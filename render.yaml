@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: fixit-salone-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fixit-salone-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: UPLOAD_DIR
+        value: uploads
+      - key: MAX_UPLOAD_MB
+        value: "15"
+
+databases:
+  - name: fixit-salone-db
+    databaseName: fixit_salone
+    user: fixit_salone
