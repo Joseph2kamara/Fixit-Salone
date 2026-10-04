@@ -8,9 +8,16 @@ CREATE TABLE IF NOT EXISTS users (
  email VARCHAR(255),
  password_hash TEXT,
  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','under_review','suspended','banned')),
+ failed_login_count INTEGER NOT NULL DEFAULT 0,
+ locked_until TIMESTAMPTZ,
+ last_login_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_users_status_role ON users(status,role);
 
 CREATE TABLE IF NOT EXISTS provider_profiles (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,7 +46,7 @@ CREATE TABLE IF NOT EXISTS identity_verifications (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_identity_user ON identity_verifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_identity_user ON identity_verifications(user_id,created_at DESC);
 
 CREATE TABLE IF NOT EXISTS incidents (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,7 +61,7 @@ CREATE TABLE IF NOT EXISTS incidents (
  resolved_at TIMESTAMPTZ,
  resolved_by UUID REFERENCES users(id)
 );
-CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status,created_at DESC);
 
 CREATE TABLE IF NOT EXISTS audit_logs (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -66,7 +73,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_user_id,created_at DESC);
 
 CREATE TABLE IF NOT EXISTS provider_work (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,7 +83,8 @@ CREATE TABLE IF NOT EXISTS provider_work (
  caption VARCHAR(500) NOT NULL,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_provider_work_provider ON provider_work(provider_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_provider_work_provider ON provider_work(provider_id,created_at DESC);
+
 CREATE TABLE IF NOT EXISTS phone_verifications (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -86,4 +94,4 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
  verified_at TIMESTAMPTZ,
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications(user_id,created_at DESC);
