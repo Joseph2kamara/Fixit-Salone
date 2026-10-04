@@ -2,12 +2,12 @@
 'use strict';
 
 const providers = [
- {name:'Kamara Electricals',service:'Electrical',region:'Western Area',district:'Western Area Urban',price:'From SLE 250',rating:'4.9',reviews:28,initials:'KE',desc:'Wiring, installations, repairs and troubleshooting.'},
- {name:"Joe's Plumbing",service:'Plumbing',region:'Western Area',district:'Western Area Urban',price:'From SLE 200',rating:'4.8',reviews:19,initials:'JP',desc:'Leaks, pipes, bathroom fittings and emergency plumbing.'},
- {name:'AM Tech Solutions',service:'IT & Computer',region:'Western Area',district:'Western Area Rural',price:'From SLE 300',rating:'4.9',reviews:34,initials:'AT',desc:'Computer repair, networking, software and technology support.'},
- {name:'Clean Salone',service:'Cleaning',region:'Western Area',district:'Western Area Urban',price:'From SLE 180',rating:'4.7',reviews:16,initials:'CS',desc:'Home, office and move-in cleaning services.'},
- {name:'Mobile Doctor SL',service:'Phone Repair',region:'Western Area',district:'Western Area Urban',price:'From SLE 150',rating:'4.8',reviews:22,initials:'MD',desc:'Screen, battery, charging-port and software repairs.'},
- {name:'Bai Motors',service:'Auto Repair',region:'Southern',district:'Bo',price:'From SLE 350',rating:'4.6',reviews:13,initials:'BM',desc:'Diagnostics, servicing, brakes and general vehicle repairs.'}
+ {name:'Kamara Electricals',service:'Electrical',region:'Western Area',district:'Western Area Urban',price:'From SLE 250',rating:'4.9',reviews:28,initials:'KE',desc:'Wiring, installations, repairs and troubleshooting.',work:[{type:'image',src:'',caption:'Electrical installation and wiring project'}]},
+ {name:"Joe's Plumbing",service:'Plumbing',region:'Western Area',district:'Western Area Urban',price:'From SLE 200',rating:'4.8',reviews:19,initials:'JP',desc:'Leaks, pipes, bathroom fittings and emergency plumbing.',work:[{type:'image',src:'',caption:'Bathroom plumbing installation'}]},
+ {name:'AM Tech Solutions',service:'IT & Computer',region:'Western Area',district:'Western Area Rural',price:'From SLE 300',rating:'4.9',reviews:34,initials:'AT',desc:'Computer repair, networking, software and technology support.',work:[{type:'image',src:'',caption:'Computer and networking setup'}]},
+ {name:'Clean Salone',service:'Cleaning',region:'Western Area',district:'Western Area Urban',price:'From SLE 180',rating:'4.7',reviews:16,initials:'CS',desc:'Home, office and move-in cleaning services.',work:[{type:'image',src:'',caption:'Office cleaning project'}]},
+ {name:'Mobile Doctor SL',service:'Phone Repair',region:'Western Area',district:'Western Area Urban',price:'From SLE 150',rating:'4.8',reviews:22,initials:'MD',desc:'Screen, battery, charging-port and software repairs.',work:[{type:'image',src:'',caption:'Phone repair project'}]},
+ {name:'Bai Motors',service:'Auto Repair',region:'Southern',district:'Bo',price:'From SLE 350',rating:'4.6',reviews:13,initials:'BM',desc:'Diagnostics, servicing, brakes and general vehicle repairs.',work:[{type:'image',src:'',caption:'Vehicle servicing project'}]}
 ];
 
 const categories=[
@@ -60,8 +60,9 @@ function renderCategories(){
 }
 
 function showProfile(i){
- const p=providers[i];
- openModal('<p class="eyebrow">'+esc(p.service)+'</p><h2>'+esc(p.name)+'</h2><p>'+esc(p.region)+' · '+esc(p.district)+' · ★ '+p.rating+' ('+p.reviews+' reviews)</p><p>'+esc(p.desc)+'</p><p><b>Starting price:</b> '+esc(p.price)+'</p><button class="btn" id="modalRequest">Request this provider</button>');
+ const p=providers[i], work=p.work||[];
+ const gallery=work.length?work.map(w=>w.src?(w.type==='video'?'<video class="work-media" controls src="'+esc(w.src)+'"></video>':'<img class="work-media" src="'+esc(w.src)+'" alt="Provider work">'):'<div class="work-placeholder">📷</div><p>'+esc(w.caption)+'</p>').join(''):'<p class="quote-note">This professional has not added work samples yet.</p>';
+ openModal('<p class="eyebrow">'+esc(p.service)+'</p><h2>'+esc(p.name)+'</h2><p>'+esc(p.region)+' · '+esc(p.district)+' · ★ '+p.rating+' ('+p.reviews+' reviews)</p><p>'+esc(p.desc)+'</p><p><b>Starting price:</b> '+esc(p.price)+'</p><h3>My Work</h3><div class="work-gallery">'+gallery+'</div><button class="btn" id="modalRequest">Request this provider</button>');
  $('modalRequest').onclick=()=>showRequest(i);
 }
 
@@ -104,11 +105,15 @@ function submitRequest(){
  $('closeRequest').onclick=closeModal;
 }
 
+function providerPortfolio(){
+ openModal('<p class="eyebrow">MY WORK</p><h2>Add a work sample</h2><p>Upload a photo or short video of a completed job and add a caption.</p><label class="form-label">Photo or video</label><input id="workFile" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"><label class="form-label">Caption</label><input id="workCaption" class="form-control" placeholder="e.g. Bathroom installation in Lumley"><button class="btn" id="addWork">Add to portfolio</button><p class="quote-note">Beta limit: one file at a time. Keep videos short.</p>'); $('addWork').onclick=addWorkSample;
+}
+function addWorkSample(){const f=$('workFile').files[0],caption=$('workCaption').value.trim();if(!f||!caption){alert('Please choose a photo/video and add a caption.');return;}if(f.size>15*1024*1024){alert('File must be 15 MB or less.');return;}const reader=new FileReader();reader.onload=()=>{const items=JSON.parse(localStorage.getItem('fixit_work')||'[]');items.push({type:f.type.startsWith('video/')?'video':'image',src:reader.result,caption});localStorage.setItem('fixit_work',JSON.stringify(items));openModal('<p class="eyebrow">WORK ADDED</p><h2>Portfolio updated</h2><p>Your work sample is saved in this browser for the beta.</p><button class="btn" id="workDone">Done</button>');$('workDone').onclick=closeModal;};reader.readAsDataURL(f);}
 function providerPortal(){
  openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Prepare a customer quote</h2><label class="form-label">Customer</label><input class="form-control" value="Sample customer" readonly><label class="form-label">Region / District</label><input class="form-control" value="Western Area / Western Area Urban" readonly><label class="form-label">Labour (SLE)</label><input id="labour" class="form-control" type="number" min="0" value="200"><label class="form-label">Materials (SLE)</label><input id="materials" class="form-control" type="number" min="0" value="0"><label class="form-label">Transport (SLE)</label><input id="transport" class="form-control" type="number" min="0" value="0"><button class="btn" id="sendQuote">Send Quote to Customer</button><p class="quote-note">FixIt fee: 1% of the customer total.</p>');
  $('sendQuote').onclick=sendQuote;
 }
-window.providerPortal=providerPortal;
+window.providerPortal=providerPortal; window.providerPortfolio=providerPortfolio;
 
 function sendQuote(){
  const total=(Number($('labour').value)||0)+(Number($('materials').value)||0)+(Number($('transport').value)||0),fee=total*.01;
