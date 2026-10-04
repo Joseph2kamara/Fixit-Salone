@@ -14,6 +14,12 @@ The repository contains the public beta marketplace frontend plus a backend foun
 - 1% FixIt platform fee display
 - Provider work portfolio UI
 
+### Trust & Safety foundation
+- Private identity verification records and verification status
+- Incident/report records with severity and investigation status
+- Admin audit-log structure
+- Public profiles show trust status, not ID documents or ID numbers
+
 ### Backend foundation
 - Node.js / Express API
 - PostgreSQL connection
@@ -22,7 +28,7 @@ The repository contains the public beta marketplace frontend plus a backend foun
 - Health endpoint
 
 ### Important deployment note
-The backend is not yet connected to a live database, authentication provider, or cloud media storage. The browser portfolio remains demo-only until the secure provider authentication and persistent storage layer is deployed.
+The backend is not yet connected to a live database, production authentication/OTP provider, KYC verification provider, or cloud media storage. The Trust & Safety UI and database foundation are beta-ready, but identity documents must not be collected in the public beta until authenticated, encrypted storage and admin access controls are deployed. The browser portfolio remains demo-only until the secure provider authentication and persistent storage layer is deployed.
 
 ### Render static site
 - Service type: Static Site
