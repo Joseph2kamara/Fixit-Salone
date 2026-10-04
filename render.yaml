@@ -19,6 +19,8 @@ services:
         value: uploads
       - key: MAX_UPLOAD_MB
         value: "15"
+      - key: AUTO_INIT_DB
+        value: "true"
 
 databases:
   - name: fixit-salone-db
