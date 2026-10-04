@@ -18,6 +18,22 @@ app.use(cors({origin:process.env.FRONTEND_URL||true}));
 app.use(express.json({limit:'2mb'}));
 
 const pool=new Pool({connectionString:process.env.DATABASE_URL});
+async function bootstrapAdmin(){
+  const phone=process.env.ADMIN_BOOTSTRAP_PHONE;
+  const password=process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  const name=process.env.ADMIN_BOOTSTRAP_NAME||'FixIt Salone Admin';
+  if(!phone||!password) return;
+  if(password.length<12) throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters.');
+  const hash=await bcrypt.hash(password,12);
+  const existing=await pool.query('SELECT id FROM users WHERE phone=$1',[phone]);
+  if(existing.rows[0]){
+    await pool.query('UPDATE users SET full_name=$1,password_hash=$2,role=\'admin\',status=\'active\',updated_at=NOW() WHERE id=$3',[name,hash,existing.rows[0].id]);
+    console.log('Bootstrap admin updated.');
+  }else{
+    await pool.query('INSERT INTO users(full_name,phone,password_hash,role,status) VALUES($1,$2,$3,\'admin\',\'active\')',[name,phone,hash]);
+    console.log('Bootstrap admin created.');
+  }
+}
 async function initializeDatabase(){
   if(process.env.AUTO_INIT_DB!=='true') return;
   const schemaPath=path.join(__dirname,'..','schema.sql');
@@ -189,4 +205,4 @@ app.get('/api/admin/audit',async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load audit history.'})}
 });
 
-initializeDatabase().then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
