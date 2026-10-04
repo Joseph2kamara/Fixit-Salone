@@ -18,6 +18,14 @@ app.use(cors({origin:process.env.FRONTEND_URL||true}));
 app.use(express.json({limit:'2mb'}));
 
 const pool=new Pool({connectionString:process.env.DATABASE_URL});
+async function initializeDatabase(){
+  if(process.env.AUTO_INIT_DB!=='true') return;
+  const schemaPath=path.join(__dirname,'..','schema.sql');
+  const schema=fs.readFileSync(schemaPath,'utf8');
+  await pool.query(schema);
+  console.log('Database schema initialized.');
+}
+
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||'uploads');
 fs.mkdirSync(uploadDir,{recursive:true});
 const storage=multer.diskStorage({destination:(req,file,cb)=>cb(null,uploadDir),filename:(req,file,cb)=>cb(null,Date.now()+'-'+Math.random().toString(36).slice(2)+path.extname(file.originalname).toLowerCase())});
@@ -181,4 +189,4 @@ app.get('/api/admin/audit',async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load audit history.'})}
 });
 
-app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));
+initializeDatabase().then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
