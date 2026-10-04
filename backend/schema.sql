@@ -77,3 +77,13 @@ CREATE TABLE IF NOT EXISTS provider_work (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_provider_work_provider ON provider_work(provider_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS phone_verifications (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ phone VARCHAR(40) NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','expired','failed')),
+ provider_reference TEXT,
+ verified_at TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications(user_id, created_at DESC);
