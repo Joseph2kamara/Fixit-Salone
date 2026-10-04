@@ -14,21 +14,49 @@ The repository contains the public beta marketplace frontend plus a backend foun
 - 1% FixIt platform fee display
 - Provider work portfolio UI
 
-### Trust & Safety foundation
+### Trust & Safety
 - Private identity verification records and verification status
 - Incident/report records with severity and investigation status
 - Admin audit-log structure
 - Public profiles show trust status, not ID documents or ID numbers
+- Protected admin API using JWT authentication and admin role checks
+- Rate limiting on authentication and admin API routes
+- Admin account status controls and audit entries for admin mutations
 
-### Backend foundation
+### Backend
 - Node.js / Express API
 - PostgreSQL connection
+- bcrypt password hashing
+- JWT authentication
 - Provider portfolio records
 - Image/video upload validation
 - Health endpoint
 
+### Create the first admin
+
+Run this on a trusted machine or server with `DATABASE_URL` configured:
+
+```bash
+cd backend
+npm install
+node scripts/create-admin.js "+232XXXXXXXXX" "use-a-long-random-password" "FixIt Admin"
+```
+
+Never put the admin password, database URL or JWT secret into GitHub.
+
+### Admin dashboard
+
+The admin page is protected at:
+
+`/admin.html`
+
+It requires a successful backend login and an account with `role = admin`. The page stores the short-lived JWT only in the browser session for this beta. For a hardened production deployment, move authentication to secure HttpOnly cookies plus CSRF protection.
+
 ### Important deployment note
-The backend is not yet connected to a live database, production authentication/OTP provider, KYC verification provider, or cloud media storage. The Trust & Safety UI and database foundation are beta-ready, but identity documents must not be collected in the public beta until authenticated, encrypted storage and admin access controls are deployed. The browser portfolio remains demo-only until the secure provider authentication and persistent storage layer is deployed.
+
+The backend is not yet connected to a live production database, production OTP provider, KYC verification provider, or private cloud media storage. Do not collect real identity documents in the public beta until authenticated encrypted storage, access controls, backups and retention/deletion controls are deployed.
+
+The current phone verification endpoint is only a database foundation and does **not** send real SMS OTPs.
 
 ### Render static site
 - Service type: Static Site
