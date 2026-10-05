@@ -113,6 +113,48 @@ app.post('/api/auth/login',authLimiter,async(req,res)=>{
   }catch(e){console.error('Login error:',e);res.status(500).json({error:'Unable to sign in.'})}
 });
 
+app.post('/api/auth/forgot-password',authLimiter,async(req,res)=>{
+  const phone=normalizePhone(req.body&&req.body.phone);
+  if(!phone)return res.status(400).json({error:'Phone number is required.'});
+  try{
+    const user=await pool.query("SELECT id,phone,status FROM users WHERE phone=$1 LIMIT 1",[phone]);
+    // Do not reveal whether an account exists.
+    if(!user.rows[0]||['suspended','banned'].includes(user.rows[0].status)){
+      return res.json({ok:true,message:'If an account exists for that phone number, password reset instructions have been prepared.'});
+    }
+    const otp='123456';
+    const otpHash=await bcrypt.hash(otp,10);
+    await pool.query("UPDATE password_resets SET used_at=NOW() WHERE user_id=$1 AND used_at IS NULL",[user.rows[0].id]);
+    const {rows}=await pool.query("INSERT INTO password_resets(user_id,phone,otp_hash,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '10 minutes') RETURNING id,expires_at",[user.rows[0].id,phone,otpHash]);
+    await audit(user.rows[0].id,user.rows[0].id,'auth.password_reset_requested','user',user.rows[0].id,{method:'phone',sms_active:false});
+    res.json({ok:true,reset_id:rows[0].id,expires_at:rows[0].expires_at,otp_demo:true,message:'Password reset started. Real SMS is not connected yet; use demo code 123456.'});
+  }catch(e){console.error('Forgot password error:',e);res.status(500).json({error:'Unable to start password reset.'})}
+});
+
+app.post('/api/auth/reset-password',authLimiter,async(req,res)=>{
+  const resetId=String(req.body&&req.body.reset_id||'').trim();
+  const otp=String(req.body&&req.body.otp||'').trim();
+  const password=String(req.body&&req.body.password||'');
+  if(!resetId||!otp||!password)return res.status(400).json({error:'Reset ID, verification code and new password are required.'});
+  if(password.length<8)return res.status(400).json({error:'New password must be at least 8 characters.'});
+  try{
+    const q=await pool.query("SELECT id,user_id,otp_hash,attempts,expires_at,used_at FROM password_resets WHERE id=$1 LIMIT 1",[resetId]);
+    const reset=q.rows[0];
+    if(!reset||reset.used_at||new Date(reset.expires_at)<=new Date())return res.status(400).json({error:'This password reset has expired. Start again.'});
+    if(Number(reset.attempts)>=5)return res.status(429).json({error:'Too many verification attempts. Start a new password reset.'});
+    const ok=await bcrypt.compare(otp,reset.otp_hash);
+    if(!ok){
+      await pool.query('UPDATE password_resets SET attempts=attempts+1 WHERE id=$1',[reset.id]);
+      return res.status(400).json({error:'Invalid verification code.'});
+    }
+    const hash=await bcrypt.hash(password,12);
+    await pool.query('UPDATE users SET password_hash=$1,failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$2',[hash,reset.user_id]);
+    await pool.query('UPDATE password_resets SET used_at=NOW() WHERE id=$1',[reset.id]);
+    await audit(reset.user_id,reset.user_id,'auth.password_reset_completed','user',reset.user_id,{method:'phone'});
+    res.json({ok:true,message:'Password reset successfully. You can now sign in.'});
+  }catch(e){console.error('Reset password error:',e);res.status(500).json({error:'Unable to reset password.'})}
+});
+
 app.get('/api/auth/me',requireAuth,async(req,res)=>{
   try{
     const {rows}=await pool.query('SELECT id,full_name,phone,role,status,created_at,last_login_at FROM users WHERE id=$1',[req.user.sub]);
