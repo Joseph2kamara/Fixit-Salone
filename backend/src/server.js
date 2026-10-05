@@ -12,27 +12,28 @@ const {Pool}=require('pg');
 
 const app=express();
 const JWT_SECRET=process.env.JWT_SECRET;
-if(!JWT_SECRET) console.warn('WARNING: JWT_SECRET is not configured.');
+if(!JWT_SECRET || String(JWT_SECRET).length<32) throw new Error('JWT_SECRET must be configured and be at least 32 characters long.');
 app.use(helmet());
 app.use(cors({origin:process.env.FRONTEND_URL||true}));
 app.use(express.json({limit:'2mb'}));
 
 const pool=new Pool({connectionString:process.env.DATABASE_URL});
 async function bootstrapAdmin(){
-  const phone=process.env.ADMIN_BOOTSTRAP_PHONE;
-  const password=process.env.ADMIN_BOOTSTRAP_PASSWORD;
-  const name=process.env.ADMIN_BOOTSTRAP_NAME||'FixIt Salone Admin';
+  const phone=String(process.env.ADMIN_BOOTSTRAP_PHONE||'').trim();
+  const password=String(process.env.ADMIN_BOOTSTRAP_PASSWORD||'');
+  const name=String(process.env.ADMIN_BOOTSTRAP_NAME||'FixIt Salone Admin').trim();
   if(!phone||!password) return;
   if(password.length<12) throw new Error('ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters.');
-  const hash=await bcrypt.hash(password,12);
-  const existing=await pool.query('SELECT id FROM users WHERE phone=$1',[phone]);
-  if(existing.rows[0]){
-    await pool.query('UPDATE users SET full_name=$1,password_hash=$2,role=\'admin\',status=\'active\',updated_at=NOW() WHERE id=$3',[name,hash,existing.rows[0].id]);
-    console.log('Bootstrap admin updated.');
-  }else{
-    await pool.query('INSERT INTO users(full_name,phone,password_hash,role,status) VALUES($1,$2,$3,\'admin\',\'active\')',[name,phone,hash]);
-    console.log('Bootstrap admin created.');
+  const adminCount=await pool.query("SELECT COUNT(*)::int AS count FROM users WHERE role='admin'");
+  if(adminCount.rows[0].count>0){
+    console.log('Admin bootstrap skipped: an admin account already exists.');
+    return;
   }
+  const existing=await pool.query('SELECT id,role FROM users WHERE phone=$1',[phone]);
+  if(existing.rows[0]) throw new Error('ADMIN_BOOTSTRAP_PHONE belongs to an existing non-admin account. Use a different bootstrap phone.');
+  const hash=await bcrypt.hash(password,12);
+  await pool.query('INSERT INTO users(full_name,phone,password_hash,role,status) VALUES($1,$2,$3,\'admin\',\'active\')',[name,phone,hash]);
+  console.log('Bootstrap admin created.');
 }
 async function initializeDatabase(){
   if(process.env.AUTO_INIT_DB!=='true') return;
@@ -50,6 +51,7 @@ app.use('/uploads',express.static(uploadDir));
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
 const adminLimiter=rateLimit({windowMs:60*1000,max:60,standardHeaders:true,legacyHeaders:false,message:{error:'Too many admin requests. Try again shortly.'}});
+function normalizePhone(value){return String(value||'').trim().replace(/[\s()-]/g,'');}
 
 function signToken(user){return jwt.sign({sub:user.id,role:user.role},JWT_SECRET,{expiresIn:'8h'});}
 function requireAuth(req,res,next){
@@ -66,35 +68,49 @@ async function audit(actor,target,action,type,id,metadata){
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'fixit-salone'}));
 
 app.post('/api/auth/register',authLimiter,async(req,res)=>{
-  const {full_name,phone,password,role}=req.body||{};
+  const {full_name,password,role}=req.body||{};
+  const phone=normalizePhone(req.body&&req.body.phone);
   if(!full_name||!phone||!password)return res.status(400).json({error:'Full name, phone and password are required.'});
+  if(String(full_name).trim().length<2||String(full_name).trim().length>160)return res.status(400).json({error:'Please enter a valid full name.'});
   if(String(password).length<8)return res.status(400).json({error:'Password must be at least 8 characters.'});
   const safeRole=role==='provider'?'provider':'customer';
   try{
     const hash=await bcrypt.hash(String(password),12);
-    const {rows}=await pool.query('INSERT INTO users(full_name,phone,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,full_name,phone,role,status',[String(full_name).trim(),String(phone).trim(),hash,safeRole]);
+    const {rows}=await pool.query('INSERT INTO users(full_name,phone,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,full_name,phone,role,status,created_at',[String(full_name).trim(),phone,hash,safeRole]);
     const user=rows[0];
+    await audit(user.id,user.id,'auth.register','user',user.id,{role:safeRole});
     res.status(201).json({user,token:signToken(user)});
   }catch(e){
     if(e.code==='23505')return res.status(409).json({error:'An account with that phone number already exists.'});
+    console.error('Register error:',e);
     res.status(500).json({error:'Unable to create account.'});
   }
 });
 
 app.post('/api/auth/login',authLimiter,async(req,res)=>{
-  const {phone,password}=req.body||{};
+  const phone=normalizePhone(req.body&&req.body.phone);
+  const password=String(req.body&&req.body.password||'');
   if(!phone||!password)return res.status(400).json({error:'Phone and password are required.'});
   try{
-    const {rows}=await pool.query('SELECT id,full_name,phone,role,status,password_hash FROM users WHERE phone=$1 LIMIT 1',[String(phone).trim()]);
+    const {rows}=await pool.query('SELECT id,full_name,phone,role,status,password_hash,failed_login_count,locked_until FROM users WHERE phone=$1 LIMIT 1',[phone]);
     const user=rows[0];
     if(!user||!user.password_hash)return res.status(401).json({error:'Invalid phone number or password.'});
+    if(user.locked_until && new Date(user.locked_until)>new Date())return res.status(429).json({error:'Too many failed attempts. Please try again later.'});
     if(user.status==='suspended'||user.status==='banned')return res.status(403).json({error:'This account is restricted. Contact FixIt Salone support.'});
-    const ok=await bcrypt.compare(String(password),user.password_hash);
-    if(!ok)return res.status(401).json({error:'Invalid phone number or password.'});
+    const ok=await bcrypt.compare(password,user.password_hash);
+    if(!ok){
+      const nextFailed=Number(user.failed_login_count||0)+1;
+      const lockSql=nextFailed>=5?',locked_until=NOW()+INTERVAL \'15 minutes\'':'';
+      await pool.query('UPDATE users SET failed_login_count=$1'+lockSql+',updated_at=NOW() WHERE id=$2',[nextFailed,user.id]);
+      return res.status(nextFailed>=5?429:401).json({error:nextFailed>=5?'Too many failed attempts. Please try again in 15 minutes.':'Invalid phone number or password.'});
+    }
     await pool.query('UPDATE users SET last_login_at=NOW(),failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$1',[user.id]);
     delete user.password_hash;
+    delete user.failed_login_count;
+    delete user.locked_until;
+    await audit(user.id,user.id,'auth.login','user',user.id,{role:user.role});
     res.json({user,token:signToken(user)});
-  }catch(e){res.status(500).json({error:'Unable to sign in.'})}
+  }catch(e){console.error('Login error:',e);res.status(500).json({error:'Unable to sign in.'})}
 });
 
 app.get('/api/auth/me',requireAuth,async(req,res)=>{
@@ -110,7 +126,12 @@ app.get('/api/providers/:id/work',async(req,res)=>{
   try{const {rows}=await pool.query('SELECT id,media_type,file_url,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);res.json(rows)}
   catch(e){res.status(500).json({error:'Unable to load portfolio'})}
 });
-app.post('/api/providers/:id/work',upload.single('media'),async(req,res)=>{
+app.post('/api/providers/:id/work',requireAuth,upload.single('media'),async(req,res)=>{
+  if(req.user.role!=='provider'&&req.user.role!=='admin')return res.status(403).json({error:'Provider access required.'});
+  if(req.user.role==='provider'){
+    const owner=await pool.query('SELECT id FROM provider_profiles WHERE id=$1 AND user_id=$2',[req.params.id,req.user.sub]);
+    if(!owner.rows[0])return res.status(403).json({error:'You can only manage your own portfolio.'});
+  }
   if(!req.file)return res.status(400).json({error:'Please upload an image or video.'});
   const caption=(req.body.caption||'').trim();
   if(!caption){try{fs.unlinkSync(path.join(uploadDir,req.file.filename))}catch{};return res.status(400).json({error:'Caption is required.'})}
@@ -121,24 +142,30 @@ app.post('/api/providers/:id/work',upload.single('media'),async(req,res)=>{
   }catch(e){try{fs.unlinkSync(path.join(uploadDir,req.file.filename))}catch{};res.status(500).json({error:'Unable to save portfolio item'})}
 });
 
-app.post('/api/incidents',async(req,res)=>{
-  const {reporter_user_id,reported_user_id,job_id,reason,details}=req.body||{};
+app.post('/api/incidents',requireAuth,async(req,res)=>{
+  const {reported_user_id,job_id,reason,details}=req.body||{};
   if(!reason||!details)return res.status(400).json({error:'reason and details are required'});
+  if(String(details).trim().length>5000)return res.status(400).json({error:'Report details are too long.'});
   try{
-    const {rows}=await pool.query('INSERT INTO incidents(reporter_user_id,reported_user_id,job_id,reason,details) VALUES($1,$2,$3,$4,$5) RETURNING id,status,created_at',[reporter_user_id||null,reported_user_id||null,job_id||null,reason,String(details).trim()]);
+    const {rows}=await pool.query('INSERT INTO incidents(reporter_user_id,reported_user_id,job_id,reason,details) VALUES($1,$2,$3,$4,$5) RETURNING id,status,priority,created_at',[req.user.sub,reported_user_id||null,job_id||null,String(reason).trim(),String(details).trim()]);
+    await audit(req.user.sub,reported_user_id||null,'incident.created','incident',rows[0].id,{reason:String(reason).trim()});
     res.status(201).json(rows[0]);
-  }catch(e){res.status(500).json({error:'Unable to create incident'})}
+  }catch(e){console.error('Incident error:',e);res.status(500).json({error:'Unable to create incident'})}
 });
 
-app.post('/api/phone-verification/request',async(req,res)=>{
-  const {user_id,phone}=req.body||{};
-  if(!user_id||!phone)return res.status(400).json({error:'user_id and phone are required'});
+app.post('/api/phone-verification/request',requireAuth,async(req,res)=>{
+  const phone=normalizePhone(req.body&&req.body.phone);
+  if(!phone)return res.status(400).json({error:'phone is required'});
   try{
-    const {rows}=await pool.query('INSERT INTO phone_verifications(user_id,phone,status) VALUES($1,$2,$3) RETURNING id,status,created_at',[user_id,String(phone).trim(),'pending']);
+    const user=await pool.query('SELECT phone FROM users WHERE id=$1',[req.user.sub]);
+    if(!user.rows[0])return res.status(404).json({error:'Account not found.'});
+    if(normalizePhone(user.rows[0].phone)!==phone)return res.status(400).json({error:'The phone number must match your account.'});
+    const {rows}=await pool.query('INSERT INTO phone_verifications(user_id,phone,status) VALUES($1,$2,$3) RETURNING id,status,created_at',[req.user.sub,phone,'pending']);
     res.status(201).json({verification:rows[0],otp_sent:false,message:'OTP provider integration is not active. No real SMS was sent.'});
   }catch(e){res.status(500).json({error:'Unable to create phone verification request'})}
 });
-app.get('/api/verification/:userId',async(req,res)=>{
+app.get('/api/verification/:userId',requireAuth,async(req,res)=>{
+  if(req.user.sub!==req.params.userId&&req.user.role!=='admin')return res.status(403).json({error:'Access denied.'});
   try{const {rows}=await pool.query('SELECT status,document_type,verified_at,created_at FROM identity_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1',[req.params.userId]);res.json(rows[0]||{status:'unverified'})}
   catch(e){res.status(500).json({error:'Unable to load verification status'})}
 });
