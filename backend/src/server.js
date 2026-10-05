@@ -60,7 +60,7 @@ function normalizeSierraLeonePhone(value){
   throw new Error('Please use a valid Sierra Leone mobile number.');
 }
 const D7_API_TOKEN=String(process.env.D7_API_TOKEN||'').trim();
-const D7_SENDER_ID=String(process.env.D7_SENDER_ID||'FixIt').trim();
+const D7_SENDER_ID=String(process.env.D7_SENDER_ID||'SignOTP').trim();
 async function d7VerifyRequest(pathname,body){
   if(!D7_API_TOKEN)throw new Error('Real SMS verification is not configured yet. Add D7_API_TOKEN in Render.');
   const response=await fetch('https://api.d7networks.com'+pathname,{
