@@ -169,3 +169,16 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_customer ON payment_transactions(customer_user_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_payment_status ON payment_transactions(status,created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS password_resets (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ phone VARCHAR(40) NOT NULL,
+ otp_hash TEXT NOT NULL,
+ attempts INTEGER NOT NULL DEFAULT 0,
+ expires_at TIMESTAMPTZ NOT NULL,
+ used_at TIMESTAMPTZ,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id,created_at DESC);
