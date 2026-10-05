@@ -122,6 +122,157 @@ app.get('/api/auth/me',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load account.'})}
 });
 
+
+// Marketplace services and provider profiles
+app.get('/api/services',async(req,res)=>{
+  try{
+    const {rows}=await pool.query('SELECT id,name,description FROM services WHERE active=true ORDER BY name');
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load services.'})}
+});
+
+app.get('/api/providers',async(req,res)=>{
+  const {service,region,district}=req.query;
+  try{
+    const values=[]; const where=[];
+    if(service){values.push(String(service));where.push('s.name=$'+values.length)}
+    if(region){values.push(String(region));where.push('pp.region=$'+values.length)}
+    if(district){values.push(String(district));where.push('pp.district=$'+values.length)}
+    const sql=`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,
+      u.full_name,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description
+      FROM provider_profiles pp
+      JOIN users u ON u.id=pp.user_id AND u.status='active'
+      JOIN provider_services ps ON ps.provider_id=pp.id
+      JOIN services s ON s.id=ps.service_id AND s.active=true
+      ${where.length?'WHERE '+where.join(' AND '):''}
+      ORDER BY pp.created_at DESC LIMIT 200`;
+    const {rows}=await pool.query(sql,values);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load providers.'})}
+});
+
+app.get('/api/providers/:id',async(req,res)=>{
+  try{
+    const profile=await pool.query(`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,u.full_name
+      FROM provider_profiles pp JOIN users u ON u.id=pp.user_id WHERE pp.id=$1`,[req.params.id]);
+    if(!profile.rows[0])return res.status(404).json({error:'Provider not found.'});
+    const services=await pool.query(`SELECT ps.service_id,s.name,ps.pricing_type,ps.price_sle,ps.description FROM provider_services ps JOIN services s ON s.id=ps.service_id WHERE ps.provider_id=$1 ORDER BY s.name`,[req.params.id]);
+    res.json({profile:profile.rows[0],services:services.rows});
+  }catch(e){res.status(500).json({error:'Unable to load provider.'})}
+});
+
+app.get('/api/providers/me/profile',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const {rows}=await pool.query('SELECT id,user_id,business_name,region,district,area,service_address,verification_status FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
+    if(!rows[0])return res.json({profile:null,services:[]});
+    const services=await pool.query('SELECT ps.service_id,s.name,ps.pricing_type,ps.price_sle,ps.description FROM provider_services ps JOIN services s ON s.id=ps.service_id WHERE ps.provider_id=$1 ORDER BY s.name',[rows[0].id]);
+    res.json({profile:rows[0],services:services.rows});
+  }catch(e){res.status(500).json({error:'Unable to load your provider profile.'})}
+});
+
+app.put('/api/providers/me/profile',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  const {business_name,region,district,area,service_address}=req.body||{};
+  if(!business_name||!region||!district||!area||!service_address)return res.status(400).json({error:'Business name, region, district, area and service address are required.'});
+  try{
+    const {rows}=await pool.query(`INSERT INTO provider_profiles(user_id,business_name,region,district,area,service_address)
+      VALUES($1,$2,$3,$4,$5,$6)
+      ON CONFLICT(user_id) DO UPDATE SET business_name=EXCLUDED.business_name,region=EXCLUDED.region,district=EXCLUDED.district,area=EXCLUDED.area,service_address=EXCLUDED.service_address,updated_at=NOW()
+      RETURNING id,user_id,business_name,region,district,area,service_address,verification_status`,
+      [req.user.sub,String(business_name).trim(),String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim()]);
+    await audit(req.user.sub,req.user.sub,'provider.profile_update','provider_profile',rows[0].id,{region:rows[0].region,district:rows[0].district});
+    res.json({profile:rows[0]});
+  }catch(e){console.error('Provider profile error:',e);res.status(500).json({error:'Unable to save provider profile.'})}
+});
+
+app.post('/api/providers/me/services',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  const {service_id,pricing_type,price_sle,description}=req.body||{};
+  if(!service_id||!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Service and valid pricing type are required.'});
+  if(price_sle!==null&&price_sle!==undefined&&price_sle!==''&&(Number.isNaN(Number(price_sle))||Number(price_sle)<0))return res.status(400).json({error:'Price must be a valid non-negative amount.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(400).json({error:'Create your provider profile first.'});
+    const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
+    if(!service.rows[0])return res.status(404).json({error:'Service not found.'});
+    const {rows}=await pool.query(`INSERT INTO provider_services(provider_id,service_id,pricing_type,price_sle,description)
+      VALUES($1,$2,$3,$4,$5)
+      ON CONFLICT(provider_id,service_id) DO UPDATE SET pricing_type=EXCLUDED.pricing_type,price_sle=EXCLUDED.price_sle,description=EXCLUDED.description,updated_at=NOW()
+      RETURNING provider_id,service_id,pricing_type,price_sle,description`,
+      [profile.rows[0].id,service_id,pricing_type,price_sle===''?null:price_sle,String(description||'').trim()||null]);
+    res.json(rows[0]);
+  }catch(e){res.status(500).json({error:'Unable to save provider service.'})}
+});
+
+app.get('/api/providers/me/services',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const {rows}=await pool.query('SELECT ps.service_id,s.name,ps.pricing_type,ps.price_sle,ps.description FROM provider_services ps JOIN provider_profiles pp ON pp.id=ps.provider_id JOIN services s ON s.id=ps.service_id WHERE pp.user_id=$1 ORDER BY s.name',[req.user.sub]);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load provider services.'})}
+});
+
+app.post('/api/service-requests',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  const {provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details}=req.body||{};
+  if(!provider_id||!service_id||!region||!district||!area||!service_address||!pricing_type||!job_details)return res.status(400).json({error:'Provider, service, location, pricing type and job details are required.'});
+  if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
+  try{
+    const provider=await pool.query('SELECT id FROM provider_profiles WHERE id=$1',[provider_id]);
+    const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
+    const offered=await pool.query('SELECT 1 FROM provider_services WHERE provider_id=$1 AND service_id=$2',[provider_id,service_id]);
+    if(!provider.rows[0]||!service.rows[0]||!offered.rows[0])return res.status(400).json({error:'That provider does not currently offer the selected service.'});
+    const {rows}=await pool.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,status,created_at`,
+      [req.user.sub,provider_id,service_id,String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,pricing_type,String(job_details).trim()]);
+    await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id});
+    res.status(201).json(rows[0]);
+  }catch(e){console.error('Service request error:',e);res.status(500).json({error:'Unable to create service request.'})}
+});
+
+app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  try{
+    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
+      pp.business_name,u.full_name AS provider_name,s.name AS service_name
+      FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id LEFT JOIN users u ON u.id=pp.user_id LEFT JOIN services s ON s.id=sr.service_id
+      WHERE sr.customer_user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load your requests.'})}
+});
+
+app.get('/api/provider/requests',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
+      u.full_name AS customer_name,u.phone AS customer_phone,s.name AS service_name
+      FROM service_requests sr JOIN provider_profiles pp ON pp.id=sr.provider_id JOIN users u ON u.id=sr.customer_user_id LEFT JOIN services s ON s.id=sr.service_id
+      WHERE pp.user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load provider requests.'})}
+});
+
+app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
+  const {status}=req.body||{};
+  const allowed=['quoted','approved','in_progress','completed','cancelled','declined'];
+  if(!allowed.includes(status))return res.status(400).json({error:'Invalid request status.'});
+  try{
+    const current=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
+    const r=current.rows[0];
+    const profile=req.user.role==='provider'?await pool.query('SELECT id FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub]):null;
+    const isCustomer=req.user.role==='customer'&&r.customer_user_id===req.user.sub;
+    const isProvider=profile&&profile.rows[0];
+    if(!isCustomer&&!isProvider)return res.status(403).json({error:'You do not have access to this request.'});
+    if(req.user.role==='customer'&&!['approved','cancelled'].includes(status))return res.status(403).json({error:'Customers can only approve or cancel requests.'});
+    if(req.user.role==='provider'&&!['quoted','in_progress','completed','declined','cancelled'].includes(status))return res.status(403).json({error:'Invalid provider transition.'});
+    const {rows}=await pool.query('UPDATE service_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status,updated_at',[status,req.params.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.status_update','service_request',r.id,{status});
+    res.json(rows[0]);
+  }catch(e){res.status(500).json({error:'Unable to update request status.'})}
+});
+
 app.get('/api/providers/:id/work',async(req,res)=>{
   try{const {rows}=await pool.query('SELECT id,media_type,file_url,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);res.json(rows)}
   catch(e){res.status(500).json({error:'Unable to load portfolio'})}
