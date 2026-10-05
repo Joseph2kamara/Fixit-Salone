@@ -253,6 +253,25 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load provider requests.'})}
 });
 
+app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  const amount=Number(req.body&&req.body.quoted_amount);
+  if(!Number.isFinite(amount)||amount<=0||amount>100000000)return res.status(400).json({error:'Enter a valid quote amount.'});
+  try{
+    const current=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
+    const r=current.rows[0];
+    const owner=await pool.query('SELECT id FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub]);
+    if(!owner.rows[0])return res.status(403).json({error:'You do not have access to this request.'});
+    if(!['requested','quoted'].includes(r.status))return res.status(409).json({error:'A quote can only be sent while the request is awaiting a quote.'});
+    const fee=Number((amount*0.01).toFixed(2));
+    const earnings=Number((amount-fee).toFixed(2));
+    const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,platform_fee=$2,provider_earnings=$3,updated_at=NOW() WHERE id=$4 RETURNING id,status,quoted_amount,platform_fee,provider_earnings,updated_at`,[amount,fee,earnings,r.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,platform_fee:fee,provider_earnings:earnings});
+    res.json(rows[0]);
+  }catch(e){console.error('Quote error:',e);res.status(500).json({error:'Unable to send quote.'})}
+});
+
 app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   const {status}=req.body||{};
   const allowed=['quoted','approved','in_progress','completed','cancelled','declined'];
@@ -265,8 +284,12 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
     const isCustomer=req.user.role==='customer'&&r.customer_user_id===req.user.sub;
     const isProvider=profile&&profile.rows[0];
     if(!isCustomer&&!isProvider)return res.status(403).json({error:'You do not have access to this request.'});
-    if(req.user.role==='customer'&&!['approved','cancelled'].includes(status))return res.status(403).json({error:'Customers can only approve or cancel requests.'});
-    if(req.user.role==='provider'&&!['quoted','in_progress','completed','declined','cancelled'].includes(status))return res.status(403).json({error:'Invalid provider transition.'});
+    const transitions={
+      customer:{quoted:['approved','cancelled'],requested:['cancelled'],approved:['cancelled'],in_progress:['cancelled']},
+      provider:{requested:['declined','cancelled'],quoted:['in_progress','cancelled'],approved:['in_progress','cancelled'],in_progress:['completed','cancelled'],completed:[],declined:[],cancelled:[]}
+    };
+    const next=(transitions[req.user.role]&&transitions[req.user.role][r.status])||[];
+    if(!next.includes(status))return res.status(409).json({error:'That status change is not allowed from the current request status.'});
     const {rows}=await pool.query('UPDATE service_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status,updated_at',[status,req.params.id]);
     await audit(req.user.sub,r.customer_user_id,'service_request.status_update','service_request',r.id,{status});
     res.json(rows[0]);
