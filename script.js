@@ -131,7 +131,8 @@ function locationFields(prefix){return '<label class="form-label">Region</label>
 function wireLocation(prefix){$(prefix+'Region').onchange=()=>{const r=$(prefix+'Region').value,d=$(prefix+'District'),list=districts[r]||[];d.innerHTML='<option value="">Select district</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length}}
 async function showRequest(i){
   if(!authToken()||!localStorage.getItem('fixit_customer')){customerLogin('login','customer');return}
-  const p=providers[i];
+  const p=visibleProviders[i]||activeProviders()[i];
+  if(!p)return;
   try{
     const services=await api('/api/services');
     const match=services.find(s=>s.name.toLowerCase()===p.service.toLowerCase());
@@ -285,7 +286,8 @@ function verificationCenter(){const saved=localStorage.getItem('fixit_customer')
 function phoneVerification(){const saved=localStorage.getItem('fixit_customer');if(!saved){customerLogin();return}const u=JSON.parse(saved);const phone=esc(u.phone);openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Verify '+phone+'</h2><p>Enter the 6-digit code sent to your phone.</p><p class="quote-note"><b>Demo mode:</b> use <b>123456</b>. No real SMS is sent yet.</p><label class="form-label">6-digit OTP</label><input id="otpCode" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456"><button class="btn" id="checkOtp">Verify phone</button><button class="btn outline" id="backVerification">Back</button>');$('checkOtp').onclick=()=>{const code=$('otpCode').value.trim();if(code!=='123456'){alert('Demo verification code is 123456.');return}localStorage.setItem('fixit_phone_verified','true');verificationCenter()};$('backVerification').onclick=verificationCenter}window.phoneVerification=phoneVerification;
 function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Beta note: secure ID upload and live admin investigation are not connected to the public beta yet. Phone verification is demo-only until a real SMS provider and authenticated backend are connected.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
 function reportProvider(i){
-  const p=providers[i];
+  const p=visibleProviders[i]||activeProviders()[i];
+  if(!p)return;
   if(!authToken()){customerLogin('login','customer');return}
   openModal('<p class="eyebrow">SAFETY REPORT</p><h2>Report '+esc(p.name)+'</h2><p>Your report is submitted to the protected FixIt Trust & Safety system.</p><label class="form-label">Reason</label><select id="reportReason" class="form-control"><option>Fraud or scam</option><option>Threatening behaviour</option><option>Harassment</option><option>Fake identity</option><option>Property damage</option><option>Payment dispute</option><option>Other safety concern</option></select><label class="form-label">What happened?</label><textarea id="reportDetails" class="form-control" placeholder="Describe what happened..."></textarea><button class="btn" id="submitReport">Submit report</button>');
   $('submitReport').onclick=async()=>{
