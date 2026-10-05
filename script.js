@@ -162,7 +162,7 @@ async function submitRequest(provider,serviceId){
   }catch(e){alert(e.message);$('submitRequest').disabled=false}
 }
 
-async async function customerRequests(){
+async function customerRequests(){
   if(!authToken()){customerLogin('login','customer');return}
   try{
     const me=await api('/api/auth/me');
@@ -171,13 +171,19 @@ async async function customerRequests(){
     const cards=requests.length?requests.map(r=>{
       const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'Awaiting provider quote';
       const actions=[];
-      if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');
+      if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');\n      if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
       return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p>'+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
     openModal('<p class="eyebrow">MY REQUESTS</p><h2>Your FixIt jobs</h2><p class="quote-note">Review provider quotes here. Payment will only be requested after you approve the final quote.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="closeCustomerRequests">Done</button>');
     document.querySelectorAll('[data-customer-action]').forEach(btn=>btn.onclick=async()=>{
       try{
+        if(btn.dataset.customerAction==='pay'){
+          const result=await api('/api/payments/intent',{method:'POST',body:JSON.stringify({service_request_id:btn.dataset.customerJob})});
+          const p=result.payment;
+          openModal('<p class="eyebrow">PAYMENT READY</p><h2>Payment prepared</h2><div class="address-box"><b>Job amount</b><br>SLE '+Number(p.amount_sle).toLocaleString()+'<br><small>FixIt fee: SLE '+Number(p.platform_fee).toLocaleString()+' · Provider earnings: SLE '+Number(p.provider_earnings).toLocaleString()+'</small></div><p>'+esc(result.message)+'</p><p class="quote-note">No money has been collected. A live payment gateway must be configured before customers can actually pay.</p><button class="btn" onclick="closeModal()">Done</button>');
+          return;
+        }
         const map={approve:'approved',cancel:'cancelled'};
         await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/status',{method:'PATCH',body:JSON.stringify({status:map[btn.dataset.customerAction]})});
         customerRequests();
@@ -216,7 +222,6 @@ async function providerJobs(){
       const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'No quote yet';
       const actions=[];
       if(r.status==='requested')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="quote">Send quote</button>','<button class="btn outline" data-job="'+esc(r.id)+'" data-action="decline">Decline</button>');
-      if(r.status==='quoted')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start after customer approval</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
       if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
