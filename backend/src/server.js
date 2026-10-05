@@ -52,6 +52,30 @@ app.use('/uploads',express.static(uploadDir));
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
 const adminLimiter=rateLimit({windowMs:60*1000,max:60,standardHeaders:true,legacyHeaders:false,message:{error:'Too many admin requests. Try again shortly.'}});
 function normalizePhone(value){return String(value||'').trim().replace(/[\s()-]/g,'');}
+function normalizeSierraLeonePhone(value){
+  const raw=normalizePhone(value);
+  if(/^\+232\d{8}$/.test(raw))return raw;
+  if(/^232\d{8}$/.test(raw))return '+'+raw;
+  if(/^0\d{8}$/.test(raw))return '+232'+raw.slice(1);
+  throw new Error('Please use a valid Sierra Leone mobile number.');
+}
+const D7_API_TOKEN=String(process.env.D7_API_TOKEN||'').trim();
+const D7_SENDER_ID=String(process.env.D7_SENDER_ID||'FixIt').trim();
+async function d7VerifyRequest(pathname,body){
+  if(!D7_API_TOKEN)throw new Error('Real SMS verification is not configured yet. Add D7_API_TOKEN in Render.');
+  const response=await fetch('https://api.d7networks.com'+pathname,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+D7_API_TOKEN,'Content-Type':'application/json','Accept':'application/json'},
+    body:JSON.stringify(body)
+  });
+  let data={};try{data=await response.json()}catch{}
+  if(!response.ok){
+    const detail=data&&data.detail;
+    const message=typeof detail==='string'?detail:(detail&&detail.message)||'SMS provider rejected the request.';
+    throw new Error(message);
+  }
+  return data;
+}
 
 function signToken(user){return jwt.sign({sub:user.id,role:user.role},JWT_SECRET,{expiresIn:'8h'});}
 function requireAuth(req,res,next){
@@ -437,21 +461,77 @@ app.post('/api/incidents',requireAuth,async(req,res)=>{
   }catch(e){console.error('Incident error:',e);res.status(500).json({error:'Unable to create incident'})}
 });
 
-app.post('/api/phone-verification/request',requireAuth,async(req,res)=>{
-  const phone=normalizePhone(req.body&&req.body.phone);
-  if(!phone)return res.status(400).json({error:'phone is required'});
+app.post('/api/phone-verification/request',requireAuth,authLimiter,async(req,res)=>{
   try{
-    const user=await pool.query('SELECT phone FROM users WHERE id=$1',[req.user.sub]);
+    const user=await pool.query('SELECT phone,status FROM users WHERE id=$1',[req.user.sub]);
     if(!user.rows[0])return res.status(404).json({error:'Account not found.'});
-    if(normalizePhone(user.rows[0].phone)!==phone)return res.status(400).json({error:'The phone number must match your account.'});
-    const {rows}=await pool.query('INSERT INTO phone_verifications(user_id,phone,status) VALUES($1,$2,$3) RETURNING id,status,created_at',[req.user.sub,phone,'pending']);
-    res.status(201).json({verification:rows[0],otp_sent:false,message:'OTP provider integration is not active. No real SMS was sent.'});
-  }catch(e){res.status(500).json({error:'Unable to create phone verification request'})}
+    if(['suspended','banned'].includes(user.rows[0].status))return res.status(403).json({error:'Account is restricted.'});
+    const phone=normalizeSierraLeonePhone(user.rows[0].phone);
+    const recent=await pool.query("SELECT created_at FROM phone_verifications WHERE user_id=$1 AND status='pending' ORDER BY created_at DESC LIMIT 1",[req.user.sub]);
+    if(recent.rows[0] && (Date.now()-new Date(recent.rows[0].created_at).getTime())<60000){
+      return res.status(429).json({error:'Please wait at least 60 seconds before requesting another verification code.'});
+    }
+    const sms=await d7VerifyRequest('/verify/v1/otp/send-otp',{
+      originator:D7_SENDER_ID,
+      recipient:phone,
+      content:'FixIt Salone verification code: {}',
+      expiry:600,
+      data_coding:'text'
+    });
+    const otpId=String(sms.otp_id||sms.request_id||'');
+    if(!otpId)throw new Error('SMS provider did not return a verification ID.');
+    await pool.query("UPDATE phone_verifications SET status='expired' WHERE user_id=$1 AND status='pending'",[req.user.sub]);
+    const expirySeconds=Number(sms.expiry)||600;
+    const {rows}=await pool.query(
+      "INSERT INTO phone_verifications(user_id,phone,status,provider_reference,expires_at) VALUES($1,$2,'pending',$3,NOW()+($4 * INTERVAL '1 second')) RETURNING id,status,created_at,expires_at",
+      [req.user.sub,phone,otpId,expirySeconds]
+    );
+    await audit(req.user.sub,req.user.sub,'phone_verification.requested','phone_verification',rows[0].id,{provider:'d7',phone_suffix:phone.slice(-4)});
+    res.status(201).json({verification:rows[0],otp_sent:true,message:'A verification code has been sent to your phone.'});
+  }catch(e){
+    console.error('Phone verification request error:',e);
+    const message=e.message||'Unable to send verification code.';
+    const status=/not configured/i.test(message)?503:502;
+    res.status(status).json({error:message});
+  }
+});
+app.post('/api/phone-verification/verify',requireAuth,authLimiter,async(req,res)=>{
+  const verificationId=String(req.body&&req.body.verification_id||'').trim();
+  const otp=String(req.body&&req.body.otp||'').trim();
+  if(!verificationId||!/^\d{4,8}$/.test(otp))return res.status(400).json({error:'Verification ID and a valid OTP are required.'});
+  try{
+    const q=await pool.query("SELECT id,user_id,status,provider_reference,expires_at FROM phone_verifications WHERE id=$1 AND user_id=$2 LIMIT 1",[verificationId,req.user.sub]);
+    const row=q.rows[0];
+    if(!row)return res.status(404).json({error:'Verification request not found.'});
+    if(row.status==='verified')return res.json({ok:true,verified:true,message:'Phone number is already verified.'});
+    if(row.status!=='pending'||(row.expires_at&&new Date(row.expires_at)<=new Date()))return res.status(400).json({error:'This verification code has expired. Request a new code.'});
+    const result=await d7VerifyRequest('/verify/v1/verify-otp',{otp_id:row.provider_reference,otp_code:otp});
+    const status=String(result.status||'').toUpperCase();
+    if(status!=='APPROVED'){
+      if(status==='EXPIRED')await pool.query("UPDATE phone_verifications SET status='expired' WHERE id=$1",[row.id]);
+      return res.status(400).json({error:status==='EXPIRED'?'This verification code has expired. Request a new code.':'Incorrect verification code.'});
+    }
+    const {rows}=await pool.query("UPDATE phone_verifications SET status='verified',verified_at=NOW() WHERE id=$1 RETURNING id,status,verified_at",[row.id]);
+    await audit(req.user.sub,req.user.sub,'phone_verification.completed','phone_verification',row.id,{provider:'d7'});
+    res.json({ok:true,verified:true,verification:rows[0],message:'Phone number verified successfully.'});
+  }catch(e){
+    console.error('Phone verification verify error:',e);
+    res.status(502).json({error:e.message||'Unable to verify the code.'});
+  }
 });
 app.get('/api/verification/:userId',requireAuth,async(req,res)=>{
   if(req.user.sub!==req.params.userId&&req.user.role!=='admin')return res.status(403).json({error:'Access denied.'});
-  try{const {rows}=await pool.query('SELECT status,document_type,verified_at,created_at FROM identity_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1',[req.params.userId]);res.json(rows[0]||{status:'unverified'})}
-  catch(e){res.status(500).json({error:'Unable to load verification status'})}
+  try{
+    const [phone,identity]=await Promise.all([
+      pool.query("SELECT status,verified_at,created_at FROM phone_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[req.params.userId]),
+      pool.query("SELECT status,document_type,verified_at,created_at FROM identity_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[req.params.userId])
+    ]);
+    res.json({
+      phone_status:phone.rows[0]?.status||'unverified',
+      phone_verified_at:phone.rows[0]?.verified_at||null,
+      identity:identity.rows[0]||{status:'unverified'}
+    });
+  }catch(e){res.status(500).json({error:'Unable to load verification status'})}
 });
 
 app.use('/api/admin',requireAuth,requireAdmin,adminLimiter);
