@@ -150,3 +150,22 @@ INSERT INTO services(name,description) VALUES
 ('Beauty','Barbers, stylists and beauty services'),
 ('Construction','Building, painting, masonry and general construction')
 ON CONFLICT (name) DO NOTHING;
+
+
+CREATE TABLE IF NOT EXISTS payment_transactions (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ service_request_id UUID NOT NULL UNIQUE REFERENCES service_requests(id) ON DELETE RESTRICT,
+ customer_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ provider_id UUID REFERENCES provider_profiles(id) ON DELETE SET NULL,
+ amount_sle NUMERIC(14,2) NOT NULL CHECK (amount_sle > 0),
+ platform_fee NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (platform_fee >= 0),
+ provider_earnings NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (provider_earnings >= 0),
+ currency VARCHAR(10) NOT NULL DEFAULT 'SLE',
+ gateway VARCHAR(40) NOT NULL DEFAULT 'not_configured',
+ status VARCHAR(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','paid','failed','cancelled','refunded')),
+ provider_reference VARCHAR(180),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_payment_customer ON payment_transactions(customer_user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_status ON payment_transactions(status,created_at DESC);
