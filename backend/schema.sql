@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications(user_id,created_at DESC);
+ALTER TABLE phone_verifications ADD COLUMN IF NOT EXISTS provider_reference TEXT;
+ALTER TABLE phone_verifications ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
 
 CREATE TABLE IF NOT EXISTS services (
