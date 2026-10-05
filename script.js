@@ -132,7 +132,7 @@ async function providerProfile(){
       '<label class="form-label">Service description</label><textarea id="providerDesc" class="form-control" placeholder="Tell customers what you do"></textarea>'+
       '<button class="btn" id="saveProvider">Save live profile</button>');
     wireLocation('provider');
-    if(p.region){$('providerRegion').value=p.region;wireLocation('provider');$('providerDistrict').value=p.district||''}
+    if(p.region){$('providerRegion').value=p.region;wireLocation('provider');$('providerDistrict').value=p.district||'';$('providerArea').value=p.area||'';$('providerAddress').value=p.service_address||''}
     if(existing.services&&existing.services[0]){
       const s=existing.services[0];$('providerService').value=s.service_id;$('providerPricing').value=s.pricing_type;$('providerPrice').value=s.price_sle??'';$('providerDesc').value=s.description||'';
     }
