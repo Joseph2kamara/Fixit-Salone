@@ -242,7 +242,16 @@ async function providerPortal(){
     $('manageJobs').onclick=()=>providerJobs();
     $('editProviderProfile').onclick=()=>providerProfile();
     $('refreshProvider').onclick=()=>providerPortal();
-  }catch(e){alert(e.message)}
+  }catch(e){
+    if(/invalid or expired session/i.test(e.message||'')){
+      clearAuth();
+      openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Join FixIt as a professional</h2><p>Your previous sign-in session has expired. Please sign in again or create a provider account.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Provider sign in</button>');
+      $('providerCreate').onclick=()=>customerLogin('register','provider');
+      $('providerSignIn').onclick=()=>customerLogin('login','provider');
+      return;
+    }
+    alert(e.message)
+  }
 }
 async function providerJobs(){
   try{
