@@ -194,7 +194,7 @@ async function customerRequests(){
     $('closeCustomerRequests').onclick=closeModal;
   }catch(e){alert(e.message)}
 }
-function providerPortal(){
+async function providerPortal(){
   if(!authToken()){
     openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Join FixIt as a professional</h2><p>Create or sign in to your provider account first.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Provider sign in</button>');
     $('providerCreate').onclick=()=>customerLogin('register','provider');
