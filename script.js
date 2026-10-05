@@ -76,8 +76,39 @@ window.customerLogin=customerLogin;
 function saveCustomer(){customerLogin('register','customer')}
 function locationFields(prefix){return '<label class="form-label">Region</label><select id="'+prefix+'Region" class="form-control"><option value="">Select region</option>'+Object.keys(districts).map(r=>'<option>'+esc(r)+'</option>').join('')+'</select><label class="form-label">District</label><select id="'+prefix+'District" class="form-control" disabled><option>Select district</option></select><label class="form-label">Community / Area</label><input id="'+prefix+'Area" class="form-control" placeholder="e.g. Lumley, Aberdeen, Hill Station"><label class="form-label">Street / Landmark / Address</label><input id="'+prefix+'Address" class="form-control" placeholder="e.g. Near ..."><label class="form-label">Additional directions (optional)</label><input id="'+prefix+'Directions" class="form-control" placeholder="Helpful directions for finding the location">'}
 function wireLocation(prefix){$(prefix+'Region').onchange=()=>{const r=$(prefix+'Region').value,d=$(prefix+'District'),list=districts[r]||[];d.innerHTML='<option value="">Select district</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length}}
-function showRequest(i){if(!authToken()||!localStorage.getItem('fixit_customer')){customerLogin('login','customer');return}const p=providers[i];openModal('<p class="eyebrow">SERVICE REQUEST</p><h2>Request '+esc(p.service)+'</h2><p>Provider: <b>'+esc(p.name)+'</b></p>'+locationFields('request')+'<label class="form-label">Pricing type</label><select id="quoteType" class="form-control"><option>Starting price</option><option>Fixed price</option><option>Quote required</option></select><label class="form-label">Job details</label><textarea id="jobDetails" class="form-control" placeholder="Describe the work you need..."></textarea><label class="form-label">Photos (optional, up to 5)</label><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" multiple><p class="quote-note">Final price must be approved before payment. FixIt fee: 1%.</p><button class="btn" id="submitRequest">Continue</button>');wireLocation('request');$('submitRequest').onclick=submitRequest}
-function submitRequest(){const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),details=$('jobDetails').value.trim(),files=$('jobPhotos').files;if(!r||!d||!a||!addr||!details){alert('Please complete your region, district, area, address and job details.');return}if(files.length>5){alert('Maximum 5 photos.');return}for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}openModal('<p class="eyebrow">REQUEST RECEIVED</p><h2>Your request is ready</h2><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+esc(r)+' · '+esc(d)+'</p><p>The provider can review the job and send a quote for your approval.</p><button class="btn" id="closeRequest">Done</button>');$('closeRequest').onclick=closeModal}
+async function showRequest(i){
+  if(!authToken()||!localStorage.getItem('fixit_customer')){customerLogin('login','customer');return}
+  const p=providers[i];
+  try{
+    const services=await api('/api/services');
+    const match=services.find(s=>s.name.toLowerCase()===p.service.toLowerCase());
+    if(!match){alert('This service is not yet available in the live marketplace.');return}
+    openModal('<p class="eyebrow">SERVICE REQUEST</p><h2>Request '+esc(p.service)+'</h2><p>Provider: <b>'+esc(p.name)+'</b></p>'+locationFields('request')+
+      '<label class="form-label">Pricing type</label><select id="quoteType" class="form-control"><option value="starting_price">Starting price</option><option value="fixed_price">Fixed price</option><option value="quote_required">Quote required</option></select>'+
+      '<label class="form-label">Job details</label><textarea id="jobDetails" class="form-control" placeholder="Describe the work you need..."></textarea>'+
+      '<label class="form-label">Photos (optional, up to 5)</label><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" multiple>'+
+      '<p class="quote-note">Final price must be approved before payment. FixIt fee: 1%.</p><button class="btn" id="submitRequest">Send request</button>');
+    wireLocation('request');
+    $('submitRequest').onclick=()=>submitRequest(p,match.id);
+  }catch(e){alert(e.message)}
+}
+async function submitRequest(provider,serviceId){
+  const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),files=$('jobPhotos').files;
+  if(!r||!d||!a||!addr||!details){alert('Please complete your region, district, area, address and job details.');return}
+  if(files.length>5){alert('Maximum 5 photos.');return}
+  for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
+  $('submitRequest').disabled=true;
+  try{
+    const profile=await api('/api/providers');
+    const live=profile.find(x=>x.business_name===provider.name);
+    const providerId=live?live.id:null;
+    if(!providerId)throw new Error('This provider is not yet connected to the live marketplace.');
+    const created=await api('/api/service-requests',{method:'POST',body:JSON.stringify({provider_id:providerId,service_id:serviceId,region:r,district:d,area:a,service_address:addr,directions,pricing_type:$('quoteType').value,job_details:details})});
+    openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
+    $('closeRequest').onclick=closeModal;
+  }catch(e){alert(e.message);$('submitRequest').disabled=false}
+}
+
 function providerPortal(){
   if(!authToken()){
     openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Join FixIt as a professional</h2><p>Create or sign in to your provider account first.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Provider sign in</button>');
@@ -87,8 +118,40 @@ function providerPortal(){
   }
   openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Grow your business on FixIt</h2><p>Choose a plan to unlock more customer leads and visibility.</p><div class="plan-grid"><div><b>Free</b><strong>SLE 0</strong><small>3 leads/month</small></div><div><b>Pro</b><strong>SLE 75/mo</strong><small>20 leads + portfolio</small></div><div><b>Business</b><strong>SLE 150/mo</strong><small>Priority leads + analytics</small></div></div><p class="quote-note">Featured placement can be purchased separately. Prices are beta examples and can be changed before launch.</p><button class="btn" id="profileBtn">Set up provider profile</button>');$('profileBtn').onclick=()=>providerProfile()
 }
-function providerProfile(){openModal('<p class="eyebrow">PROVIDER PROFILE</p><h2>Your business details</h2>'+locationFields('provider')+'<label class="form-label">Business / service description</label><textarea id="providerDesc" class="form-control" placeholder="Tell customers what you do"></textarea><button class="btn" id="saveProvider">Save profile</button>');wireLocation('provider');$('saveProvider').onclick=saveProvider}
-function saveProvider(){const r=$('providerRegion').value,d=$('providerDistrict').value,a=$('providerArea').value.trim(),addr=$('providerAddress').value.trim();if(!r||!d||!a||!addr){alert('Please complete region, district, area and address.');return}localStorage.setItem('fixit_provider_profile',JSON.stringify({region:r,district:d,area:a,address:addr,directions:$('providerDirections').value.trim(),description:$('providerDesc').value.trim()}));openModal('<p class="eyebrow">PROFILE SAVED</p><h2>Provider profile saved</h2><p>📍 '+esc(a)+', '+esc(addr)+'</p><button class="btn" id="profileDone">Done</button>');$('profileDone').onclick=closeModal}
+async function providerProfile(){
+  try{
+    const services=await api('/api/services');
+    const existing=await api('/api/providers/me/profile');
+    const p=existing.profile||{};
+    openModal('<p class="eyebrow">PROVIDER PROFILE</p><h2>Your live business profile</h2>'+
+      '<label class="form-label">Business name</label><input id="providerBusiness" class="form-control" value="'+esc(p.business_name||'')+'" placeholder="e.g. Joe Electrical Services">'+
+      locationFields('provider')+
+      '<label class="form-label">Main service</label><select id="providerService" class="form-control"><option value="">Select service</option>'+services.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select>'+
+      '<label class="form-label">Pricing type</label><select id="providerPricing" class="form-control"><option value="starting_price">Starting price</option><option value="fixed_price">Fixed price</option><option value="quote_required">Quote required</option></select>'+
+      '<label class="form-label">Starting / fixed price (SLE)</label><input id="providerPrice" class="form-control" type="number" min="0" step="0.01" placeholder="Optional">'+
+      '<label class="form-label">Service description</label><textarea id="providerDesc" class="form-control" placeholder="Tell customers what you do"></textarea>'+
+      '<button class="btn" id="saveProvider">Save live profile</button>');
+    wireLocation('provider');
+    if(p.region){$('providerRegion').value=p.region;wireLocation('provider');$('providerDistrict').value=p.district||''}
+    if(existing.services&&existing.services[0]){
+      const s=existing.services[0];$('providerService').value=s.service_id;$('providerPricing').value=s.pricing_type;$('providerPrice').value=s.price_sle??'';$('providerDesc').value=s.description||'';
+    }
+    $('saveProvider').onclick=saveProvider;
+  }catch(e){alert(e.message)}
+}
+async function saveProvider(){
+  const business=$('providerBusiness').value.trim(),r=$('providerRegion').value,d=$('providerDistrict').value,a=$('providerArea').value.trim(),addr=$('providerAddress').value.trim(),serviceId=$('providerService').value;
+  if(!business||!r||!d||!a||!addr||!serviceId){alert('Please complete your business name, location and main service.');return}
+  $('saveProvider').disabled=true;
+  try{
+    const profile=await api('/api/providers/me/profile',{method:'PUT',body:JSON.stringify({business_name:business,region:r,district:d,area:a,service_address:addr})});
+    await api('/api/providers/me/services',{method:'POST',body:JSON.stringify({service_id:serviceId,pricing_type:$('providerPricing').value,price_sle:$('providerPrice').value||null,description:$('providerDesc').value.trim()})});
+    localStorage.setItem('fixit_provider_profile',JSON.stringify({business_name:business,region:r,district:d,area:a,address:addr,description:$('providerDesc').value.trim(),provider_id:profile.profile.id}));
+    openModal('<p class="eyebrow">PROFILE LIVE</p><h2>Your provider profile is saved</h2><p>Your business details are now stored in the FixIt database.</p><p>Provider profile ID: <b>'+esc(profile.profile.id)+'</b></p><button class="btn" id="profileDone">Done</button>');
+    $('profileDone').onclick=closeModal;
+  }catch(e){alert(e.message);$('saveProvider').disabled=false}
+}
+
 function verificationCenter(){const saved=localStorage.getItem('fixit_customer');const user=saved?JSON.parse(saved):null;const phoneVerified=localStorage.getItem('fixit_phone_verified')==='true';openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Build trust on FixIt</h2><div class="verification-steps"><div class="verification-step '+(user?'done':'')+'"><b>01</b><span><strong>Account</strong><small>'+(user?'Account created':'Create a customer account first')+'</small></span></div><div class="verification-step '+(phoneVerified?'done':'')+'"><b>02</b><span><strong>Phone</strong><small>'+(phoneVerified?'Phone marked verified in beta':'Verify your phone number')+'</small></span></div><div class="verification-step"><b>03</b><span><strong>Identity</strong><small>Secure KYC will be added before launch</small></span></div></div><p class="quote-note">Public beta: phone verification currently uses a demo code only. It does not prove ownership of a real phone number. Do not upload ID documents yet.</p>'+(user?'<button class="btn" id="phoneVerifyBtn">'+(phoneVerified?'Phone verified':'Verify phone')+'</button>':'<button class="btn" id="createAccountBtn">Create customer account</button>')+'<button class="btn outline" id="verificationDone">Done</button>');if(user){$('phoneVerifyBtn').onclick=phoneVerification}else{$('createAccountBtn').onclick=()=>{closeModal();customerLogin()}}$('verificationDone').onclick=closeModal}window.verificationCenter=verificationCenter;
 function phoneVerification(){const saved=localStorage.getItem('fixit_customer');if(!saved){customerLogin();return}const u=JSON.parse(saved);const phone=esc(u.phone);openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Verify '+phone+'</h2><p>Enter the 6-digit code sent to your phone.</p><p class="quote-note"><b>Demo mode:</b> use <b>123456</b>. No real SMS is sent yet.</p><label class="form-label">6-digit OTP</label><input id="otpCode" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456"><button class="btn" id="checkOtp">Verify phone</button><button class="btn outline" id="backVerification">Back</button>');$('checkOtp').onclick=()=>{const code=$('otpCode').value.trim();if(code!=='123456'){alert('Demo verification code is 123456.');return}localStorage.setItem('fixit_phone_verified','true');verificationCenter()};$('backVerification').onclick=verificationCenter}window.phoneVerification=phoneVerification;
 function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Beta note: secure ID upload and live admin investigation are not connected to the public beta yet. Phone verification is demo-only until a real SMS provider and authenticated backend are connected.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
