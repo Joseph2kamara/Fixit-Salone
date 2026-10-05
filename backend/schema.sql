@@ -95,3 +95,58 @@ CREATE TABLE IF NOT EXISTS phone_verifications (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_phone_verifications_user ON phone_verifications(user_id,created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS services (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ name VARCHAR(100) NOT NULL UNIQUE,
+ description VARCHAR(255),
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS provider_services (
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ service_id UUID NOT NULL REFERENCES services(id) ON DELETE RESTRICT,
+ pricing_type VARCHAR(30) NOT NULL DEFAULT 'quote_required' CHECK (pricing_type IN ('fixed_price','starting_price','quote_required')),
+ price_sle NUMERIC(14,2),
+ description VARCHAR(500),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY(provider_id,service_id)
+);
+CREATE INDEX IF NOT EXISTS idx_provider_services_service ON provider_services(service_id);
+
+CREATE TABLE IF NOT EXISTS service_requests (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ customer_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ provider_id UUID REFERENCES provider_profiles(id) ON DELETE SET NULL,
+ service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+ region VARCHAR(80) NOT NULL,
+ district VARCHAR(100) NOT NULL,
+ area VARCHAR(120) NOT NULL,
+ service_address TEXT NOT NULL,
+ directions TEXT,
+ pricing_type VARCHAR(30) NOT NULL CHECK (pricing_type IN ('fixed_price','starting_price','quote_required')),
+ job_details TEXT NOT NULL,
+ status VARCHAR(30) NOT NULL DEFAULT 'requested' CHECK (status IN ('requested','quoted','approved','in_progress','completed','cancelled','declined')),
+ quoted_amount NUMERIC(14,2),
+ platform_fee NUMERIC(14,2),
+ provider_earnings NUMERIC(14,2),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_requests_customer ON service_requests(customer_user_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_provider ON service_requests(provider_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON service_requests(status,created_at DESC);
+
+INSERT INTO services(name,description) VALUES
+('Plumbing','Leaks, pipes, fittings and water systems'),
+('Electrical','Wiring, installations, repairs and troubleshooting'),
+('Cleaning','Home, office and move-in cleaning'),
+('Phone Repair','Phone screens, batteries, charging ports and software'),
+('IT & Computer','Computer repair, networking and technical support'),
+('Auto Repair','Diagnostics, servicing and vehicle repairs'),
+('Beauty','Barbers, stylists and beauty services'),
+('Construction','Building, painting, masonry and general construction')
+ON CONFLICT (name) DO NOTHING;
