@@ -1,7 +1,7 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const tokenKey='fixit_admin_token',apiKey='fixit_api_base';
-let API=(localStorage.getItem(apiKey)||'').replace(/\\/$/,'');
+let API=(localStorage.getItem(apiKey)||'https://fixit-salone-api.onrender.com').replace(/\\/$/,'');
 const token=()=>sessionStorage.getItem(tokenKey);
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function msg(t){$('loginMessage').textContent=t}
