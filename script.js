@@ -106,6 +106,7 @@ function customerLogin(mode='login',role='customer'){
     '<label class="form-label">Phone number</label><input id="authPhone" class="form-control" placeholder="+232 76 000 000" autocomplete="tel">'+
     '<label class="form-label">Password</label><input id="authPassword" type="password" class="form-control" placeholder="At least 8 characters" autocomplete="'+(mode==='register'?'new-password':'current-password')+'">'+
     '<button class="btn" id="authSubmit">'+action+'</button>'+
+    (mode==='login'?'<button class="btn outline" id="forgotPassword">Forgot password?</button>':'')+
     '<button class="btn outline" id="authSwitch">'+(mode==='register'?'Already have an account? Sign in':'New here? Create an account')+'</button>'+
     '<p id="authMessage" class="form-message"></p>'+
     '<p class="quote-note">Your password is securely stored on the FixIt backend and is never saved in your browser.</p>');
@@ -122,7 +123,34 @@ function customerLogin(mode='login',role='customer'){
     }catch(e){$('authMessage').textContent=e.message;$('authSubmit').disabled=false;}
   };
   $('authSwitch').onclick=()=>customerLogin(mode==='register'?'login':'register',role);
+  if(mode==='login')$('forgotPassword').onclick=forgotPassword;
 }
+async function forgotPassword(){
+  openModal('<p class="eyebrow">ACCOUNT RECOVERY</p><h2>Forgot password?</h2><p>Enter the phone number linked to your FixIt account.</p><label class="form-label">Phone number</label><input id="resetPhone" class="form-control" placeholder="+232 76 000 000" autocomplete="tel"><button class="btn" id="sendReset">Continue</button><button class="btn outline" id="backToLogin">Back to sign in</button><p id="resetMessage" class="form-message"></p>');
+  $('sendReset').onclick=async()=>{
+    const phone=$('resetPhone').value.trim();
+    if(!phone){$('resetMessage').textContent='Please enter your phone number.';return}
+    $('sendReset').disabled=true;$('resetMessage').textContent='Preparing password reset…';
+    try{
+      const data=await api('/api/auth/forgot-password',{method:'POST',body:JSON.stringify({phone})});
+      if(!data.reset_id){$('resetMessage').textContent=data.message||'If an account exists, reset instructions have been prepared.';return}
+      openModal('<p class="eyebrow">VERIFY</p><h2>Reset your password</h2><p>Enter the verification code, then choose a new password.</p><p class="quote-note"><b>Beta mode:</b> real SMS is not connected yet. Use demo code <b>123456</b>.</p><label class="form-label">Verification code</label><input id="resetOtp" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456"><label class="form-label">New password</label><input id="resetNewPassword" type="password" class="form-control" placeholder="At least 8 characters" autocomplete="new-password"><label class="form-label">Confirm new password</label><input id="resetConfirmPassword" type="password" class="form-control" placeholder="Repeat new password" autocomplete="new-password"><button class="btn" id="resetSubmit">Reset password</button><p id="resetFormMessage" class="form-message"></p>');
+      $('resetSubmit').onclick=async()=>{
+        const otp=$('resetOtp').value.trim(),pw=$('resetNewPassword').value,confirm=$('resetConfirmPassword').value;
+        if(!otp||!pw||!confirm){$('resetFormMessage').textContent='Please complete all fields.';return}
+        if(pw!==confirm){$('resetFormMessage').textContent='Passwords do not match.';return}
+        $('resetSubmit').disabled=true;$('resetFormMessage').textContent='Updating password…';
+        try{
+          const result=await api('/api/auth/reset-password',{method:'POST',body:JSON.stringify({reset_id:data.reset_id,otp,password:pw})});
+          openModal('<p class="eyebrow">PASSWORD UPDATED</p><h2>Password reset successful</h2><p>'+esc(result.message)+'</p><button class="btn" id="resetDone">Sign in</button>');
+          $('resetDone').onclick=()=>customerLogin('login',role);
+        }catch(e){$('resetFormMessage').textContent=e.message;$('resetSubmit').disabled=false}
+      };
+    }catch(e){$('resetMessage').textContent=e.message;$('sendReset').disabled=false}
+  };
+  $('backToLogin').onclick=()=>customerLogin('login','customer');
+}
+
 window.customerLogin=customerLogin;
 window.customerRequests=customerRequests;
 window.providerJobs=providerJobs;
