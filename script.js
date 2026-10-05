@@ -14,7 +14,7 @@ async function api(path,options={}){
 }
 function saveAuth(data){
   sessionStorage.setItem(AUTH_TOKEN_KEY,data.token);
-  localStorage.setItem('fixit_customer',JSON.stringify({name:data.user.full_name,phone:data.user.phone,role:data.user.role}));
+  localStorage.setItem('fixit_customer',JSON.stringify({id:data.user.id,name:data.user.full_name,phone:data.user.phone,role:data.user.role}));
 }
 function clearAuth(){
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
@@ -320,9 +320,40 @@ async function saveProvider(){
   }catch(e){alert(e.message);$('saveProvider').disabled=false}
 }
 
-function verificationCenter(){const saved=localStorage.getItem('fixit_customer');const user=saved?JSON.parse(saved):null;const phoneVerified=localStorage.getItem('fixit_phone_verified')==='true';openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Build trust on FixIt</h2><div class="verification-steps"><div class="verification-step '+(user?'done':'')+'"><b>01</b><span><strong>Account</strong><small>'+(user?'Account created':'Create a customer account first')+'</small></span></div><div class="verification-step '+(phoneVerified?'done':'')+'"><b>02</b><span><strong>Phone</strong><small>'+(phoneVerified?'Phone marked verified in beta':'Verify your phone number')+'</small></span></div><div class="verification-step"><b>03</b><span><strong>Identity</strong><small>Secure KYC will be added before launch</small></span></div></div><p class="quote-note">Public beta: phone verification currently uses a demo code only. It does not prove ownership of a real phone number. Do not upload ID documents yet.</p>'+(user?'<button class="btn" id="phoneVerifyBtn">'+(phoneVerified?'Phone verified':'Verify phone')+'</button>':'<button class="btn" id="createAccountBtn">Create customer account</button>')+'<button class="btn outline" id="verificationDone">Done</button>');if(user){$('phoneVerifyBtn').onclick=phoneVerification}else{$('createAccountBtn').onclick=()=>{closeModal();customerLogin()}}$('verificationDone').onclick=closeModal}window.verificationCenter=verificationCenter;
-function phoneVerification(){const saved=localStorage.getItem('fixit_customer');if(!saved){customerLogin();return}const u=JSON.parse(saved);const phone=esc(u.phone);openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Verify '+phone+'</h2><p>Enter the 6-digit code sent to your phone.</p><p class="quote-note"><b>Demo mode:</b> use <b>123456</b>. No real SMS is sent yet.</p><label class="form-label">6-digit OTP</label><input id="otpCode" class="form-control" inputmode="numeric" maxlength="6" placeholder="123456"><button class="btn" id="checkOtp">Verify phone</button><button class="btn outline" id="backVerification">Back</button>');$('checkOtp').onclick=()=>{const code=$('otpCode').value.trim();if(code!=='123456'){alert('Demo verification code is 123456.');return}localStorage.setItem('fixit_phone_verified','true');verificationCenter()};$('backVerification').onclick=verificationCenter}window.phoneVerification=phoneVerification;
-function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Beta note: secure ID upload and live admin investigation are not connected to the public beta yet. Phone verification is demo-only until a real SMS provider and authenticated backend are connected.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
+async function verificationCenter(){
+  const saved=localStorage.getItem('fixit_customer');const user=saved?JSON.parse(saved):null;
+  if(!user||!authToken()){openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Sign in first</h2><p>Create or sign in to your FixIt account before verifying your phone number.</p><button class="btn" id="verificationLogin">Sign in</button><button class="btn outline" id="verificationDone">Done</button>');$('verificationLogin').onclick=()=>{closeModal();customerLogin('login','customer')};$('verificationDone').onclick=closeModal;return}
+  openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Loading verification…</h2><p>Please wait.</p>');
+  let status={phone_status:'unverified',identity:{status:'unverified'}};
+  try{status=await api('/api/verification/'+encodeURIComponent(user.id||''))}catch{}
+  const phoneVerified=status.phone_status==='verified';
+  openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Build trust on FixIt</h2><div class="verification-steps"><div class="verification-step done"><b>01</b><span><strong>Account</strong><small>Account created</small></span></div><div class="verification-step '+(phoneVerified?'done':'')+'"><b>02</b><span><strong>Phone</strong><small>'+(phoneVerified?'Phone verified':'Verify your phone number')+'</small></span></div><div class="verification-step"><b>03</b><span><strong>Identity</strong><small>Secure KYC will be added before launch</small></span></div></div><p class="quote-note">'+(phoneVerified?'Your phone number has been verified successfully.':'We will send a real one-time code by SMS. Your code expires after a short period. SMS charges apply.')+'</p>'+(phoneVerified?'<button class="btn" disabled>Phone verified ✓</button>':'<button class="btn" id="phoneVerifyBtn">Send verification code</button>')+'<button class="btn outline" id="verificationDone">Done</button>');
+  if(!phoneVerified)$('phoneVerifyBtn').onclick=phoneVerification;
+  $('verificationDone').onclick=closeModal;
+}
+window.verificationCenter=verificationCenter;
+async function phoneVerification(){
+  const saved=localStorage.getItem('fixit_customer');if(!saved||!authToken()){customerLogin('login','customer');return}
+  const u=JSON.parse(saved);
+  openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Sending code…</h2><p>Please wait while we send a verification SMS.</p>');
+  try{
+    const data=await api('/api/phone-verification/request',{method:'POST',body:JSON.stringify({})});
+    const verificationId=data.verification.id;
+    openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Check your phone</h2><p>Enter the 6-digit code sent to <b>'+esc(u.phone)+'</b>.</p><p class="quote-note">The code is sent by FixIt Salone SMS verification and is valid for a limited time. Never share your verification code with anyone.</p><label class="form-label">6-digit OTP</label><input id="otpCode" class="form-control" inputmode="numeric" maxlength="8" placeholder="Enter code" autocomplete="one-time-code"><button class="btn" id="checkOtp">Verify phone</button><button class="btn outline" id="backVerification">Back</button><p id="otpMessage" class="form-message"></p>');
+    $('checkOtp').onclick=async()=>{
+      const code=$('otpCode').value.trim();if(!code){$('otpMessage').textContent='Enter the code sent to your phone.';return}
+      $('checkOtp').disabled=true;$('otpMessage').textContent='Checking code…';
+      try{const result=await api('/api/phone-verification/verify',{method:'POST',body:JSON.stringify({verification_id:verificationId,otp:code})});localStorage.setItem('fixit_phone_verified','true');openModal('<p class="eyebrow">VERIFIED</p><h2>Phone verified ✓</h2><p>'+esc(result.message)+'</p><button class="btn" id="verifiedDone">Continue</button>');$('verifiedDone').onclick=verificationCenter}
+      catch(e){$('otpMessage').textContent=e.message;$('checkOtp').disabled=false}
+    };
+    $('backVerification').onclick=verificationCenter;
+  }catch(e){
+    openModal('<p class="eyebrow">PHONE VERIFICATION</p><h2>Could not send code</h2><p>'+esc(e.message)+'</p><p class="quote-note">The SMS service must be configured on the FixIt backend before real messages can be sent.</p><button class="btn" id="verificationRetry">Try again</button><button class="btn outline" id="verificationBack">Back</button>');
+    $('verificationRetry').onclick=phoneVerification;$('verificationBack').onclick=verificationCenter;
+  }
+}
+window.phoneVerification=phoneVerification;
+function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Beta note: secure ID upload and live admin investigation are not connected to the public beta yet. Phone verification uses real SMS when the configured provider is active; identity KYC is still pending.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
 function reportProvider(i){
   const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
