@@ -34,6 +34,7 @@ const districts={'Western Area':['Western Area Urban','Western Area Rural'],'Eas
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const modal=$('modal'),body=$('modalBody');
 let liveProviders=[];
+let visibleProviders=[];
 async function loadLiveProviders(){
   try{
     const params=new URLSearchParams();
@@ -66,12 +67,13 @@ async function render(){
   const source=activeProviders();
   const q=$('search').value.trim().toLowerCase(),r=$('region').value,d=$('district').value;
   const list=source.filter(p=>(!q||Object.values(p).join(' ').toLowerCase().includes(q))&&(r==='All regions'||p.region===r)&&(!d||p.district===d));
+  visibleProviders=list;
   $('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found'+(ok?'':' · demo data');
   $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+esc(p.initials)+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
 }
 function renderCategories(){$('categories').innerHTML=categories.map(c=>'<button class="category-btn" data-service="'+esc(c[1])+'">'+c[0]+'<b>'+esc(c[1])+'</b><small>'+esc(c[2])+'</small></button>').join('')}
 async function showProfile(i){
-  const source=activeProviders(); const p=source[i];
+  const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
   if(p.id){
     try{
@@ -90,8 +92,9 @@ function customerLogin(mode='login',role='customer'){
   const saved=localStorage.getItem('fixit_customer');
   if(authToken()&&saved){
     const u=JSON.parse(saved);
-    openModal('<p class="eyebrow">'+(u.role==='provider'?'PROVIDER':'CUSTOMER')+' ACCOUNT</p><h2>Welcome back, '+esc(u.name)+'</h2><p>'+esc(u.phone)+'</p><button class="btn" id="accountContinue">Continue</button><button class="btn outline" id="accountSignOut">Sign out</button>');
+    openModal('<p class="eyebrow">'+(u.role==='provider'?'PROVIDER':'CUSTOMER')+' ACCOUNT</p><h2>Welcome back, '+esc(u.name)+'</h2><p>'+esc(u.phone)+'</p><button class="btn" id="accountContinue">Continue</button>'+(u.role==='customer'?'<button class="btn outline" id="myRequests">My requests</button>':'<button class="btn outline" id="providerJobsBtn">Incoming jobs</button>')+'<button class="btn outline" id="accountSignOut">Sign out</button>');
     $('accountContinue').onclick=closeModal;
+    if(u.role==='customer')$('myRequests').onclick=customerRequests; else $('providerJobsBtn').onclick=providerJobs;
     $('accountSignOut').onclick=()=>{clearAuth();customerLogin('login',role)};
     return;
   }
@@ -121,6 +124,8 @@ function customerLogin(mode='login',role='customer'){
   $('authSwitch').onclick=()=>customerLogin(mode==='register'?'login':'register',role);
 }
 window.customerLogin=customerLogin;
+window.customerRequests=customerRequests;
+window.providerJobs=providerJobs;
 function saveCustomer(){customerLogin('register','customer')}
 function locationFields(prefix){return '<label class="form-label">Region</label><select id="'+prefix+'Region" class="form-control"><option value="">Select region</option>'+Object.keys(districts).map(r=>'<option>'+esc(r)+'</option>').join('')+'</select><label class="form-label">District</label><select id="'+prefix+'District" class="form-control" disabled><option>Select district</option></select><label class="form-label">Community / Area</label><input id="'+prefix+'Area" class="form-control" placeholder="e.g. Lumley, Aberdeen, Hill Station"><label class="form-label">Street / Landmark / Address</label><input id="'+prefix+'Address" class="form-control" placeholder="e.g. Near ..."><label class="form-label">Additional directions (optional)</label><input id="'+prefix+'Directions" class="form-control" placeholder="Helpful directions for finding the location">'}
 function wireLocation(prefix){$(prefix+'Region').onchange=()=>{const r=$(prefix+'Region').value,d=$(prefix+'District'),list=districts[r]||[];d.innerHTML='<option value="">Select district</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length}}
@@ -157,6 +162,30 @@ async function submitRequest(provider,serviceId){
   }catch(e){alert(e.message);$('submitRequest').disabled=false}
 }
 
+async async function customerRequests(){
+  if(!authToken()){customerLogin('login','customer');return}
+  try{
+    const me=await api('/api/auth/me');
+    if(me.user.role!=='customer')throw new Error('Please sign in with a customer account to view your requests.');
+    const requests=await api('/api/service-requests/mine');
+    const cards=requests.length?requests.map(r=>{
+      const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'Awaiting provider quote';
+      const actions=[];
+      if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');
+      if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p>'+actions.join('')+'</article>';
+    }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
+    openModal('<p class="eyebrow">MY REQUESTS</p><h2>Your FixIt jobs</h2><p class="quote-note">Review provider quotes here. Payment will only be requested after you approve the final quote.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="closeCustomerRequests">Done</button>');
+    document.querySelectorAll('[data-customer-action]').forEach(btn=>btn.onclick=async()=>{
+      try{
+        const map={approve:'approved',cancel:'cancelled'};
+        await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/status',{method:'PATCH',body:JSON.stringify({status:map[btn.dataset.customerAction]})});
+        customerRequests();
+      }catch(e){alert(e.message)}
+    });
+    $('closeCustomerRequests').onclick=closeModal;
+  }catch(e){alert(e.message)}
+}
 function providerPortal(){
   if(!authToken()){
     openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Join FixIt as a professional</h2><p>Create or sign in to your provider account first.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Provider sign in</button>');
@@ -164,7 +193,54 @@ function providerPortal(){
     $('providerSignIn').onclick=()=>customerLogin('login','provider');
     return;
   }
-  openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Grow your business on FixIt</h2><p>Choose a plan to unlock more customer leads and visibility.</p><div class="plan-grid"><div><b>Free</b><strong>SLE 0</strong><small>3 leads/month</small></div><div><b>Pro</b><strong>SLE 75/mo</strong><small>20 leads + portfolio</small></div><div><b>Business</b><strong>SLE 150/mo</strong><small>Priority leads + analytics</small></div></div><p class="quote-note">Featured placement can be purchased separately. Prices are beta examples and can be changed before launch.</p><button class="btn" id="profileBtn">Set up provider profile</button>');$('profileBtn').onclick=()=>providerProfile()
+  try{
+    const me=await api('/api/auth/me');
+    if(me.user.role!=='provider')throw new Error('Please sign in with a provider account to open the Provider Dashboard.');
+    const profile=await api('/api/providers/me/profile');
+    const requests=await api('/api/provider/requests');
+    const pending=requests.filter(r=>['requested','quoted','approved','in_progress'].includes(r.status)).length;
+    openModal('<p class="eyebrow">PROVIDER DASHBOARD</p><h2>Welcome, '+esc(me.user.full_name)+'</h2>'+
+      '<div class="stats-row"><span><b>'+requests.length+'</b><small>Total jobs</small></span><span><b>'+pending+'</b><small>Active jobs</small></span><span><b>'+esc(profile.profile?.verification_status||'unverified')+'</b><small>Trust status</small></span></div>'+
+      '<div class="plan-grid"><div><b>Profile</b><strong>'+(profile.profile?'Live':'Not set')+'</strong><small>Business information</small></div><div><b>Services</b><strong>'+((profile.services||[]).length)+'</strong><small>Services listed</small></div><div><b>Jobs</b><strong>'+requests.filter(r=>r.status==='completed').length+'</strong><small>Completed requests</small></div></div>'+
+      '<button class="btn" id="manageJobs">Manage incoming jobs</button><button class="btn outline" id="editProviderProfile">Edit profile & services</button><button class="btn outline" id="refreshProvider">Refresh dashboard</button>');
+    $('manageJobs').onclick=()=>providerJobs();
+    $('editProviderProfile').onclick=()=>providerProfile();
+    $('refreshProvider').onclick=()=>providerPortal();
+  }catch(e){alert(e.message)}
+}
+async function providerJobs(){
+  try{
+    const requests=await api('/api/provider/requests');
+    const cards=requests.length?requests.map(r=>{
+      const status=r.status.replaceAll('_',' ');
+      const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'No quote yet';
+      const actions=[];
+      if(r.status==='requested')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="quote">Send quote</button>','<button class="btn outline" data-job="'+esc(r.id)+'" data-action="decline">Decline</button>');
+      if(r.status==='quoted')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start after customer approval</button>');
+      if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
+      if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
+      if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div><p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p><div class="job-actions">'+actions.join('')+'</div></article>';
+    }).join(''):'<div class="card"><h3>No incoming requests</h3><p class="desc">New customer requests will appear here.</p></div>';
+    openModal('<p class="eyebrow">INCOMING JOBS</p><h2>Manage customer requests</h2><p class="quote-note">Send a final quote before work starts. FixIt fee is 1% of the approved job value.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="backProvider">Back to dashboard</button>');
+    document.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=()=>handleProviderJob(btn.dataset.job,btn.dataset.action));
+    $('backProvider').onclick=providerPortal;
+  }catch(e){alert(e.message)}
+}
+async function handleProviderJob(id,action){
+  try{
+    if(action==='quote'){
+      const amount=prompt('Enter your final quote in SLE:');
+      if(amount===null)return;
+      const n=Number(amount);
+      if(!Number.isFinite(n)||n<=0){alert('Enter a valid positive amount.');return}
+      await api('/api/service-requests/'+encodeURIComponent(id)+'/quote',{method:'PATCH',body:JSON.stringify({quoted_amount:n})});
+    }else{
+      const map={decline:'declined',start:'in_progress',complete:'completed',cancel:'cancelled'};
+      await api('/api/service-requests/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({status:map[action]})});
+    }
+    providerJobs();
+  }catch(e){alert(e.message)}
 }
 async function providerProfile(){
   try{
