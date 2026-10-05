@@ -33,11 +33,59 @@ const categories=[['🔧','Plumbing','Leaks & pipes'],['⚡','Electrical','Wirin
 const districts={'Western Area':['Western Area Urban','Western Area Rural'],'Eastern':['Kailahun','Kenema','Kono'],'Northern':['Bombali','Falaba','Koinadugu','Tonkolili'],'North West':['Kambia','Karene','Port Loko'],'Southern':['Bo','Bonthe','Moyamba','Pujehun']};
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const modal=$('modal'),body=$('modalBody');
+let liveProviders=[];
+async function loadLiveProviders(){
+  try{
+    const params=new URLSearchParams();
+    const q=$('search').value.trim();
+    const r=$('region').value;
+    const d=$('district').value;
+    if(q)params.set('service',q);
+    if(r&&r!=='All regions')params.set('region',r);
+    if(d)params.set('district',d);
+    const rows=await api('/api/providers?'+params.toString());
+    liveProviders=rows.map(x=>({
+      id:x.id,name:x.business_name||x.full_name,service:x.service_name,serviceId:x.service_id,
+      region:x.region,district:x.district,area:x.area,address:x.service_address,
+      price:x.price_sle!=null?('SLE '+Number(x.price_sle).toLocaleString()):'Quote required',
+      rating:'—',reviews:0,initials:(x.business_name||x.full_name||'FI').split(/\\s+/).map(v=>v[0]).slice(0,2).join('').toUpperCase(),
+      plan:'Free',featured:false,completed:0,completion:'—',verified:x.verification_status==='verified',
+      desc:x.service_description||'Local FixIt Salone service provider.',pricingType:x.pricing_type
+    }));
+    return true;
+  }catch(e){
+    liveProviders=[];
+    return false;
+  }
+}
+function activeProviders(){return liveProviders.length?liveProviders:providers}
 function openModal(html){body.innerHTML=html;modal.hidden=false} function closeModal(){modal.hidden=true} window.closeModal=closeModal;
 function updateDistricts(){const r=$('region').value,d=$('district'),list=districts[r]||[];d.innerHTML='<option value="">All districts</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length;render()}window.updateDistricts=updateDistricts;
-function render(){const q=$('search').value.trim().toLowerCase(),r=$('region').value,d=$('district').value;const list=providers.filter(p=>(!q||Object.values(p).join(' ').toLowerCase().includes(q))&&(r==='All regions'||p.region===r)&&(!d||p.district===d));$('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found';$('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+esc(p.initials)+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">★★★★★ <span class="meta">'+p.rating+' ('+p.reviews+')</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+p.completed+' jobs · '+p.completion+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">Try another service, region or district.</p></div>'}
+async function render(){
+  const ok=await loadLiveProviders();
+  const source=activeProviders();
+  const q=$('search').value.trim().toLowerCase(),r=$('region').value,d=$('district').value;
+  const list=source.filter(p=>(!q||Object.values(p).join(' ').toLowerCase().includes(q))&&(r==='All regions'||p.region===r)&&(!d||p.district===d));
+  $('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found'+(ok?'':' · demo data');
+  $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+esc(p.initials)+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
+}
 function renderCategories(){$('categories').innerHTML=categories.map(c=>'<button class="category-btn" data-service="'+esc(c[1])+'">'+c[0]+'<b>'+esc(c[1])+'</b><small>'+esc(c[2])+'</small></button>').join('')}
-function showProfile(i){const p=providers[i];openModal('<p class="eyebrow">'+esc(p.service)+'</p><h2>'+esc(p.name)+'</h2><p>★ '+p.rating+' ('+p.reviews+' reviews) · '+(p.verified?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'New provider')+'</p><p>'+esc(p.desc)+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(p.address)+'<br><small>'+esc(p.region)+' · '+esc(p.district)+'</small></div><div class="stats-row"><span><b>'+p.completed+'</b><small>Jobs completed</small></span><span><b>'+p.completion+'</b><small>Completion</small></span><span><b>'+p.reviews+'</b><small>Reviews</small></span></div><p><b>Starting price:</b> '+esc(p.price)+'</p><h3>My Work</h3><p class="quote-note">Portfolio uploads will appear here when this provider adds them.</p><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');$('modalRequest').onclick=()=>showRequest(i);$('modalReport').onclick=()=>reportProvider(i)}
+async function showProfile(i){
+  const source=activeProviders(); const p=source[i];
+  if(!p)return;
+  if(p.id){
+    try{
+      const data=await api('/api/providers/'+encodeURIComponent(p.id));
+      const profile=data.profile;
+      const services=data.services||[];
+      openModal('<p class="eyebrow">'+esc(services[0]?.name||p.service)+'</p><h2>'+esc(profile.business_name)+'</h2><p>'+(profile.verification_status==='verified'?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'Verification pending')+'</p><p>'+esc(services[0]?.description||'Local FixIt Salone provider.')+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(profile.service_address)+'<br><small>'+esc(profile.region)+' · '+esc(profile.district)+' · '+esc(profile.area)+'</small></div><p><b>Services:</b> '+services.map(s=>esc(s.name)).join(', ')+'</p><p><b>Pricing:</b> '+services.map(s=>esc(s.pricing_type.replaceAll('_',' '))+(s.price_sle!=null?' — SLE '+Number(s.price_sle).toLocaleString():'')).join('<br>')+'</p><h3>My Work</h3><p class="quote-note">Portfolio uploads will appear here when this provider adds them.</p><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
+      $('modalRequest').onclick=()=>showRequest(i);$('modalReport').onclick=()=>reportProvider(i);
+      return;
+    }catch(e){alert(e.message);return}
+  }
+  openModal('<p class="eyebrow">'+esc(p.service)+'</p><h2>'+esc(p.name)+'</h2><p>'+esc(p.desc)+'</p><p class="quote-note">Demo provider profile.</p><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
+  $('modalRequest').onclick=()=>showRequest(i);$('modalReport').onclick=()=>reportProvider(i);
+}
 function customerLogin(mode='login',role='customer'){
   const saved=localStorage.getItem('fixit_customer');
   if(authToken()&&saved){
@@ -173,5 +221,5 @@ window.reportProvider=reportProvider;
 function featuredListing(){openModal('<p class="eyebrow">FEATURED LISTING</p><h2>Get more visibility</h2><p>Featured providers appear prominently in relevant searches.</p><div class="plan-grid"><div><b>7 days</b><strong>SLE 25</strong><small>Featured placement</small></div><div><b>30 days</b><strong>SLE 75</strong><small>Featured placement</small></div></div><p class="quote-note">This is a beta pricing model; no payment is collected yet.</p><button class="btn" onclick="closeModal()">Got it</button>')}
 function joinProvider(){providerPortal()}window.providerPortal=providerPortal;window.joinProvider=joinProvider;window.featuredListing=featuredListing;
 document.addEventListener('click',e=>{const p=e.target.closest('.profile-btn'),r=e.target.closest('.request-btn'),cat=e.target.closest('.category-btn');if(p){showProfile(+p.dataset.index);return}if(r){showRequest(+r.dataset.index);return}if(cat){$('search').value=cat.dataset.service;render();$('providers').scrollIntoView({behavior:'smooth'})}});
-$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();
+$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();render();
 })();
