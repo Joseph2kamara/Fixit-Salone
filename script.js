@@ -307,6 +307,12 @@ async function providerPortal(){
       return;
     }
     const profile=await api('/api/providers/me/profile');
+    if(!profile.profile){
+      openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Complete your provider profile</h2><p>Your provider account is ready, but your business profile has not been created yet. Add your business name, location and main service before receiving customer requests.</p><button class="btn" id="setupProviderProfile">Set up provider profile</button><button class="btn outline" id="providerPortalBack">Back</button>');
+      $('setupProviderProfile').onclick=providerProfile;
+      $('providerPortalBack').onclick=closeModal;
+      return;
+    }
     const jobData=await api('/api/provider/requests');
     const requests=jobData.requests||[];
     const notifications=await api('/api/provider/notifications');
