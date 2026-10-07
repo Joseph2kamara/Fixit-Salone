@@ -75,7 +75,7 @@ async function storeUpload(file,key){
     await objectStorage.send(new PutObjectCommand({
       Bucket:R2_BUCKET,Key:key,Body:file.buffer,ContentType:file.mimetype,Metadata:{original_name:safeObjectName(file.originalname)}
     }));
-    return {storage_provider:'r2',storage_key:key,file_url:null};
+    return {storage_provider:'r2',storage_key:key,file_url:'r2://'+key};
   }
   const filename=Date.now()+'-'+crypto.randomBytes(10).toString('hex')+path.extname(file.originalname||'').toLowerCase();
   const target=path.join(uploadDir,filename);
