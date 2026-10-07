@@ -46,7 +46,7 @@ async function loadLiveProviders(){
     if(d)params.set('district',d);
     const rows=await api('/api/providers?'+params.toString());
     liveProviders=rows.map(x=>({
-      id:x.id,name:x.business_name||x.full_name,service:x.service_name,serviceId:x.service_id,
+      id:x.id,userId:x.user_id,name:x.business_name||x.full_name,service:x.service_name,serviceId:x.service_id,
       region:x.region,district:x.district,area:x.area,address:x.service_address,
       price:x.price_sle!=null?('SLE '+Number(x.price_sle).toLocaleString()):'Quote required',
       rating:'—',reviews:0,initials:(x.business_name||x.full_name||'FI').split(/\\s+/).map(v=>v[0]).slice(0,2).join('').toUpperCase(),
@@ -414,7 +414,7 @@ function reportProvider(i){
     if(!d){alert('Please describe what happened.');return}
     $('submitReport').disabled=true;
     try{
-      await api('/api/incidents',{method:'POST',body:JSON.stringify({reason:$('reportReason').value,details:d})});
+      await api('/api/incidents',{method:'POST',body:JSON.stringify({reported_user_id:p.userId||null,reason:$('#reportReason').value,details:d})});
       openModal('<p class="eyebrow">REPORT SUBMITTED</p><h2>Safety report recorded</h2><p>Your report has been stored securely for FixIt Trust & Safety review.</p><button class="btn" onclick="closeModal()">Done</button>');
     }catch(e){alert(e.message);$('submitReport').disabled=false}
   }
