@@ -772,6 +772,75 @@ app.patch('/api/admin/users/:id/status',async(req,res)=>{
     res.json(rows[0]);
   }catch(e){res.status(500).json({error:'Unable to update user status.'})}
 });
+app.get('/api/admin/subscription-payments',async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`SELECT p.id,p.provider_id,p.plan_name,p.amount_sle,p.status,p.gateway,p.provider_reference,p.created_at,p.updated_at,
+      pp.business_name,u.full_name AS provider_name,u.phone AS provider_phone,pp.verification_status
+      FROM provider_subscription_payments p
+      JOIN provider_profiles pp ON pp.id=p.provider_id
+      JOIN users u ON u.id=pp.user_id
+      ORDER BY p.created_at DESC LIMIT 300`);
+    res.json(rows);
+  }catch(e){console.error('Admin subscription payments error:',e);res.status(500).json({error:'Unable to load subscription payments.'})}
+});
+app.patch('/api/admin/subscription-payments/:id',async(req,res)=>{
+  const {status,provider_reference,duration_months}=req.body||{};
+  if(!['pending','processing','paid','failed','cancelled'].includes(status))return res.status(400).json({error:'Invalid subscription payment status.'});
+  const months=Number(duration_months||1);
+  if(!Number.isInteger(months)||months<1||months>12)return res.status(400).json({error:'Duration must be between 1 and 12 months.'});
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const current=await client.query(`SELECT p.id,p.provider_id,p.plan_name,p.amount_sle,p.status,p.provider_reference,pp.business_name,u.full_name AS provider_name
+      FROM provider_subscription_payments p
+      JOIN provider_profiles pp ON pp.id=p.provider_id
+      JOIN users u ON u.id=pp.user_id
+      WHERE p.id=$1 FOR UPDATE`,[req.params.id]);
+    if(!current.rows[0]){await client.query('ROLLBACK');return res.status(404).json({error:'Subscription payment not found.'})}
+    const p=current.rows[0];
+    if(['paid','failed','cancelled'].includes(p.status)&&status!==p.status){
+      await client.query('ROLLBACK');return res.status(409).json({error:'This subscription payment has already been finalized.'});
+    }
+    const reference=String(provider_reference||p.provider_reference||'').trim()||null;
+    const updated=await client.query('UPDATE provider_subscription_payments SET status=$1,provider_reference=$2,updated_at=NOW() WHERE id=$3 RETURNING id,provider_id,plan_name,amount_sle,status,gateway,provider_reference,updated_at',[status,reference,p.id]);
+    if(status==='paid'){
+      await client.query("UPDATE provider_subscriptions SET status='expired',updated_at=NOW() WHERE provider_id=$1 AND status='active' AND expires_at>NOW()",[p.provider_id]);
+      await client.query(`INSERT INTO provider_subscriptions(provider_id,plan_name,status,starts_at,expires_at)
+        VALUES($1,$2,'active',NOW(),NOW()+(($3::text||' months')::interval))`,[p.provider_id,p.plan_name,months]);
+      await audit(req.user.sub,p.provider_id,'admin.subscription_activated','provider_subscription',p.provider_id,{payment_id:p.id,plan_name:p.plan_name,amount_sle:Number(p.amount_sle),duration_months:months,provider_reference:reference,manual_confirmation:true});
+    }else{
+      await audit(req.user.sub,p.provider_id,'admin.subscription_payment_update','provider_subscription_payment',p.id,{status,provider_reference:reference});
+    }
+    await client.query('COMMIT');
+    res.json(updated.rows[0]);
+  }catch(e){
+    await client.query('ROLLBACK').catch(()=>{});
+    console.error('Admin subscription payment update error:',e);
+    res.status(500).json({error:'Unable to update subscription payment.'});
+  }finally{client.release()}
+});
+app.get('/api/admin/subscriptions',async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`SELECT ps.id,ps.provider_id,ps.plan_name,ps.status,ps.starts_at,ps.expires_at,
+      pp.business_name,u.full_name AS provider_name,u.phone AS provider_phone
+      FROM provider_subscriptions ps
+      JOIN provider_profiles pp ON pp.id=ps.provider_id
+      JOIN users u ON u.id=pp.user_id
+      ORDER BY ps.created_at DESC LIMIT 300`);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load subscriptions.'})}
+});
+app.get('/api/admin/payments',async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`SELECT pt.id,pt.service_request_id,pt.amount_sle,pt.platform_fee,pt.provider_earnings,pt.currency,pt.gateway,pt.status,pt.provider_reference,pt.created_at,
+      cu.full_name AS customer_name,cu.phone AS customer_phone,pp.business_name
+      FROM payment_transactions pt
+      JOIN users cu ON cu.id=pt.customer_user_id
+      LEFT JOIN provider_profiles pp ON pp.id=pt.provider_id
+      ORDER BY pt.created_at DESC LIMIT 300`);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load payment records.'})}
+});
 app.get('/api/admin/audit',async(req,res)=>{
   try{
     const {rows}=await pool.query('SELECT a.id,a.action,a.entity_type,a.entity_id,a.metadata,a.created_at,u.full_name AS actor_name FROM audit_logs a LEFT JOIN users u ON u.id=a.actor_user_id ORDER BY a.created_at DESC LIMIT 500');
