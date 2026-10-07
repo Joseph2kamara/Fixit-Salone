@@ -286,8 +286,16 @@ async function providerNotificationsCenter(){
   }catch(e){alert(e.message)}
 }
 function subscriptionCenter(){
-  openModal('<p class="eyebrow">PROVIDER SUBSCRIPTION</p><h2>Unlock new customer requests</h2><p>Every provider receives the first <b>3 customer referrals free</b>. After that, you will still receive notifications when customers request your service, but request details are locked until you subscribe.</p><div class="card"><h3>Provider Pro</h3><p class="desc">Receive and view new customer requests without the 3-referral limit.</p><button class="btn" id="subscriptionComing">Subscribe</button></div><p class="quote-note">Subscription payment is not connected yet. We can connect Orange Money or another payment gateway when you're ready.</p><button class="btn outline" id="subscriptionBack">Back</button>');
-  $('subscriptionComing').onclick=()=>alert('Subscription payment is coming next. Your 3 free referrals remain available.');
+  openModal('<p class="eyebrow">PROVIDER SUBSCRIPTION</p><h2>Choose your FixIt plan</h2><p>Your first <b>3 customer referrals are free</b>. After that, request details stay locked until you activate a paid plan.</p><div class="plan-grid">'+
+    '<div><b>FREE</b><strong>SLE 0 / month</strong><small>3 referrals · 1% FixIt fee</small></div>'+
+    '<div><b>PRO</b><strong>SLE 20 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribePro">Choose Pro</button></div>'+
+    '<div><b>BUSINESS</b><strong>SLE 40 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribeBusiness">Choose Business</button></div>'+
+    '<div><b>PREMIUM</b><strong>SLE 60 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribePremium">Choose Premium</button></div>'+
+  '</div><p class="quote-note">Subscription payment is not connected yet. These plan prices are the current beta pricing. We can connect Orange Money when you are ready.</p><button class="btn outline" id="subscriptionBack">Back</button>');
+  const choose=plan=>alert(plan+' subscription payment is coming next. No payment has been collected.');
+  $('subscribePro').onclick=()=>choose('Pro');
+  $('subscribeBusiness').onclick=()=>choose('Business');
+  $('subscribePremium').onclick=()=>choose('Premium');
   $('subscriptionBack').onclick=providerPortal;
 }
 async function providerJobs(){
