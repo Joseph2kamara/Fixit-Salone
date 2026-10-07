@@ -893,9 +893,9 @@ app.patch('/api/admin/subscription-payments/:id',async(req,res)=>{
       await client.query("UPDATE provider_subscriptions SET status='expired',updated_at=NOW() WHERE provider_id=$1 AND status='active' AND expires_at>NOW()",[p.provider_id]);
       await client.query(`INSERT INTO provider_subscriptions(provider_id,plan_name,status,starts_at,expires_at)
         VALUES($1,$2,'active',NOW(),NOW()+(($3::text||' months')::interval))`,[p.provider_id,p.plan_name,months]);
-      await audit(req.user.sub,p.provider_id,'admin.subscription_activated','provider_subscription',p.provider_id,{payment_id:p.id,plan_name:p.plan_name,amount_sle:Number(p.amount_sle),duration_months:months,provider_reference:reference,manual_confirmation:true});
+      await client.query('INSERT INTO audit_logs(actor_user_id,target_user_id,action,entity_type,entity_id,metadata) VALUES($1,$2,$3,$4,$5,$6)',[req.user.sub,p.provider_id,'admin.subscription_activated','provider_subscription',p.provider_id,{payment_id:p.id,plan_name:p.plan_name,amount_sle:Number(p.amount_sle),duration_months:months,provider_reference:reference,manual_confirmation:true}]);
     }else{
-      await audit(req.user.sub,p.provider_id,'admin.subscription_payment_update','provider_subscription_payment',p.id,{status,provider_reference:reference});
+      await client.query('INSERT INTO audit_logs(actor_user_id,target_user_id,action,entity_type,entity_id,metadata) VALUES($1,$2,$3,$4,$5,$6)',[req.user.sub,p.provider_id,'admin.subscription_payment_update','provider_subscription_payment',p.id,{status,provider_reference:reference}]);
     }
     await client.query('COMMIT');
     res.json(updated.rows[0]);
