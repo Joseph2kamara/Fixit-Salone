@@ -250,15 +250,22 @@ async function providerPortal(){
       return;
     }
     const profile=await api('/api/providers/me/profile');
-    const requests=await api('/api/provider/requests');
+    const jobData=await api('/api/provider/requests');
+    const requests=jobData.requests||[];
+    const notifications=await api('/api/provider/notifications');
+    const unread=notifications.filter(n=>!n.is_read).length;
     const pending=requests.filter(r=>['requested','quoted','approved','in_progress'].includes(r.status)).length;
     openModal('<p class="eyebrow">PROVIDER DASHBOARD</p><h2>Welcome, '+esc(me.user.full_name)+'</h2>'+
-      '<div class="stats-row"><span><b>'+requests.length+'</b><small>Total jobs</small></span><span><b>'+pending+'</b><small>Active jobs</small></span><span><b>'+esc(profile.profile?.verification_status||'unverified')+'</b><small>Trust status</small></span></div>'+
+      '<div class="stats-row"><span><b>'+requests.length+'</b><small>Visible jobs</small></span><span><b>'+pending+'</b><small>Active jobs</small></span><span><b>'+esc(profile.profile?.verification_status||'unverified')+'</b><small>Trust status</small></span></div>'+
+      '<div class="card"><b>Referral access</b><p class="desc">Free referrals used: '+esc(String(Math.min(jobData.referral_count||0,3)))+' / 3'+(jobData.subscription?' · Subscription active until '+esc(new Date(jobData.subscription.expires_at).toLocaleDateString()):'')+'</p>'+(jobData.can_receive_requests?'':'<p class="quote-note">You have reached 3 free referrals. You will still receive notifications, but new request details are locked until you subscribe.</p><button class="btn" id="subscribeProvider">Subscribe to receive requests</button>')+'</div>'+
+      '<button class="btn outline" id="providerNotifications">Notifications'+(unread?' ('+unread+')':'')+'</button>'+
       '<div class="plan-grid"><div><b>Profile</b><strong>'+(profile.profile?'Live':'Not set')+'</strong><small>Business information</small></div><div><b>Services</b><strong>'+((profile.services||[]).length)+'</strong><small>Services listed</small></div><div><b>Jobs</b><strong>'+requests.filter(r=>r.status==='completed').length+'</strong><small>Completed requests</small></div></div>'+
       '<button class="btn" id="manageJobs">Manage incoming jobs</button><button class="btn outline" id="editProviderProfile">Edit profile & services</button><button class="btn outline" id="refreshProvider">Refresh dashboard</button>');
     $('manageJobs').onclick=()=>providerJobs();
     $('editProviderProfile').onclick=()=>providerProfile();
     $('refreshProvider').onclick=()=>providerPortal();
+    $('providerNotifications').onclick=()=>providerNotificationsCenter();
+    if($('subscribeProvider'))$('subscribeProvider').onclick=()=>subscriptionCenter();
   }catch(e){
     if(/invalid or expired session/i.test(e.message||'')){
       clearAuth();
@@ -270,9 +277,23 @@ async function providerPortal(){
     alert(e.message)
   }
 }
+async function providerNotificationsCenter(){
+  try{
+    const notes=await api('/api/provider/notifications');
+    openModal('<p class="eyebrow">PROVIDER NOTIFICATIONS</p><h2>Notifications</h2>'+(notes.length?notes.map(n=>'<article class="job-card"><div class="job-head"><b>'+esc(n.title)+'</b><small>'+esc(new Date(n.created_at).toLocaleString())+'</small></div><p>'+esc(n.message)+'</p>'+(!n.is_read?'<button class="btn outline" data-note="'+esc(n.id)+'">Mark read</button>':'<small>Read</small>')+'</article>').join(''):'<p>No notifications yet.</p>')+'<button class="btn outline" id="closeProviderNotes">Done</button>');
+    document.querySelectorAll('[data-note]').forEach(b=>b.onclick=async()=>{await api('/api/provider/notifications/'+encodeURIComponent(b.dataset.note)+'/read',{method:'PATCH'});providerNotificationsCenter()});
+    $('closeProviderNotes').onclick=providerPortal;
+  }catch(e){alert(e.message)}
+}
+function subscriptionCenter(){
+  openModal('<p class="eyebrow">PROVIDER SUBSCRIPTION</p><h2>Unlock new customer requests</h2><p>Every provider receives the first <b>3 customer referrals free</b>. After that, you will still receive notifications when customers request your service, but request details are locked until you subscribe.</p><div class="card"><h3>Provider Pro</h3><p class="desc">Receive and view new customer requests without the 3-referral limit.</p><button class="btn" id="subscriptionComing">Subscribe</button></div><p class="quote-note">Subscription payment is not connected yet. We can connect Orange Money or another payment gateway when you're ready.</p><button class="btn outline" id="subscriptionBack">Back</button>');
+  $('subscriptionComing').onclick=()=>alert('Subscription payment is coming next. Your 3 free referrals remain available.');
+  $('subscriptionBack').onclick=providerPortal;
+}
 async function providerJobs(){
   try{
-    const requests=await api('/api/provider/requests');
+    const jobData=await api('/api/provider/requests');
+    const requests=jobData.requests||[];
     const cards=requests.length?requests.map(r=>{
       const status=r.status.replaceAll('_',' ');
       const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'No quote yet';
