@@ -183,6 +183,19 @@ CREATE INDEX IF NOT EXISTS idx_payment_customer ON payment_transactions(customer
 CREATE INDEX IF NOT EXISTS idx_payment_status ON payment_transactions(status,created_at DESC);
 
 
+CREATE TABLE IF NOT EXISTS provider_reviews (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ service_request_id UUID NOT NULL UNIQUE REFERENCES service_requests(id) ON DELETE CASCADE,
+ customer_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+ review_text VARCHAR(1000),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_provider_reviews_provider ON provider_reviews(provider_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_provider_reviews_customer ON provider_reviews(customer_user_id,created_at DESC);
+
 CREATE TABLE IF NOT EXISTS password_resets (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
