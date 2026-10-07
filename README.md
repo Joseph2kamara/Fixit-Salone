@@ -65,3 +65,18 @@ The current phone verification endpoint is only a database foundation and does *
 - Publish directory: `.`
 
 Never commit passwords, database URLs, JWT secrets, or payment credentials to this repository.
+
+
+## Secure KYC configuration
+
+Identity documents and selfies are encrypted before database storage. To enable KYC submissions, configure the Render environment variable:
+
+- `KYC_ENCRYPTION_KEY` — a private 32-byte key encoded as 64 hex characters or base64.
+
+Generate a key locally with:
+
+```bash
+openssl rand -hex 32
+```
+
+Never commit the key to GitHub or send it in chat. Keep it only in the backend environment.
