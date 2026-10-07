@@ -220,6 +220,21 @@ CREATE TABLE IF NOT EXISTS password_resets (
 CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id,created_at DESC);
 
 
+
+
+CREATE TABLE IF NOT EXISTS provider_notifications (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ type VARCHAR(60) NOT NULL DEFAULT 'service_request',
+ title VARCHAR(180) NOT NULL,
+ message TEXT NOT NULL,
+ service_request_id UUID REFERENCES service_requests(id) ON DELETE CASCADE,
+ is_read BOOLEAN NOT NULL DEFAULT FALSE,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_provider_notifications_provider ON provider_notifications(provider_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_provider_notifications_unread ON provider_notifications(provider_id,is_read,created_at DESC);
+
 CREATE TABLE IF NOT EXISTS provider_subscriptions (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
