@@ -47,9 +47,9 @@ async function loadLiveProviders(){
     const rows=await api('/api/providers?'+params.toString());
     liveProviders=rows.map(x=>({
       id:x.id,userId:x.user_id,name:x.business_name||x.full_name,service:x.service_name,serviceId:x.service_id,
-      region:x.region,district:x.district,area:x.area,address:x.service_address,
+      region:x.region,district:x.district,area:x.area,address:x.service_address,rating:x.rating,review_count:x.review_count,
       price:x.price_sle!=null?('SLE '+Number(x.price_sle).toLocaleString()):'Quote required',
-      rating:'—',reviews:0,initials:(x.business_name||x.full_name||'FI').split(/\\s+/).map(v=>v[0]).slice(0,2).join('').toUpperCase(),
+      rating:x.rating!=null?String(x.rating):'—',reviews:Number(x.review_count||0),initials:(x.business_name||x.full_name||'FI').split(/\\s+/).map(v=>v[0]).slice(0,2).join('').toUpperCase(),
       plan:'Free',featured:false,completed:0,completion:'—',verified:x.verification_status==='verified',
       desc:x.service_description||'Local FixIt Salone service provider.',pricingType:x.pricing_type
     }));
