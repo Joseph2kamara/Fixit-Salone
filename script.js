@@ -169,7 +169,7 @@ async function showRequest(i){
     openModal('<p class="eyebrow">SERVICE REQUEST</p><h2>Request '+esc(p.service)+'</h2><p>Provider: <b>'+esc(p.name)+'</b></p>'+locationFields('request')+
       '<label class="form-label">Pricing type</label><select id="quoteType" class="form-control"><option value="starting_price">Starting price</option><option value="fixed_price">Fixed price</option><option value="quote_required">Quote required</option></select>'+
       '<label class="form-label">Job details</label><textarea id="jobDetails" class="form-control" placeholder="Describe the work you need..."></textarea>'+
-      '<label class="form-label">Photos (optional, up to 5)</label><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" multiple>'+
+      '<label class="form-label">Photos (optional, up to 5)</label><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple><p class="quote-note">Choose photos from your phone or use the camera to take a new photo.</p>'+
       '<p class="quote-note">Final price must be approved before payment. FixIt fee: 1%.</p><button class="btn" id="submitRequest">Send request</button>');
     wireLocation('request');
     $('submitRequest').onclick=()=>submitRequest(p,match.id);
@@ -502,8 +502,8 @@ async function verificationCenter(){
 async function submitIdentityVerification(){
   openModal('<p class="eyebrow">SECURE KYC</p><h2>Verify your identity</h2><p>Your identity document and selfie are encrypted before they are stored. They are not displayed publicly.</p>'+
     '<label class="form-label">Document type</label><select id="kycDocumentType" class="form-control"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="drivers_license">Driver\'s licence</option><option value="voter_id">Voter ID</option></select>'+
-    '<label class="form-label">Identity document</label><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">'+
-    '<label class="form-label">Selfie</label><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp">'+
+    '<label class="form-label">Identity document</label><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment"><p class="quote-note">Choose an existing file or use your camera to take a photo of your ID.</p>'+
+    '<label class="form-label">Selfie</label><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="user"><p class="quote-note">Choose a selfie or use your front camera to take one.</p>'+
     '<p class="quote-note">Maximum 5MB per file. Do not upload another person\'s ID or any document you are not authorized to provide.</p><button class="btn" id="submitKyc">Submit securely</button><button class="btn outline" id="kycBack">Back</button><p id="kycMessage" class="form-message"></p>');
   $('submitKyc').onclick=async()=>{
     const documentFile=$('kycDocument').files[0],selfie=$('kycSelfie').files[0];
