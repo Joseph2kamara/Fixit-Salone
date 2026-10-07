@@ -5,6 +5,7 @@ const helmet=require('helmet');
 const multer=require('multer');
 const path=require('path');
 const fs=require('fs');
+const crypto=require('crypto');
 const bcrypt=require('bcryptjs');
 const jwt=require('jsonwebtoken');
 const rateLimit=require('express-rate-limit');
@@ -47,6 +48,37 @@ const uploadDir=path.resolve(process.env.UPLOAD_DIR||'uploads');
 fs.mkdirSync(uploadDir,{recursive:true});
 const storage=multer.diskStorage({destination:(req,file,cb)=>cb(null,uploadDir),filename:(req,file,cb)=>cb(null,Date.now()+'-'+Math.random().toString(36).slice(2)+path.extname(file.originalname).toLowerCase())});
 const upload=multer({storage,limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||15)*1024*1024},fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.mimetype))});
+const kycUpload=multer({
+  storage:multer.memoryStorage(),
+  limits:{fileSize:5*1024*1024,files:2},
+  fileFilter:(req,file,cb)=>{
+    const allowed=['image/jpeg','image/png','image/webp','application/pdf'];
+    const selfieAllowed=['image/jpeg','image/png','image/webp'];
+    const ok=file.fieldname==='selfie'?selfieAllowed.includes(file.mimetype):allowed.includes(file.mimetype);
+    cb(null,ok);
+  }
+});
+function kycEncryptionKey(){
+  const raw=String(process.env.KYC_ENCRYPTION_KEY||'').trim();
+  if(!raw)throw new Error('KYC_ENCRYPTION_KEY is not configured.');
+  let key;
+  if(/^[0-9a-fA-F]{64}$/.test(raw))key=Buffer.from(raw,'hex');
+  else{try{key=Buffer.from(raw,'base64')}catch{}}
+  if(!key||key.length!==32)throw new Error('KYC_ENCRYPTION_KEY must be a 32-byte base64 or 64-character hex key.');
+  return key;
+}
+function encryptKyc(buffer){
+  const iv=crypto.randomBytes(12);
+  const cipher=crypto.createCipheriv('aes-256-gcm',kycEncryptionKey(),iv);
+  const ciphertext=Buffer.concat([cipher.update(buffer),cipher.final()]);
+  return {ciphertext,iv,authTag:cipher.getAuthTag()};
+}
+function decryptKyc(ciphertext,iv,authTag){
+  const decipher=crypto.createDecipheriv('aes-256-gcm',kycEncryptionKey(),iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext),decipher.final()]);
+}
+
 app.use('/uploads',express.static(uploadDir));
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
@@ -642,6 +674,36 @@ app.post('/api/phone-verification/verify',requireAuth,authLimiter,async(req,res)
     res.status(502).json({error:e.message||'Unable to verify the code.'});
   }
 });
+app.post('/api/verification/identity',requireAuth,kycUpload.fields([{name:'document',maxCount:1},{name:'selfie',maxCount:1}]),async(req,res)=>{
+  const document=req.files?.document?.[0];
+  const selfie=req.files?.selfie?.[0];
+  const documentType=String(req.body?.document_type||'').trim().slice(0,50);
+  if(!document||!selfie||!documentType)return res.status(400).json({error:'Document type, identity document and selfie are required.'});
+  if(!['national_id','passport','drivers_license','voter_id'].includes(documentType))return res.status(400).json({error:'Choose a supported identity document type.'});
+  try{
+    const user=await pool.query('SELECT id,role,status FROM users WHERE id=$1',[req.user.sub]);
+    if(!user.rows[0])return res.status(404).json({error:'Account not found.'});
+    if(['suspended','banned'].includes(user.rows[0].status))return res.status(403).json({error:'Account is restricted.'});
+    const phone=await pool.query("SELECT status FROM phone_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[req.user.sub]);
+    if(phone.rows[0]?.status!=='verified')return res.status(409).json({error:'Verify your phone number before submitting identity verification.'});
+    const doc=encryptKyc(document.buffer);
+    const selfieData=encryptKyc(selfie.buffer);
+    await pool.query("UPDATE identity_verifications SET status='rejected',rejection_reason='Replaced by a newer submission',updated_at=NOW() WHERE user_id=$1 AND status IN ('pending','under_review')",[req.user.sub]);
+    const {rows}=await pool.query(`INSERT INTO identity_verifications(
+      user_id,status,document_type,document_storage_key,document_original_name,document_mime_type,document_ciphertext,document_iv,document_auth_tag,
+      selfie_storage_key,selfie_original_name,selfie_mime_type,selfie_ciphertext,selfie_iv,selfie_auth_tag
+    ) VALUES($1,'pending',$2,'postgresql-encrypted-v1',$3,$4,$5,$6,$7,'postgresql-encrypted-v1',$8,$9,$10,$11,$12)
+    RETURNING id,status,document_type,created_at`,
+      [req.user.sub,documentType,document.originalname,document.mimetype,doc.ciphertext,doc.iv,doc.authTag,selfie.originalname,selfie.mimetype,selfieData.ciphertext,selfieData.iv,selfieData.authTag]);
+    await audit(req.user.sub,req.user.sub,'identity_verification.submitted','identity_verification',rows[0].id,{document_type:documentType,encrypted_storage:'postgresql'});
+    res.status(201).json({verification:rows[0],message:'Identity verification submitted securely. FixIt Trust & Safety will review it.'});
+  }catch(e){
+    console.error('Identity verification submission error:',e);
+    const status=/KYC_ENCRYPTION_KEY/.test(e.message||'')?503:500;
+    res.status(status).json({error:/KYC_ENCRYPTION_KEY/.test(e.message||'')?'Secure KYC storage is not configured yet. Please contact FixIt Salone support.':'Unable to submit identity verification.'});
+  }
+});
+
 app.get('/api/verification/:userId',requireAuth,async(req,res)=>{
   if(req.user.sub!==req.params.userId&&req.user.role!=='admin')return res.status(403).json({error:'Access denied.'});
   try{
@@ -738,9 +800,33 @@ app.patch('/api/admin/incidents/:id',async(req,res)=>{
 });
 app.get('/api/admin/verifications',async(req,res)=>{
   try{
-    const {rows}=await pool.query('SELECT iv.id,iv.user_id,u.full_name,u.role,u.phone,iv.status,iv.document_type,iv.created_at,iv.verified_at FROM identity_verifications iv JOIN users u ON u.id=iv.user_id ORDER BY iv.created_at DESC LIMIT 200');
-    res.json(rows.map(r=>({id:r.id,user_id:r.user_id,full_name:r.full_name,role:r.role,phone:r.phone,status:r.status,document_type:r.document_type||'Not provided',created_at:r.created_at,verified_at:r.verified_at})));
+    const {rows}=await pool.query('SELECT iv.id,iv.user_id,u.full_name,u.role,u.phone,iv.status,iv.document_type,iv.document_original_name,iv.selfie_original_name,iv.document_ciphertext IS NOT NULL AS document_available,iv.selfie_ciphertext IS NOT NULL AS selfie_available,iv.created_at,iv.verified_at,iv.rejection_reason FROM identity_verifications iv JOIN users u ON u.id=iv.user_id ORDER BY iv.created_at DESC LIMIT 200');
+    res.json(rows.map(r=>({id:r.id,user_id:r.user_id,full_name:r.full_name,role:r.role,phone:r.phone,status:r.status,document_type:r.document_type||'Not provided',document_original_name:r.document_original_name||null,selfie_original_name:r.selfie_original_name||null,document_available:r.document_available,selfie_available:r.selfie_available,created_at:r.created_at,verified_at:r.verified_at,rejection_reason:r.rejection_reason||null})));
   }catch(e){res.status(500).json({error:'Unable to load verification queue.'})}
+});
+app.get('/api/admin/verifications/:id/file',async(req,res)=>{
+  const type=String(req.query?.type||'document');
+  if(!['document','selfie'].includes(type))return res.status(400).json({error:'Invalid verification file type.'});
+  try{
+    const {rows}=await pool.query(`SELECT id,user_id,status,
+      document_ciphertext,document_iv,document_auth_tag,document_mime_type,document_original_name,
+      selfie_ciphertext,selfie_iv,selfie_auth_tag,selfie_mime_type,selfie_original_name
+      FROM identity_verifications WHERE id=$1 LIMIT 1`,[req.params.id]);
+    const row=rows[0];
+    if(!row)return res.status(404).json({error:'Verification record not found.'});
+    const prefix=type==='document'?'document':'selfie';
+    const ciphertext=row[prefix+'_ciphertext'],iv=row[prefix+'_iv'],authTag=row[prefix+'_auth_tag'];
+    if(!ciphertext||!iv||!authTag)return res.status(404).json({error:'Verification file is not available.'});
+    const data=decryptKyc(ciphertext,iv,authTag);
+    await audit(req.user.sub,row.user_id,'admin.identity_file_access','identity_verification',row.id,{file_type:type});
+    res.setHeader('Content-Type',row[prefix+'_mime_type']||'application/octet-stream');
+    res.setHeader('Content-Disposition','inline; filename="'+String(row[prefix+'_original_name']||type).replace(/[^a-zA-Z0-9._-]/g,'_')+'"');
+    res.send(data);
+  }catch(e){
+    console.error('Admin identity file error:',e);
+    const status=/KYC_ENCRYPTION_KEY/.test(e.message||'')?503:500;
+    res.status(status).json({error:/KYC_ENCRYPTION_KEY/.test(e.message||'')?'Secure KYC storage is not configured.':'Unable to open verification file.'});
+  }
 });
 app.patch('/api/admin/verifications/:id',async(req,res)=>{
   const {status,rejection_reason}=req.body||{};
