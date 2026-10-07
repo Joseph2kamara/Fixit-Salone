@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS provider_work (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_provider_work_provider ON provider_work(provider_id,created_at DESC);
+ALTER TABLE provider_work ADD COLUMN IF NOT EXISTS storage_key TEXT;
+ALTER TABLE provider_work ADD COLUMN IF NOT EXISTS storage_provider VARCHAR(30) NOT NULL DEFAULT 'local';
+CREATE INDEX IF NOT EXISTS idx_provider_work_storage ON provider_work(storage_provider,storage_key);
 
 CREATE TABLE IF NOT EXISTS phone_verifications (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -162,6 +165,9 @@ CREATE TABLE IF NOT EXISTS service_request_photos (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_request_photos_request ON service_request_photos(service_request_id,created_at ASC);
+ALTER TABLE service_request_photos ADD COLUMN IF NOT EXISTS storage_key TEXT;
+ALTER TABLE service_request_photos ADD COLUMN IF NOT EXISTS storage_provider VARCHAR(30) NOT NULL DEFAULT 'local';
+CREATE INDEX IF NOT EXISTS idx_request_photos_storage ON service_request_photos(storage_provider,storage_key);
 
 INSERT INTO services(name,description) VALUES
 ('Plumbing','Leaks, pipes, fittings and water systems'),
