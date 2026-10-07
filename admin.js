@@ -39,8 +39,8 @@ async function render(tab){
    head='<th>ID</th><th>Reason</th><th>Details</th><th>Priority</th><th>Status</th><th>Action</th>';
    body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.reason)+'</td><td>'+esc(r.details)+'</td><td>'+esc(r.priority)+'</td><td>'+esc(r.status)+'</td><td><button class="table-btn" data-incident="'+esc(r.id)+'">Review</button></td></tr>').join('');
   }else if(tab==='verification'){
-   head='<th>ID</th><th>Name</th><th>Role</th><th>Phone</th><th>Status</th><th>Document type</th><th>Action</th>';
-   body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.full_name)+'</td><td>'+esc(r.role)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.status)+'</td><td>'+esc(r.document_type)+'</td><td><button class="table-btn" data-ver="'+esc(r.id)+'">Review</button></td></tr>').join('');
+   head='<th>ID</th><th>Name</th><th>Role</th><th>Phone</th><th>Status</th><th>Document</th><th>Files</th><th>Action</th>';
+   body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.full_name)+'</td><td>'+esc(r.role)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.status)+'</td><td>'+esc(r.document_type)+'</td><td>'+((r.document_available?'<button class="table-btn" data-ver-file="'+esc(r.id)+'" data-file-type="document">View ID</button> ':'')+(r.selfie_available?'<button class="table-btn" data-ver-file="'+esc(r.id)+'" data-file-type="selfie">View selfie</button>':''))+'</td><td><button class="table-btn" data-ver="'+esc(r.id)+'">Review</button></td></tr>').join('');
   }else if(tab==='users'){
    head='<th>ID</th><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Action</th>';
    body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.full_name)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.role)+'</td><td>'+esc(r.status)+'</td><td><button class="table-btn" data-user="'+esc(r.id)+'">Change status</button></td></tr>').join('');
@@ -60,6 +60,14 @@ async function render(tab){
   content.innerHTML='<div class="admin-section-head"><div><h2>'+esc({incidents:'Incident reports',verification:'Verification queue',users:'User accounts',subscriptions:'Active subscriptions', 'subscription-payments':'Subscription payment requests',payments:'Job payment records',audit:'Audit history'}[tab])+'</h2><p>Protected live records.</p></div><span>'+rows.length+' records</span></div><div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   content.querySelectorAll('[data-incident]').forEach(b=>b.onclick=async()=>{const id=b.dataset.incident;const status=prompt('Status: open, under_review, resolved or dismissed');if(!status)return;try{await api('/api/admin/incidents/'+id,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('incidents')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-ver]').forEach(b=>b.onclick=async()=>{const status=prompt('Verification: pending, under_review, verified or rejected');if(!status)return;try{await api('/api/admin/verifications/'+b.dataset.ver,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('verification')}catch(e){alert(e.message)}});
+  content.querySelectorAll('[data-ver-file]').forEach(b=>b.onclick=async()=>{
+    try{
+      const r=await fetch(API+'/api/admin/verifications/'+encodeURIComponent(b.dataset.verFile)+'/file?type='+encodeURIComponent(b.dataset.fileType),{headers:{Authorization:'Bearer '+token()}});
+      if(!r.ok){let d={};try{d=await r.json()}catch{};throw new Error(d.error||'Unable to open file.')}
+      const blob=await r.blob(),url=URL.createObjectURL(blob);window.open(url,'_blank','noopener');
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){alert(e.message)}
+  });
   content.querySelectorAll('[data-user]').forEach(b=>b.onclick=async()=>{const status=prompt('Account status: active, under_review, suspended or banned');if(!status)return;try{await api('/api/admin/users/'+b.dataset.user+'/status',{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('users')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-subpay]').forEach(b=>b.onclick=async()=>{
     const status=prompt('Status: paid, failed or cancelled');
