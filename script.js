@@ -80,8 +80,9 @@ async function showProfile(i){
       const data=await api('/api/providers/'+encodeURIComponent(p.id));
       const profile=data.profile;
       const services=data.services||[];
-      openModal('<p class="eyebrow">'+esc(services[0]?.name||p.service)+'</p><h2>'+esc(profile.business_name)+'</h2><p>'+(profile.verification_status==='verified'?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'Verification pending')+'</p><p>'+esc(services[0]?.description||'Local FixIt Salone provider.')+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(profile.service_address)+'<br><small>'+esc(profile.region)+' · '+esc(profile.district)+' · '+esc(profile.area)+'</small></div><p><b>Services:</b> '+services.map(s=>esc(s.name)).join(', ')+'</p><p><b>Pricing:</b> '+services.map(s=>esc(s.pricing_type.replaceAll('_',' '))+(s.price_sle!=null?' — SLE '+Number(s.price_sle).toLocaleString():'')).join('<br>')+'</p><h3>My Work</h3><p class="quote-note">Portfolio uploads will appear here when this provider adds them.</p><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
+      openModal('<p class="eyebrow">'+esc(services[0]?.name||p.service)+'</p><h2>'+esc(profile.business_name)+'</h2><p>'+(profile.verification_status==='verified'?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'Verification pending')+'</p><p>'+esc(services[0]?.description||'Local FixIt Salone provider.')+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(profile.service_address)+'<br><small>'+esc(profile.region)+' · '+esc(profile.district)+' · '+esc(profile.area)+'</small></div><p><b>Services:</b> '+services.map(s=>esc(s.name)).join(', ')+'</p><p><b>Pricing:</b> '+services.map(s=>esc(s.pricing_type.replaceAll('_',' '))+(s.price_sle!=null?' — SLE '+Number(s.price_sle).toLocaleString():'')).join('<br>')+'</p><h3>My Work</h3><div id="profileWork"><p class="quote-note">Loading portfolio…</p></div><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
       $('modalRequest').onclick=()=>showRequest(i);$('modalReport').onclick=()=>reportProvider(i);
+      loadProviderWork(p.id);
       return;
     }catch(e){alert(e.message);return}
   }
@@ -241,6 +242,16 @@ async function customerRequests(){
     $('closeCustomerRequests').onclick=closeModal;
   }catch(e){alert(e.message)}
 }
+async function loadProviderWork(providerId){
+  const box=$('profileWork'); if(!box)return;
+  try{
+    const work=await api('/api/providers/'+encodeURIComponent(providerId)+'/work');
+    box.innerHTML=work.length?'<div class="photo-grid">'+work.map(w=>w.media_type==='video'
+      ? '<figure class="work-card"><video src="'+esc(API_BASE+w.file_url)+'" controls preload="metadata"></video><figcaption>'+esc(w.caption)+'</figcaption></figure>'
+      : '<figure class="work-card"><img src="'+esc(API_BASE+w.file_url)+'" alt="'+esc(w.caption)+'"><figcaption>'+esc(w.caption)+'</figcaption></figure>').join('')+'</div>'
+      : '<p class="quote-note">No portfolio items yet.</p>';
+  }catch(e){box.innerHTML='<p class="quote-note">Portfolio could not be loaded.</p>'}
+}
 async function providerPortal(){
   if(!authToken()){
     openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>Join FixIt as a professional</h2><p>Create or sign in to your provider account first.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Provider sign in</button>');
@@ -268,9 +279,10 @@ async function providerPortal(){
       '<div class="card"><b>Referral access</b><p class="desc">Free referrals used: '+esc(String(Math.min(jobData.referral_count||0,3)))+' / 3'+(jobData.subscription?' · Subscription active until '+esc(new Date(jobData.subscription.expires_at).toLocaleDateString()):'')+'</p>'+(jobData.can_receive_requests?'':'<p class="quote-note">You have reached 3 free referrals. You will still receive notifications, but new request details are locked until you subscribe.</p><button class="btn" id="subscribeProvider">Subscribe to receive requests</button>')+'</div>'+
       '<button class="btn outline" id="providerNotifications">Notifications'+(unread?' ('+unread+')':'')+'</button>'+
       '<div class="plan-grid"><div><b>Profile</b><strong>'+(profile.profile?'Live':'Not set')+'</strong><small>Business information</small></div><div><b>Services</b><strong>'+((profile.services||[]).length)+'</strong><small>Services listed</small></div><div><b>Jobs</b><strong>'+requests.filter(r=>r.status==='completed').length+'</strong><small>Completed requests</small></div></div>'+
-      '<button class="btn" id="manageJobs">Manage incoming jobs</button><button class="btn outline" id="editProviderProfile">Edit profile & services</button><button class="btn outline" id="refreshProvider">Refresh dashboard</button>');
+      '<button class="btn" id="manageJobs">Manage incoming jobs</button><button class="btn outline" id="editProviderProfile">Edit profile & services</button><button class="btn outline" id="managePortfolio">Manage portfolio</button><button class="btn outline" id="refreshProvider">Refresh dashboard</button>');
     $('manageJobs').onclick=()=>providerJobs();
     $('editProviderProfile').onclick=()=>providerProfile();
+    $('managePortfolio').onclick=()=>providerPortfolio();
     $('refreshProvider').onclick=()=>providerPortal();
     $('providerNotifications').onclick=()=>providerNotificationsCenter();
     if($('subscribeProvider'))$('subscribeProvider').onclick=()=>subscriptionCenter();
@@ -305,6 +317,32 @@ function subscriptionCenter(){
   $('subscribeBusiness').onclick=()=>choose('Business');
   $('subscribePremium').onclick=()=>choose('Premium');
   $('subscriptionBack').onclick=providerPortal;
+}
+async function providerPortfolio(){
+  try{
+    const profile=await api('/api/providers/me/profile');
+    const providerId=profile.profile?.id;
+    if(!providerId)throw new Error('Please save your provider profile first.');
+    const work=await api('/api/providers/'+encodeURIComponent(providerId)+'/work');
+    const items=work.length?work.map(w=>{
+      const media=w.media_type==='video'?'<video src="'+esc(API_BASE+w.file_url)+'" controls preload="metadata"></video>':'<img src="'+esc(API_BASE+w.file_url)+'" alt="'+esc(w.caption)+'">';
+      return '<article class="work-card">'+media+'<b>'+esc(w.caption)+'</b><button class="btn outline" data-work-delete="'+esc(w.id)+'">Delete</button></article>';
+    }).join(''):'<p class="quote-note">Your portfolio is empty. Add photos or short videos of completed work to help customers choose you.</p>';
+    openModal('<p class="eyebrow">PROVIDER PORTFOLIO</p><h2>Show customers your work</h2><p class="quote-note">Upload clear work photos or short videos. Do not upload IDs or private customer information.</p><label class="form-label">Photo or video</label><input id="workMedia" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"><label class="form-label">Caption</label><input id="workCaption" class="form-control" maxlength="300" placeholder="e.g. Kitchen sink installation in Lumley"><button class="btn" id="uploadWork">Add to portfolio</button><div class="photo-grid" id="myPortfolio">'+items+'</div><button class="btn outline" id="portfolioBack">Back to dashboard</button>');
+    $('uploadWork').onclick=async()=>{
+      const file=$('workMedia').files[0],caption=$('workCaption').value.trim();
+      if(!file){alert('Choose a photo or video first.');return}
+      if(!caption){alert('Add a short caption.');return}
+      if(file.size>15*1024*1024){alert('Maximum file size is 15MB.');return}
+      const fd=new FormData();fd.append('media',file);fd.append('caption',caption);$('uploadWork').disabled=true;
+      try{await api('/api/providers/'+encodeURIComponent(providerId)+'/work',{method:'POST',body:fd});providerPortfolio()}catch(e){alert(e.message);$('uploadWork').disabled=false}
+    };
+    document.querySelectorAll('[data-work-delete]').forEach(btn=>btn.onclick=async()=>{
+      if(!confirm('Remove this portfolio item?'))return;
+      try{await api('/api/providers/'+encodeURIComponent(providerId)+'/work/'+encodeURIComponent(btn.dataset.workDelete),{method:'DELETE'});providerPortfolio()}catch(e){alert(e.message)}
+    });
+    $('portfolioBack').onclick=providerPortal;
+  }catch(e){alert(e.message)}
 }
 async function providerJobs(){
   try{
