@@ -18,7 +18,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.13.0",
-    "@aws-sdk/client-s3": "^3.936.0",
-    "@aws-sdk/s3-request-presigner": "^3.936.0"
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1145.0"
   }
 }
