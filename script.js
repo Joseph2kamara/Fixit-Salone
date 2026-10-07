@@ -476,14 +476,48 @@ async function saveProvider(){
 
 async function verificationCenter(){
   const saved=localStorage.getItem('fixit_customer');const user=saved?JSON.parse(saved):null;
-  if(!user||!authToken()){openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Sign in first</h2><p>Create or sign in to your FixIt account before verifying your phone number.</p><button class="btn" id="verificationLogin">Sign in</button><button class="btn outline" id="verificationDone">Done</button>');$('verificationLogin').onclick=()=>{closeModal();customerLogin('login','customer')};$('verificationDone').onclick=closeModal;return}
+  if(!user||!authToken()){
+    openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Sign in first</h2><p>Create or sign in to your FixIt account before verifying your phone number or identity.</p><button class="btn" id="verificationLogin">Sign in</button><button class="btn outline" id="verificationDone">Done</button>');
+    $('verificationLogin').onclick=()=>{closeModal();customerLogin('login','customer')};$('verificationDone').onclick=closeModal;return;
+  }
   openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Loading verification…</h2><p>Please wait.</p>');
   let status={phone_status:'unverified',identity:{status:'unverified'}};
   try{status=await api('/api/verification/'+encodeURIComponent(user.id||''))}catch{}
   const phoneVerified=status.phone_status==='verified';
-  openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Build trust on FixIt</h2><div class="verification-steps"><div class="verification-step done"><b>01</b><span><strong>Account</strong><small>Account created</small></span></div><div class="verification-step '+(phoneVerified?'done':'')+'"><b>02</b><span><strong>Phone</strong><small>'+(phoneVerified?'Phone verified':'Verify your phone number')+'</small></span></div><div class="verification-step"><b>03</b><span><strong>Identity</strong><small>Secure KYC will be added before launch</small></span></div></div><p class="quote-note">'+(phoneVerified?'Your phone number has been verified successfully.':'We will send a real one-time code by SMS. Your code expires after a short period. SMS charges apply.')+'</p>'+(phoneVerified?'<button class="btn" disabled>Phone verified ✓</button>':'<button class="btn" id="phoneVerifyBtn">Send verification code</button>')+'<button class="btn outline" id="verificationDone">Done</button>');
+  const identityStatus=status.identity?.status||'unverified';
+  const identityDone=identityStatus==='verified';
+  const identityPending=['pending','under_review'].includes(identityStatus);
+  openModal('<p class="eyebrow">ACCOUNT VERIFICATION</p><h2>Build trust on FixIt</h2>'+
+    '<div class="verification-steps"><div class="verification-step done"><b>01</b><span><strong>Account</strong><small>Account created</small></span></div>'+
+    '<div class="verification-step '+(phoneVerified?'done':'')+'"><b>02</b><span><strong>Phone</strong><small>'+(phoneVerified?'Phone verified':'Verify your phone number')+'</small></span></div>'+
+    '<div class="verification-step '+(identityDone?'done':'')+'"><b>03</b><span><strong>Identity</strong><small>'+ (identityDone?'Identity verified':identityPending?'Identity review in progress':'Secure identity verification') +'</small></span></div></div>'+
+    '<p class="quote-note">'+(phoneVerified?'Your phone number is verified. ':'Verify your phone before submitting KYC. ')+(identityDone?'Your identity is verified and private.':identityPending?'Your identity documents are encrypted and waiting for Trust & Safety review.':'Your ID and selfie are encrypted before storage and are only accessible to authorized Trust & Safety administrators.')+'</p>'+
+    (phoneVerified?'<button class="btn" disabled>Phone verified ✓</button>':'<button class="btn" id="phoneVerifyBtn">Send verification code</button>')+
+    (identityDone?'<button class="btn" disabled>Identity verified ✓</button>':identityPending?'<button class="btn" disabled>Identity review pending</button>':'<button class="btn" id="identityVerifyBtn" '+(phoneVerified?'':'disabled')+'>Submit identity verification</button>')+
+    '<button class="btn outline" id="verificationDone">Done</button>');
   if(!phoneVerified)$('phoneVerifyBtn').onclick=phoneVerification;
+  if($('identityVerifyBtn'))$('identityVerifyBtn').onclick=submitIdentityVerification;
   $('verificationDone').onclick=closeModal;
+}
+async function submitIdentityVerification(){
+  openModal('<p class="eyebrow">SECURE KYC</p><h2>Verify your identity</h2><p>Your identity document and selfie are encrypted before they are stored. They are not displayed publicly.</p>'+
+    '<label class="form-label">Document type</label><select id="kycDocumentType" class="form-control"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="drivers_license">Driver\'s licence</option><option value="voter_id">Voter ID</option></select>'+
+    '<label class="form-label">Identity document</label><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf">'+
+    '<label class="form-label">Selfie</label><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp">'+
+    '<p class="quote-note">Maximum 5MB per file. Do not upload another person\'s ID or any document you are not authorized to provide.</p><button class="btn" id="submitKyc">Submit securely</button><button class="btn outline" id="kycBack">Back</button><p id="kycMessage" class="form-message"></p>');
+  $('submitKyc').onclick=async()=>{
+    const documentFile=$('kycDocument').files[0],selfie=$('kycSelfie').files[0];
+    if(!documentFile||!selfie){$('kycMessage').textContent='Please choose both your identity document and selfie.';return}
+    if(documentFile.size>5*1024*1024||selfie.size>5*1024*1024){$('kycMessage').textContent='Each file must be 5MB or smaller.';return}
+    const fd=new FormData();fd.append('document_type',$('kycDocumentType').value);fd.append('document',documentFile);fd.append('selfie',selfie);
+    $('submitKyc').disabled=true;$('kycMessage').textContent='Encrypting and submitting securely…';
+    try{
+      const result=await api('/api/verification/identity',{method:'POST',body:fd});
+      openModal('<p class="eyebrow">KYC SUBMITTED</p><h2>Identity verification received</h2><p>'+esc(result.message)+'</p><p class="quote-note">Your documents are stored encrypted and will only be accessible to authorized Trust & Safety administrators.</p><button class="btn" id="kycDone">Done</button>');
+      $('kycDone').onclick=verificationCenter;
+    }catch(e){$('kycMessage').textContent=e.message;$('submitKyc').disabled=false}
+  };
+  $('kycBack').onclick=verificationCenter;
 }
 window.verificationCenter=verificationCenter;
 async function phoneVerification(){
@@ -507,7 +541,7 @@ async function phoneVerification(){
   }
 }
 window.phoneVerification=phoneVerification;
-function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Beta note: secure ID upload and live admin investigation are not connected to the public beta yet. Phone verification uses real SMS when the configured provider is active; identity KYC is still pending.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
+function safetyCenter(){openModal('<p class="eyebrow">TRUST & SAFETY</p><h2>Safety Center</h2><p>FixIt is designed to keep a private identity record while showing only trust signals publicly.</p><div class="safety-list"><div><b>🔵 Verification</b><small>Identity verification status can be stored securely.</small></div><div><b>⚠️ Report an issue</b><small>Use the report button on a provider profile or contact support.</small></div><div><b>🧾 Job history</b><small>Important job activity can be linked to the customer and provider accounts.</small></div></div><p class="quote-note">Identity documents are encrypted before storage and reviewed privately by authorized Trust & Safety administrators. Phone verification uses real SMS when the configured provider is active.</p><button class="btn" onclick="verificationCenter()">Verify my account</button><button class="btn outline" onclick="closeModal()">Done</button>')}window.safetyCenter=safetyCenter;
 function reportProvider(i){
   const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
