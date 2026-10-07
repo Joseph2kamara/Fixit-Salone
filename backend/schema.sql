@@ -142,6 +142,16 @@ CREATE INDEX IF NOT EXISTS idx_requests_customer ON service_requests(customer_us
 CREATE INDEX IF NOT EXISTS idx_requests_provider ON service_requests(provider_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON service_requests(status,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS service_request_photos (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ service_request_id UUID NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE,
+ uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+ file_url TEXT NOT NULL,
+ original_name VARCHAR(255),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_request_photos_request ON service_request_photos(service_request_id,created_at ASC);
+
 INSERT INTO services(name,description) VALUES
 ('Plumbing','Leaks, pipes, fittings and water systems'),
 ('Electrical','Wiring, installations, repairs and troubleshooting'),
