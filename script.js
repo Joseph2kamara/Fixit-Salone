@@ -200,8 +200,46 @@ async function submitRequest(provider,serviceId){
 }
 
 async function reviewCompletedJob(id){
-  openModal('<p class="eyebrow">RATE YOUR EXPERIENCE</p><h2>How was the job?</h2><p>Your review helps other customers choose reliable providers.</p><label class="form-label">Rating</label><select id="reviewRating" class="form-control"><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Very good</option><option value="3">★★★ Good</option><option value="2">★★ Needs improvement</option><option value="1">★ Poor</option></select><label class="form-label">Review (optional)</label><textarea id="reviewText" class="form-control" maxlength="1000" placeholder="Tell us about the provider's work..."></textarea><button class="btn" id="submitReview">Submit review</button><button class="btn outline" id="reviewBack">Back</button>');
-  $('submitReview').onclick=async()=>{const btn=$('submitReview');btn.disabled=true;try{await api('/api/service-requests/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify({rating:Number($('reviewRating').value),review_text:$('reviewText').value.trim()})});openModal('<p class="eyebrow">THANK YOU</p><h2>Review submitted ⭐</h2><p>Your feedback has been recorded.</p><button class="btn" id="reviewDone">Done</button>');$('reviewDone').onclick=customerRequests}catch(e){alert(e.message);btn.disabled=false}};
+  openModal(
+    '<p class="eyebrow">RATE YOUR EXPERIENCE</p><h2>How was the job?</h2>' +
+    '<p>Your review helps other customers choose reliable providers.</p>' +
+    '<label class="form-label">Rating</label>' +
+    '<select id="reviewRating" class="form-control">' +
+      '<option value="5">★★★★★ Excellent</option>' +
+      '<option value="4">★★★★ Very good</option>' +
+      '<option value="3">★★★ Good</option>' +
+      '<option value="2">★★ Needs improvement</option>' +
+      '<option value="1">★ Poor</option>' +
+    '</select>' +
+    '<label class="form-label">Review (optional)</label>' +
+    '<textarea id="reviewText" class="form-control" maxlength="1000" placeholder="Tell us about the provider\'s work..."></textarea>' +
+    '<button class="btn" id="submitReview">Submit review</button>' +
+    '<button class="btn outline" id="reviewBack">Back</button>'
+  );
+
+  $('submitReview').onclick=async()=>{
+    const btn=$('submitReview');
+    btn.disabled=true;
+    try{
+      await api('/api/service-requests/'+encodeURIComponent(id)+'/review',{
+        method:'POST',
+        body:JSON.stringify({
+          rating:Number($('reviewRating').value),
+          review_text:$('reviewText').value.trim()
+        })
+      });
+      openModal(
+        '<p class="eyebrow">THANK YOU</p><h2>Review submitted ⭐</h2>' +
+        '<p>Your feedback has been recorded.</p>' +
+        '<button class="btn" id="reviewDone">Done</button>'
+      );
+      $('reviewDone').onclick=customerRequests;
+    }catch(e){
+      alert(e.message);
+      btn.disabled=false;
+    }
+  };
+
   $('reviewBack').onclick=customerRequests;
 }
 window.reviewCompletedJob=reviewCompletedJob;
