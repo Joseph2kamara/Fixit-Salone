@@ -169,14 +169,14 @@ async function showRequest(i){
     openModal('<p class="eyebrow">SERVICE REQUEST</p><h2>Request '+esc(p.service)+'</h2><p>Provider: <b>'+esc(p.name)+'</b></p>'+locationFields('request')+
       '<label class="form-label">Pricing type</label><select id="quoteType" class="form-control"><option value="starting_price">Starting price</option><option value="fixed_price">Fixed price</option><option value="quote_required">Quote required</option></select>'+
       '<label class="form-label">Job details</label><textarea id="jobDetails" class="form-control" placeholder="Describe the work you need..."></textarea>'+
-      '<label class="form-label">Photos (optional, up to 5)</label><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple><p class="quote-note">Choose photos from your phone or use the camera to take a new photo.</p>'+
+      '<label class="form-label">Photos (optional, up to 5)</label><div class="upload-choice"><label class="btn outline" for="jobPhotos">📁 Choose photo</label><label class="btn outline" for="jobCamera">📷 Take photo</label></div><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden><input id="jobCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="quote-note">Choose an existing photo or take a new photo with your camera.</p>'+
       '<p class="quote-note">Final price must be approved before payment. FixIt fee: 1%.</p><button class="btn" id="submitRequest">Send request</button>');
     wireLocation('request');
     $('submitRequest').onclick=()=>submitRequest(p,match.id);
   }catch(e){alert(e.message)}
 }
 async function submitRequest(provider,serviceId){
-  const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),files=$('jobPhotos').files;
+  const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),files=[...$('jobPhotos').files,...$('jobCamera').files];
   if(!r||!d||!a||!addr||!details){alert('Please complete your region, district, area, address and job details.');return}
   if(files.length>5){alert('Maximum 5 photos.');return}
   for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
@@ -502,11 +502,11 @@ async function verificationCenter(){
 async function submitIdentityVerification(){
   openModal('<p class="eyebrow">SECURE KYC</p><h2>Verify your identity</h2><p>Your identity document and selfie are encrypted before they are stored. They are not displayed publicly.</p>'+
     '<label class="form-label">Document type</label><select id="kycDocumentType" class="form-control"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="drivers_license">Driver\'s licence</option><option value="voter_id">Voter ID</option></select>'+
-    '<label class="form-label">Identity document</label><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment"><p class="quote-note">Choose an existing file or use your camera to take a photo of your ID.</p>'+
-    '<label class="form-label">Selfie</label><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="user"><p class="quote-note">Choose a selfie or use your front camera to take one.</p>'+
+    '<label class="form-label">Identity document</label><div class="upload-choice"><label class="btn outline" for="kycDocument">📁 Choose file</label><label class="btn outline" for="kycDocumentCamera">📷 Take photo</label></div><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden><input id="kycDocumentCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="quote-note">Choose an existing ID file or take a photo of your ID.</p>'+
+    '<label class="form-label">Selfie</label><div class="upload-choice"><label class="btn outline" for="kycSelfie">📁 Choose photo</label><label class="btn outline" for="kycSelfieCamera">📷 Take selfie</label></div><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" hidden><input id="kycSelfieCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="user" hidden><p class="quote-note">Choose an existing selfie or take one with your front camera.</p>'+
     '<p class="quote-note">Maximum 5MB per file. Do not upload another person\'s ID or any document you are not authorized to provide.</p><button class="btn" id="submitKyc">Submit securely</button><button class="btn outline" id="kycBack">Back</button><p id="kycMessage" class="form-message"></p>');
   $('submitKyc').onclick=async()=>{
-    const documentFile=$('kycDocument').files[0],selfie=$('kycSelfie').files[0];
+    const documentFile=$('kycDocument').files[0]||$('kycDocumentCamera').files[0],selfie=$('kycSelfie').files[0]||$('kycSelfieCamera').files[0];
     if(!documentFile||!selfie){$('kycMessage').textContent='Please choose both your identity document and selfie.';return}
     if(documentFile.size>5*1024*1024||selfie.size>5*1024*1024){$('kycMessage').textContent='Each file must be 5MB or smaller.';return}
     const fd=new FormData();fd.append('document_type',$('kycDocumentType').value);fd.append('document',documentFile);fd.append('selfie',selfie);
