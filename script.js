@@ -157,7 +157,17 @@ window.customerRequests=customerRequests;
 window.providerJobs=providerJobs;
 function saveCustomer(){customerLogin('register','customer')}
 function locationFields(prefix){return '<label class="form-label">Region</label><select id="'+prefix+'Region" class="form-control"><option value="">Select region</option>'+Object.keys(districts).map(r=>'<option>'+esc(r)+'</option>').join('')+'</select><label class="form-label">District</label><select id="'+prefix+'District" class="form-control" disabled><option>Select district</option></select><label class="form-label">Community / Area</label><input id="'+prefix+'Area" class="form-control" placeholder="e.g. Lumley, Aberdeen, Hill Station"><label class="form-label">Street / Landmark / Address</label><input id="'+prefix+'Address" class="form-control" placeholder="e.g. Near ..."><label class="form-label">Additional directions (optional)</label><input id="'+prefix+'Directions" class="form-control" placeholder="Helpful directions for finding the location">'}
-function wireLocation(prefix){$(prefix+'Region').onchange=()=>{const r=$(prefix+'Region').value,d=$(prefix+'District'),list=districts[r]||[];d.innerHTML='<option value="">Select district</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length}}
+function wireLocation(prefix){
+  const region=$(prefix+'Region'),district=$(prefix+'District');
+  const refresh=()=>{
+    const r=region.value,list=districts[r]||[],current=district.value;
+    district.innerHTML='<option value="">Select district</option>'+list.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');
+    district.disabled=!list.length;
+    if(list.includes(current))district.value=current;
+  };
+  region.onchange=refresh;
+  refresh();
+}
 async function showRequest(i){
   if(!authToken()||!localStorage.getItem('fixit_customer')){customerLogin('login','customer');return}
   const p=visibleProviders[i]||activeProviders()[i];
