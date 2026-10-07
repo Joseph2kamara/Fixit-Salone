@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS identity_verifications (
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_identity_user ON identity_verifications(user_id,created_at DESC);
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS document_original_name VARCHAR(255);
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS document_mime_type VARCHAR(120);
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS document_ciphertext BYTEA;
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS document_iv BYTEA;
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS document_auth_tag BYTEA;
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS selfie_original_name VARCHAR(255);
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS selfie_mime_type VARCHAR(120);
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS selfie_ciphertext BYTEA;
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS selfie_iv BYTEA;
+ALTER TABLE identity_verifications ADD COLUMN IF NOT EXISTS selfie_auth_tag BYTEA;
+
 
 CREATE TABLE IF NOT EXISTS incidents (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
