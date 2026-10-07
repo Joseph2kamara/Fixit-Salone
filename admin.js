@@ -24,11 +24,13 @@ async function boot(){
  }catch(e){sessionStorage.removeItem(tokenKey);$('loginPanel').hidden=false;$('dashboard').hidden=true;msg(e.message)}
 }
 async function loadStats(){
- const [inc,ver,users]=await Promise.all([api('/api/admin/incidents'),api('/api/admin/verifications'),api('/api/admin/users')]);
+ const [inc,ver,users,subpay,payments]=await Promise.all([api('/api/admin/incidents'),api('/api/admin/verifications'),api('/api/admin/users'),api('/api/admin/subscription-payments'),api('/api/admin/payments')]);
  $('openReports').textContent=inc.filter(x=>x.status==='open').length;
  $('verificationQueue').textContent=ver.filter(x=>['pending','under_review'].includes(x.status)).length;
  $('activeUsers').textContent=users.filter(x=>x.status==='active').length;
  $('suspendedUsers').textContent=users.filter(x=>x.status==='suspended'||x.status==='banned').length;
+ $('pendingSubscriptions').textContent=subpay.filter(x=>x.status==='pending'||x.status==='processing').length;
+ $('paymentRecords').textContent=payments.length;
 }
 async function render(tab){
  const content=$('adminContent');content.innerHTML='<p>Loading…</p>';
