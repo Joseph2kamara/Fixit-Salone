@@ -44,14 +44,34 @@ async function render(tab){
   }else if(tab==='users'){
    head='<th>ID</th><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Action</th>';
    body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.full_name)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.role)+'</td><td>'+esc(r.status)+'</td><td><button class="table-btn" data-user="'+esc(r.id)+'">Change status</button></td></tr>').join('');
+  }else if(tab==='subscriptions'){
+   head='<th>Provider</th><th>Plan</th><th>Status</th><th>Starts</th><th>Expires</th>';
+   body=rows.map(r=>'<tr><td><b>'+esc(r.business_name||'')+'</b><br><small>'+esc(r.provider_name||'')+' · '+esc(r.provider_phone||'')+'</small></td><td>'+esc(r.plan_name)+'</td><td>'+esc(r.status)+'</td><td>'+esc(new Date(r.starts_at).toLocaleDateString())+'</td><td>'+esc(new Date(r.expires_at).toLocaleDateString())+'</td></tr>').join('');
+  }else if(tab==='subscription-payments'){
+   head='<th>Provider</th><th>Plan</th><th>Amount</th><th>Status</th><th>Gateway</th><th>Reference</th><th>Action</th>';
+   body=rows.map(r=>'<tr><td><b>'+esc(r.business_name||'')+'</b><br><small>'+esc(r.provider_name||'')+' · '+esc(r.provider_phone||'')+'</small></td><td>'+esc(r.plan_name)+'</td><td>SLE '+Number(r.amount_sle).toLocaleString()+'</td><td>'+esc(r.status)+'</td><td>'+esc(r.gateway)+'</td><td>'+esc(r.provider_reference||'—')+'</td><td>'+((r.status==='pending'||r.status==='processing')?'<button class="table-btn" data-subpay="'+esc(r.id)+'">Review</button>':'—')+'</td></tr>').join('');
+  }else if(tab==='payments'){
+   head='<th>Customer</th><th>Provider</th><th>Amount</th><th>Fee</th><th>Earnings</th><th>Gateway</th><th>Status</th>';
+   body=rows.map(r=>'<tr><td>'+esc(r.customer_name||'')+'<br><small>'+esc(r.customer_phone||'')+'</small></td><td>'+esc(r.business_name||'—')+'</td><td>SLE '+Number(r.amount_sle).toLocaleString()+'</td><td>SLE '+Number(r.platform_fee||0).toLocaleString()+'</td><td>SLE '+Number(r.provider_earnings||0).toLocaleString()+'</td><td>'+esc(r.gateway)+'</td><td>'+esc(r.status)+'</td></tr>').join('');
   }else{
    rows=await api('/api/admin/audit');head='<th>Time</th><th>Action</th><th>Actor</th><th>Entity</th><th>Metadata</th>';
    body=rows.map(r=>'<tr><td>'+esc(new Date(r.created_at).toLocaleString())+'</td><td>'+esc(r.action)+'</td><td>'+esc(r.actor_name||'System')+'</td><td>'+esc(r.entity_type)+' '+esc(r.entity_id||'')+'</td><td><code>'+esc(JSON.stringify(r.metadata))+'</code></td></tr>').join('');
   }
-  content.innerHTML='<div class="admin-section-head"><div><h2>'+esc({incidents:'Incident reports',verification:'Verification queue',users:'User accounts',audit:'Audit history'}[tab])+'</h2><p>Protected live records.</p></div><span>'+rows.length+' records</span></div><div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  content.innerHTML='<div class="admin-section-head"><div><h2>'+esc({incidents:'Incident reports',verification:'Verification queue',users:'User accounts',subscriptions:'Active subscriptions', 'subscription-payments':'Subscription payment requests',payments:'Job payment records',audit:'Audit history'}[tab])+'</h2><p>Protected live records.</p></div><span>'+rows.length+' records</span></div><div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   content.querySelectorAll('[data-incident]').forEach(b=>b.onclick=async()=>{const id=b.dataset.incident;const status=prompt('Status: open, under_review, resolved or dismissed');if(!status)return;try{await api('/api/admin/incidents/'+id,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('incidents')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-ver]').forEach(b=>b.onclick=async()=>{const status=prompt('Verification: pending, under_review, verified or rejected');if(!status)return;try{await api('/api/admin/verifications/'+b.dataset.ver,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('verification')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-user]').forEach(b=>b.onclick=async()=>{const status=prompt('Account status: active, under_review, suspended or banned');if(!status)return;try{await api('/api/admin/users/'+b.dataset.user+'/status',{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('users')}catch(e){alert(e.message)}});
+  content.querySelectorAll('[data-subpay]').forEach(b=>b.onclick=async()=>{
+    const status=prompt('Status: paid, failed or cancelled');
+    if(!status)return;
+    if(status==='paid' && !confirm('Confirm that the provider payment was received outside FixIt Salone. This will activate the selected subscription.'))return;
+    const reference=prompt('Payment reference (optional):')||'';
+    const duration=status==='paid'?(prompt('Subscription duration in months (1-12):','1')||'1'):'1';
+    try{
+      await api('/api/admin/subscription-payments/'+encodeURIComponent(b.dataset.subpay),{method:'PATCH',body:JSON.stringify({status,provider_reference:reference,duration_months:Number(duration)})});
+      await loadStats();render('subscription-payments');
+    }catch(e){alert(e.message)}
+  });
  }catch(e){content.innerHTML='<p class="form-message">'+esc(e.message)+'</p>'}
 }
 $('adminLoginForm').onsubmit=async e=>{e.preventDefault();API=($('apiBase').value.trim()||window.location.origin).replace(/\\/$/,'');localStorage.setItem(apiKey,API);msg('Signing in…');try{const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({phone:$('loginPhone').value.trim(),password:$('loginPassword').value})});if(d.user.role!=='admin')throw new Error('Login succeeded, but this account is not an admin.');sessionStorage.setItem(tokenKey,d.token);$('loginPassword').value='';msg('');boot()}catch(e){msg(e.message)}};
