@@ -198,6 +198,12 @@ async function submitRequest(provider,serviceId){
   }catch(e){alert(e.message);$('submitRequest').disabled=false}
 }
 
+async function reviewCompletedJob(id){
+  openModal('<p class="eyebrow">RATE YOUR EXPERIENCE</p><h2>How was the job?</h2><p>Your review helps other customers choose reliable providers.</p><label class="form-label">Rating</label><select id="reviewRating" class="form-control"><option value="5">★★★★★ Excellent</option><option value="4">★★★★ Very good</option><option value="3">★★★ Good</option><option value="2">★★ Needs improvement</option><option value="1">★ Poor</option></select><label class="form-label">Review (optional)</label><textarea id="reviewText" class="form-control" maxlength="1000" placeholder="Tell us about the provider's work..."></textarea><button class="btn" id="submitReview">Submit review</button><button class="btn outline" id="reviewBack">Back</button>');
+  $('submitReview').onclick=async()=>{const btn=$('submitReview');btn.disabled=true;try{await api('/api/service-requests/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify({rating:Number($('reviewRating').value),review_text:$('reviewText').value.trim()})});openModal('<p class="eyebrow">THANK YOU</p><h2>Review submitted ⭐</h2><p>Your feedback has been recorded.</p><button class="btn" id="reviewDone">Done</button>');$('reviewDone').onclick=customerRequests}catch(e){alert(e.message);btn.disabled=false}};
+  $('reviewBack').onclick=customerRequests;
+}
+window.reviewCompletedJob=reviewCompletedJob;
 async function customerRequests(){
   if(!authToken()){customerLogin('login','customer');return}
   try{
@@ -209,6 +215,7 @@ async function customerRequests(){
       const actions=[];
       if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
+      if(r.status==='completed')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="review">Rate provider ⭐</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
       return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p><button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
@@ -219,6 +226,7 @@ async function customerRequests(){
           const photos=await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/photos');
           openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(API_BASE+p.file_url)+'" target="_blank" rel="noopener"><img src="'+esc(API_BASE+p.file_url)+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
         }
+        if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
         if(btn.dataset.customerAction==='pay'){
           const result=await api('/api/payments/intent',{method:'POST',body:JSON.stringify({service_request_id:btn.dataset.customerJob})});
           const p=result.payment;
