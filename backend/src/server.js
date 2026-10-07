@@ -421,10 +421,11 @@ app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
     const owner=await pool.query('SELECT id FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub]);
     if(!owner.rows[0])return res.status(403).json({error:'You do not have access to this request.'});
     if(!['requested','quoted'].includes(r.status))return res.status(409).json({error:'A quote can only be sent while the request is awaiting a quote.'});
-    const fee=Number((amount*0.01).toFixed(2));
+    const subscription=await providerSubscriptionState(r.provider_id);
+    const fee=subscription?0:Number((amount*0.01).toFixed(2));
     const earnings=Number((amount-fee).toFixed(2));
     const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,platform_fee=$2,provider_earnings=$3,updated_at=NOW() WHERE id=$4 RETURNING id,status,quoted_amount,platform_fee,provider_earnings,updated_at`,[amount,fee,earnings,r.id]);
-    await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,platform_fee:fee,provider_earnings:earnings});
+    await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,platform_fee:fee,provider_earnings:earnings,subscription_active:!!subscription});
     res.json(rows[0]);
   }catch(e){console.error('Quote error:',e);res.status(500).json({error:'Unable to send quote.'})}
 });
@@ -442,12 +443,13 @@ app.post('/api/payments/intent',requireAuth,async(req,res)=>{
     if(!r.quoted_amount)return res.status(409).json({error:'This request has no approved quote.'});
     const existing=await pool.query('SELECT id,status,amount_sle,platform_fee,provider_earnings,gateway FROM payment_transactions WHERE service_request_id=$1',[r.id]);
     if(existing.rows[0])return res.json({payment:existing.rows[0],gateway_ready:false,message:'Payment gateway is not configured yet. No money was collected.'});
-    const fee=Number((Number(r.quoted_amount)*0.01).toFixed(2));
+    const providerSubscription=await providerSubscriptionState(r.provider_id);
+    const fee=providerSubscription?0:Number((Number(r.quoted_amount)*0.01).toFixed(2));
     const earnings=Number((Number(r.quoted_amount)-fee).toFixed(2));
     const {rows}=await pool.query(`INSERT INTO payment_transactions(service_request_id,customer_user_id,provider_id,amount_sle,platform_fee,provider_earnings,gateway,status)
       VALUES($1,$2,$3,$4,$5,$6,'not_configured','pending')
       RETURNING id,status,amount_sle,platform_fee,provider_earnings,gateway,created_at`,[r.id,req.user.sub,r.provider_id,r.quoted_amount,fee,earnings]);
-    await audit(req.user.sub,null,'payment.intent_created','payment_transaction',rows[0].id,{service_request_id:r.id,amount_sle:Number(r.quoted_amount),gateway:'not_configured'});
+    await audit(req.user.sub,null,'payment.intent_created','payment_transaction',rows[0].id,{service_request_id:r.id,amount_sle:Number(r.quoted_amount),gateway:'not_configured',subscription_active:!!providerSubscription});
     res.status(201).json({payment:rows[0],gateway_ready:false,message:'Payment gateway is not configured yet. No money was collected.'});
   }catch(e){console.error('Payment intent error:',e);res.status(500).json({error:'Unable to prepare payment.'})}
 });
