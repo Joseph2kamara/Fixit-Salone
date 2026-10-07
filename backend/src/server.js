@@ -541,6 +541,21 @@ app.post('/api/providers/:id/work',requireAuth,upload.single('media'),async(req,
   }catch(e){try{fs.unlinkSync(path.join(uploadDir,req.file.filename))}catch{};res.status(500).json({error:'Unable to save portfolio item'})}
 });
 
+app.delete('/api/providers/:id/work/:workId',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider'&&req.user.role!=='admin')return res.status(403).json({error:'Provider access required.'});
+  try{
+    const owner=req.user.role==='admin'
+      ? await pool.query('SELECT id,file_url FROM provider_work WHERE id=$1 AND provider_id=$2',[req.params.workId,req.params.id])
+      : await pool.query('SELECT w.id,w.file_url FROM provider_work w JOIN provider_profiles p ON p.id=w.provider_id WHERE w.id=$1 AND w.provider_id=$2 AND p.user_id=$3',[req.params.workId,req.params.id,req.user.sub]);
+    const item=owner.rows[0];
+    if(!item)return res.status(404).json({error:'Portfolio item not found.'});
+    await pool.query('DELETE FROM provider_work WHERE id=$1',[item.id]);
+    const filename=String(item.file_url||'').replace(/^\/uploads\//,'');
+    const filePath=path.resolve(uploadDir,filename);
+    if(filePath.startsWith(path.resolve(uploadDir)+path.sep)){try{fs.unlinkSync(filePath)}catch{}}
+    res.json({ok:true});
+  }catch(e){res.status(500).json({error:'Unable to delete portfolio item'})}
+});
 app.post('/api/incidents',requireAuth,async(req,res)=>{
   const {reported_user_id,job_id,reason,details}=req.body||{};
   if(!reason||!details)return res.status(400).json({error:'reason and details are required'});
