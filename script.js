@@ -186,7 +186,14 @@ async function submitRequest(provider,serviceId){
     const providerId=live?live.id:null;
     if(!providerId)throw new Error('This provider is not yet connected to the live marketplace.');
     const created=await api('/api/service-requests',{method:'POST',body:JSON.stringify({provider_id:providerId,service_id:serviceId,region:r,district:d,area:a,service_address:addr,directions,pricing_type:$('quoteType').value,job_details:details})});
-    openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
+    if(files.length){
+      const form=new FormData();
+      for(const file of files)form.append('photos',file);
+      const uploadRes=await fetch(API_BASE+'/api/service-requests/'+encodeURIComponent(created.id)+'/photos',{method:'POST',headers:{Authorization:'Bearer '+authToken()},body:form});
+      let uploadData={};try{uploadData=await uploadRes.json()}catch{}
+      if(!uploadRes.ok)throw new Error(uploadData.error||'Request was created, but the photos could not be uploaded.');
+    }
+    openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+(files.length?files.length+' photo'+(files.length===1?'':'s')+' attached. ':'')+'The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
     $('closeRequest').onclick=closeModal;
   }catch(e){alert(e.message);$('submitRequest').disabled=false}
 }
@@ -203,11 +210,15 @@ async function customerRequests(){
       if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p>'+actions.join('')+'</article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p><button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
     openModal('<p class="eyebrow">MY REQUESTS</p><h2>Your FixIt jobs</h2><p class="quote-note">Review provider quotes here. Payment will only be requested after you approve the final quote.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="closeCustomerRequests">Done</button>');
     document.querySelectorAll('[data-customer-action]').forEach(btn=>btn.onclick=async()=>{
       try{
+        if(btn.dataset.customerAction==='photos'){
+          const photos=await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/photos');
+          openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(API_BASE+p.file_url)+'" target="_blank" rel="noopener"><img src="'+esc(API_BASE+p.file_url)+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
+        }
         if(btn.dataset.customerAction==='pay'){
           const result=await api('/api/payments/intent',{method:'POST',body:JSON.stringify({service_request_id:btn.dataset.customerJob})});
           const p=result.payment;
@@ -270,7 +281,7 @@ async function providerJobs(){
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
       if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div><p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p><div class="job-actions">'+actions.join('')+'</div></article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div><p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+esc(quote)+'</p><div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button>'+actions.join('')+'</div></article>';
     }).join(''):'<div class="card"><h3>No incoming requests</h3><p class="desc">New customer requests will appear here.</p></div>';
     openModal('<p class="eyebrow">INCOMING JOBS</p><h2>Manage customer requests</h2><p class="quote-note">Send a final quote before work starts. FixIt fee is 1% of the approved job value.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="backProvider">Back to dashboard</button>');
     document.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=()=>handleProviderJob(btn.dataset.job,btn.dataset.action));
@@ -279,6 +290,10 @@ async function providerJobs(){
 }
 async function handleProviderJob(id,action){
   try{
+    if(action==='photos'){
+      const photos=await api('/api/service-requests/'+encodeURIComponent(id)+'/photos');
+      openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(API_BASE+p.file_url)+'" target="_blank" rel="noopener"><img src="'+esc(API_BASE+p.file_url)+'" alt="Customer job photo"></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;return;
+    }
     if(action==='quote'){
       const amount=prompt('Enter your final quote in SLE:');
       if(amount===null)return;
