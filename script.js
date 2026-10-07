@@ -231,7 +231,13 @@ async function providerPortal(){
   }
   try{
     const me=await api('/api/auth/me');
-    if(me.user.role!=='provider')throw new Error('Please sign in with a provider account to open the Provider Dashboard.');
+    if(me.user.role!=='provider'){
+      openModal('<p class="eyebrow">PROVIDER PORTAL</p><h2>You are signed in as a customer</h2><p>Your current account is a customer account. To use the Provider Portal, create a separate provider account or sign in with an existing provider account.</p><button class="btn" id="providerCreate">Create provider account</button><button class="btn outline" id="providerSignIn">Sign in as provider</button><button class="btn outline" id="providerStay">Stay as customer</button>');
+      $('providerCreate').onclick=()=>customerLogin('register','provider');
+      $('providerSignIn').onclick=()=>customerLogin('login','provider');
+      $('providerStay').onclick=closeModal;
+      return;
+    }
     const profile=await api('/api/providers/me/profile');
     const requests=await api('/api/provider/requests');
     const pending=requests.filter(r=>['requested','quoted','approved','in_progress'].includes(r.status)).length;
