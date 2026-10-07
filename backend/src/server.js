@@ -381,12 +381,29 @@ app.patch('/api/provider/notifications/:id/read',requireAuth,async(req,res)=>{
 app.get('/api/provider/subscription',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
   try{
-    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1 LIMIT 1',[req.user.sub]);
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
     if(!profile.rows[0])return res.status(404).json({error:'Provider profile not found.'});
-    const subscription=await providerSubscriptionState(profile.rows[0].id);
-    const referrals=await providerReferralCount(profile.rows[0].id);
-    res.json({subscription,referral_count:referrals,free_referrals:3,can_receive_requests:!!subscription||referrals<3});
+    const providerId=profile.rows[0].id;
+    const subscription=await providerSubscriptionState(providerId);
+    const referrals=await providerReferralCount(providerId);
+    const payments=await pool.query('SELECT id,plan_name,amount_sle,status,provider_reference,created_at FROM provider_subscription_payments WHERE provider_id=$1 ORDER BY created_at DESC LIMIT 10',[providerId]);
+    res.json({subscription,referral_count:referrals,free_referrals:3,can_receive_requests:!!subscription||referrals<3,payments:payments.rows});
   }catch(e){res.status(500).json({error:'Unable to load subscription status.'})}
+});
+app.post('/api/provider/subscription/request',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  const plans={Pro:20,Business:40,Premium:60};
+  const plan=String(req.body&&req.body.plan_name||'').trim();
+  if(!plans[plan])return res.status(400).json({error:'Choose a valid paid plan.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(404).json({error:'Create your provider profile first.'});
+    const existing=await pool.query("SELECT id,status FROM provider_subscription_payments WHERE provider_id=$1 AND status IN ('pending','processing') ORDER BY created_at DESC LIMIT 1",[profile.rows[0].id]);
+    if(existing.rows[0])return res.status(409).json({error:'You already have a pending subscription payment request.'});
+    const {rows}=await pool.query('INSERT INTO provider_subscription_payments(provider_id,plan_name,amount_sle,status,gateway) VALUES($1,$2,$3,\'pending\',\'not_configured\') RETURNING id,plan_name,amount_sle,status,created_at',[profile.rows[0].id,plan,plans[plan]]);
+    await audit(req.user.sub,null,'provider.subscription_payment_requested','provider_subscription_payment',rows[0].id,{plan_name:plan,amount_sle:plans[plan]});
+    res.status(201).json({payment:rows[0],gateway_ready:false,message:'Subscription request recorded. Live Orange Money payment is not connected yet, so no money was collected.'});
+  }catch(e){console.error('Subscription request error:',e);res.status(500).json({error:'Unable to create subscription payment request.'})}
 });
 
 app.get('/api/provider/requests',requireAuth,async(req,res)=>{
