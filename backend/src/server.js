@@ -297,6 +297,41 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
   }catch(e){console.error('Service request error:',e);res.status(500).json({error:'Unable to create service request.'})}
 });
 
+app.post('/api/service-requests/:id/photos',requireAuth,upload.array('photos',5),async(req,res)=>{
+  const files=req.files||[];
+  if(!files.length)return res.status(400).json({error:'Please upload at least one photo.'});
+  try{
+    const current=await pool.query('SELECT id,customer_user_id,provider_id FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!current.rows[0]){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(404).json({error:'Service request not found.'})}
+    const r=current.rows[0];
+    const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
+    if(!allowed){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(403).json({error:'You do not have access to this request.'})}
+    const count=await pool.query('SELECT COUNT(*)::int AS count FROM service_request_photos WHERE service_request_id=$1',[r.id]);
+    if(count.rows[0].count+files.length>5){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(400).json({error:'A request can have a maximum of 5 photos.'})}
+    const saved=[];
+    for(const f of files){
+      const row=await pool.query('INSERT INTO service_request_photos(service_request_id,uploaded_by,file_url,original_name) VALUES($1,$2,$3,$4) RETURNING id,file_url,original_name,created_at',[r.id,req.user.sub,'/uploads/'+f.filename,f.originalname]);
+      saved.push(row.rows[0]);
+    }
+    await audit(req.user.sub,r.customer_user_id,'service_request.photos_uploaded','service_request',r.id,{count:saved.length});
+    res.status(201).json(saved);
+  }catch(e){
+    for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}}
+    console.error('Request photos error:',e);res.status(500).json({error:'Unable to save request photos.'});
+  }
+});
+app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
+  try{
+    const current=await pool.query('SELECT customer_user_id,provider_id FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
+    const r=current.rows[0];
+    const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
+    if(!allowed)return res.status(403).json({error:'You do not have access to these photos.'});
+    const {rows}=await pool.query('SELECT id,file_url,original_name,created_at FROM service_request_photos WHERE service_request_id=$1 ORDER BY created_at ASC',[req.params.id]);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load request photos.'})}
+});
+
 app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   try{
