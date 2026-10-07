@@ -489,6 +489,38 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to update request status.'})}
 });
 
+app.get('/api/providers/:id/reviews',async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`SELECT pr.id,pr.rating,pr.review_text,pr.created_at,u.full_name AS customer_name
+      FROM provider_reviews pr JOIN users u ON u.id=pr.customer_user_id
+      WHERE pr.provider_id=$1 ORDER BY pr.created_at DESC LIMIT 100`,[req.params.id]);
+    const stats=await pool.query('SELECT COUNT(*)::int AS count,COALESCE(ROUND(AVG(rating)::numeric,1),0) AS average FROM provider_reviews WHERE provider_id=$1',[req.params.id]);
+    res.json({reviews:rows,rating:Number(stats.rows[0].average||0),review_count:Number(stats.rows[0].count||0)});
+  }catch(e){res.status(500).json({error:'Unable to load provider reviews.'})}
+});
+
+app.post('/api/service-requests/:id/review',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  const rating=Number(req.body&&req.body.rating);
+  const reviewText=String(req.body&&req.body.review_text||'').trim();
+  if(!Number.isInteger(rating)||rating<1||rating>5)return res.status(400).json({error:'Rating must be between 1 and 5.'});
+  if(reviewText.length>1000)return res.status(400).json({error:'Review is too long.'});
+  try{
+    const q=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!q.rows[0])return res.status(404).json({error:'Service request not found.'});
+    const r=q.rows[0];
+    if(r.customer_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
+    if(r.status!=='completed')return res.status(409).json({error:'You can review a provider only after the job is completed.'});
+    if(!r.provider_id)return res.status(409).json({error:'This request has no provider to review.'});
+    const existing=await pool.query('SELECT id FROM provider_reviews WHERE service_request_id=$1',[r.id]);
+    if(existing.rows[0])return res.status(409).json({error:'You have already reviewed this completed job.'});
+    const {rows}=await pool.query(`INSERT INTO provider_reviews(service_request_id,customer_user_id,provider_id,rating,review_text)
+      VALUES($1,$2,$3,$4,$5) RETURNING id,rating,review_text,created_at`,[r.id,req.user.sub,r.provider_id,rating,reviewText||null]);
+    await audit(req.user.sub,null,'provider.review_created','provider_review',rows[0].id,{provider_id:r.provider_id,service_request_id:r.id,rating});
+    res.status(201).json(rows[0]);
+  }catch(e){console.error('Review error:',e);res.status(500).json({error:'Unable to submit review.'})}
+});
+
 app.get('/api/providers/:id/work',async(req,res)=>{
   try{const {rows}=await pool.query('SELECT id,media_type,file_url,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);res.json(rows)}
   catch(e){res.status(500).json({error:'Unable to load portfolio'})}
