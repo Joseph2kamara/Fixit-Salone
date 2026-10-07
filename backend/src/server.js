@@ -10,6 +10,8 @@ const bcrypt=require('bcryptjs');
 const jwt=require('jsonwebtoken');
 const rateLimit=require('express-rate-limit');
 const {Pool}=require('pg');
+const {S3Client,PutObjectCommand,DeleteObjectCommand,GetObjectCommand}=require('@aws-sdk/client-s3');
+const {getSignedUrl}=require('@aws-sdk/s3-request-presigner');
 
 const app=express();
 const JWT_SECRET=process.env.JWT_SECRET;
@@ -46,8 +48,55 @@ async function initializeDatabase(){
 
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||'uploads');
 fs.mkdirSync(uploadDir,{recursive:true});
-const storage=multer.diskStorage({destination:(req,file,cb)=>cb(null,uploadDir),filename:(req,file,cb)=>cb(null,Date.now()+'-'+Math.random().toString(36).slice(2)+path.extname(file.originalname).toLowerCase())});
-const upload=multer({storage,limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||15)*1024*1024},fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.mimetype))});
+const R2_ENDPOINT=String(process.env.R2_ENDPOINT||'').trim();
+const R2_ACCESS_KEY_ID=String(process.env.R2_ACCESS_KEY_ID||'').trim();
+const R2_SECRET_ACCESS_KEY=String(process.env.R2_SECRET_ACCESS_KEY||'').trim();
+const R2_BUCKET=String(process.env.R2_BUCKET||'').trim();
+const objectStorageEnabled=!!(R2_ENDPOINT&&R2_ACCESS_KEY_ID&&R2_SECRET_ACCESS_KEY&&R2_BUCKET);
+const objectStorage=objectStorageEnabled?new S3Client({
+  region:'auto',
+  endpoint:R2_ENDPOINT,
+  credentials:{accessKeyId:R2_ACCESS_KEY_ID,secretAccessKey:R2_SECRET_ACCESS_KEY},
+}):null;
+const diskStorage=multer.diskStorage({destination:(req,file,cb)=>cb(null,uploadDir),filename:(req,file,cb)=>cb(null,Date.now()+'-'+Math.random().toString(36).slice(2)+path.extname(file.originalname).toLowerCase())});
+const memoryStorage=multer.memoryStorage();
+const upload=multer({
+  storage:objectStorageEnabled?memoryStorage:diskStorage,
+  limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||15)*1024*1024},
+  fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.mimetype))
+});
+function safeObjectName(name){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(-180)}
+function makeObjectKey(prefix,file){
+  const ext=path.extname(file.originalname||'').toLowerCase();
+  return prefix+'/'+Date.now()+'-'+crypto.randomBytes(10).toString('hex')+ext;
+}
+async function storeUpload(file,key){
+  if(objectStorageEnabled){
+    await objectStorage.send(new PutObjectCommand({
+      Bucket:R2_BUCKET,Key:key,Body:file.buffer,ContentType:file.mimetype,Metadata:{original_name:safeObjectName(file.originalname)}
+    }));
+    return {storage_provider:'r2',storage_key:key,file_url:null};
+  }
+  const filename=Date.now()+'-'+crypto.randomBytes(10).toString('hex')+path.extname(file.originalname||'').toLowerCase();
+  const target=path.join(uploadDir,filename);
+  if(file.buffer)fs.writeFileSync(target,file.buffer);
+  return {storage_provider:'local',storage_key:filename,file_url:'/uploads/'+filename};
+}
+async function removeStoredFile(storageProvider,storageKey,fileUrl){
+  if(storageProvider==='r2'&&storageKey&&objectStorageEnabled){
+    await objectStorage.send(new DeleteObjectCommand({Bucket:R2_BUCKET,Key:storageKey}));return;
+  }
+  const filename=String(storageKey||fileUrl||'').replace(/^\/uploads\//,'');
+  const filePath=path.resolve(uploadDir,filename);
+  if(filePath.startsWith(path.resolve(uploadDir)+path.sep)){try{fs.unlinkSync(filePath)}catch{}}
+}
+async function storedFileUrl(storageProvider,storageKey,fileUrl,expires=600){
+  if(storageProvider==='r2'&&storageKey&&objectStorageEnabled){
+    return await getSignedUrl(objectStorage,new GetObjectCommand({Bucket:R2_BUCKET,Key:storageKey}),{expiresIn:expires});
+  }
+  return fileUrl||null;
+}
+
 const kycUpload=multer({
   storage:multer.memoryStorage(),
   limits:{fileSize:5*1024*1024,files:2},
@@ -80,6 +129,7 @@ function decryptKyc(ciphertext,iv,authTag){
 }
 
 app.use('/uploads',express.static(uploadDir));
+app.get('/api/storage/status',(req,res)=>res.json({permanent_storage:objectStorageEnabled,provider:objectStorageEnabled?'r2':'local'}));
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
 const adminLimiter=rateLimit({windowMs:60*1000,max:60,standardHeaders:true,legacyHeaders:false,message:{error:'Too many admin requests. Try again shortly.'}});
@@ -349,26 +399,43 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
 app.post('/api/service-requests/:id/photos',requireAuth,upload.array('photos',5),async(req,res)=>{
   const files=req.files||[];
   if(!files.length)return res.status(400).json({error:'Please upload at least one photo.'});
+  const cleanup=[];
   try{
     const current=await pool.query('SELECT id,customer_user_id,provider_id FROM service_requests WHERE id=$1',[req.params.id]);
-    if(!current.rows[0]){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(404).json({error:'Service request not found.'})}
+    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
     const r=current.rows[0];
     const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
-    if(!allowed){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(403).json({error:'You do not have access to this request.'})}
+    if(!allowed)return res.status(403).json({error:'You do not have access to this request.'});
     const count=await pool.query('SELECT COUNT(*)::int AS count FROM service_request_photos WHERE service_request_id=$1',[r.id]);
-    if(count.rows[0].count+files.length>5){for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}};return res.status(400).json({error:'A request can have a maximum of 5 photos.'})}
+    if(count.rows[0].count+files.length>5)return res.status(400).json({error:'A request can have a maximum of 5 photos.'});
     const saved=[];
     for(const f of files){
-      const row=await pool.query('INSERT INTO service_request_photos(service_request_id,uploaded_by,file_url,original_name) VALUES($1,$2,$3,$4) RETURNING id,file_url,original_name,created_at',[r.id,req.user.sub,'/uploads/'+f.filename,f.originalname]);
+      const key=makeObjectKey('service-request-photos/'+r.id,f);
+      const stored=await storeUpload(f,key);
+      cleanup.push(stored);
+      const row=await pool.query('INSERT INTO service_request_photos(service_request_id,uploaded_by,file_url,storage_key,storage_provider,original_name) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,file_url,storage_key,storage_provider,original_name,created_at',[r.id,req.user.sub,stored.file_url,stored.storage_key,stored.storage_provider,f.originalname]);
       saved.push(row.rows[0]);
     }
-    await audit(req.user.sub,r.customer_user_id,'service_request.photos_uploaded','service_request',r.id,{count:saved.length});
-    res.status(201).json(saved);
+    await audit(req.user.sub,r.customer_user_id,'service_request.photos_uploaded','service_request',r.id,{count:saved.length,storage:objectStorageEnabled?'r2':'local'});
+    res.status(201).json(saved.map(x=>({...x,file_url:objectStorageEnabled&&x.storage_provider==='r2'?('/api/service-requests/'+encodeURIComponent(r.id)+'/photos/'+encodeURIComponent(x.id)+'/file'):x.file_url})));
   }catch(e){
-    for(const f of files){try{fs.unlinkSync(path.join(uploadDir,f.filename))}catch{}}
+    for(const item of cleanup){try{await removeStoredFile(item.storage_provider,item.storage_key,item.file_url)}catch{}}
     console.error('Request photos error:',e);res.status(500).json({error:'Unable to save request photos.'});
   }
 });
+app.get('/api/service-requests/:id/photos/:photoId/file',requireAuth,async(req,res)=>{
+  try{
+    const current=await pool.query('SELECT sr.customer_user_id,sr.provider_id,p.id,p.file_url,p.storage_key,p.storage_provider,p.original_name FROM service_requests sr JOIN service_request_photos p ON p.service_request_id=sr.id WHERE sr.id=$1 AND p.id=$2',[req.params.id,req.params.photoId]);
+    const row=current.rows[0];if(!row)return res.status(404).json({error:'Photo not found.'});
+    const allowed=req.user.role==='customer'&&row.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[row.provider_id,req.user.sub])).rows[0] || req.user.role==='admin';
+    if(!allowed)return res.status(403).json({error:'You do not have access to this photo.'});
+    if(row.storage_provider==='r2'&&row.storage_key&&objectStorageEnabled)return res.redirect(await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600));
+    const filename=String(row.file_url||'').replace(/^\/uploads\//,'');const filePath=path.resolve(uploadDir,filename);
+    if(!filePath.startsWith(path.resolve(uploadDir)+path.sep)||!fs.existsSync(filePath))return res.status(404).json({error:'File not found.'});
+    res.sendFile(filePath);
+  }catch(e){res.status(500).json({error:'Unable to load photo.'})}
+});
+
 app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
   try{
     const current=await pool.query('SELECT customer_user_id,provider_id FROM service_requests WHERE id=$1',[req.params.id]);
@@ -376,8 +443,8 @@ app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
     const r=current.rows[0];
     const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
     if(!allowed)return res.status(403).json({error:'You do not have access to these photos.'});
-    const {rows}=await pool.query('SELECT id,file_url,original_name,created_at FROM service_request_photos WHERE service_request_id=$1 ORDER BY created_at ASC',[req.params.id]);
-    res.json(rows);
+    const {rows}=await pool.query('SELECT id,file_url,storage_key,storage_provider,original_name,created_at FROM service_request_photos WHERE service_request_id=$1 ORDER BY created_at ASC',[req.params.id]);
+    res.json(rows.map(x=>({...x,file_url:objectStorageEnabled&&x.storage_provider==='r2'?('/api/service-requests/'+encodeURIComponent(req.params.id)+'/photos/'+encodeURIComponent(x.id)+'/file'):x.file_url})));
   }catch(e){res.status(500).json({error:'Unable to load request photos.'})}
 });
 
@@ -571,8 +638,25 @@ app.post('/api/service-requests/:id/review',requireAuth,async(req,res)=>{
 });
 
 app.get('/api/providers/:id/work',async(req,res)=>{
-  try{const {rows}=await pool.query('SELECT id,media_type,file_url,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);res.json(rows)}
-  catch(e){res.status(500).json({error:'Unable to load portfolio'})}
+  try{
+    const {rows}=await pool.query('SELECT id,media_type,file_url,storage_key,storage_provider,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);
+    const result=[];
+    for(const row of rows){
+      const file_url=await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600);
+      result.push({id:row.id,media_type:row.media_type,file_url:objectStorageEnabled&&row.storage_provider==='r2'?('/api/providers/'+encodeURIComponent(req.params.id)+'/work/'+encodeURIComponent(row.id)+'/file'):file_url,caption:row.caption,created_at:row.created_at});
+    }
+    res.json(result);
+  }catch(e){console.error('Portfolio load error:',e);res.status(500).json({error:'Unable to load portfolio'})}
+});
+app.get('/api/providers/:id/work/:workId/file',async(req,res)=>{
+  try{
+    const q=await pool.query('SELECT media_type,file_url,storage_key,storage_provider FROM provider_work WHERE id=$1 AND provider_id=$2',[req.params.workId,req.params.id]);
+    const row=q.rows[0];if(!row)return res.status(404).json({error:'Portfolio item not found.'});
+    if(row.storage_provider==='r2'&&row.storage_key&&objectStorageEnabled)return res.redirect(await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600));
+    const filename=String(row.file_url||'').replace(/^\/uploads\//,'');const filePath=path.resolve(uploadDir,filename);
+    if(!filePath.startsWith(path.resolve(uploadDir)+path.sep)||!fs.existsSync(filePath))return res.status(404).json({error:'File not found.'});
+    res.sendFile(filePath);
+  }catch(e){res.status(500).json({error:'Unable to load portfolio file.'})}
 });
 app.post('/api/providers/:id/work',requireAuth,upload.single('media'),async(req,res)=>{
   if(req.user.role!=='provider'&&req.user.role!=='admin')return res.status(403).json({error:'Provider access required.'});
@@ -582,28 +666,28 @@ app.post('/api/providers/:id/work',requireAuth,upload.single('media'),async(req,
   }
   if(!req.file)return res.status(400).json({error:'Please upload an image or video.'});
   const caption=(req.body.caption||'').trim();
-  if(!caption){try{fs.unlinkSync(path.join(uploadDir,req.file.filename))}catch{};return res.status(400).json({error:'Caption is required.'})}
+  if(!caption)return res.status(400).json({error:'Caption is required.'});
   const mediaType=req.file.mimetype.startsWith('video/')?'video':'image';
+  const key=makeObjectKey('provider-work/'+req.params.id,req.file);
   try{
-    const {rows}=await pool.query('INSERT INTO provider_work(provider_id,media_type,file_url,caption) VALUES($1,$2,$3,$4) RETURNING id,media_type,file_url,caption,created_at',[req.params.id,mediaType,'/uploads/'+req.file.filename,caption]);
+    const stored=await storeUpload(req.file,key);
+    const {rows}=await pool.query('INSERT INTO provider_work(provider_id,media_type,file_url,storage_key,storage_provider,caption) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,media_type,file_url,storage_key,storage_provider,caption,created_at',[req.params.id,mediaType,stored.file_url,stored.storage_key,stored.storage_provider,caption]);
     res.status(201).json(rows[0]);
-  }catch(e){try{fs.unlinkSync(path.join(uploadDir,req.file.filename))}catch{};res.status(500).json({error:'Unable to save portfolio item'})}
+  }catch(e){try{await removeStoredFile(objectStorageEnabled?'r2':'local',key,req.file.filename?'/uploads/'+req.file.filename:null)}catch{};console.error('Portfolio upload error:',e);res.status(500).json({error:'Unable to save portfolio item'})}
 });
 
 app.delete('/api/providers/:id/work/:workId',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider'&&req.user.role!=='admin')return res.status(403).json({error:'Provider access required.'});
   try{
     const owner=req.user.role==='admin'
-      ? await pool.query('SELECT id,file_url FROM provider_work WHERE id=$1 AND provider_id=$2',[req.params.workId,req.params.id])
-      : await pool.query('SELECT w.id,w.file_url FROM provider_work w JOIN provider_profiles p ON p.id=w.provider_id WHERE w.id=$1 AND w.provider_id=$2 AND p.user_id=$3',[req.params.workId,req.params.id,req.user.sub]);
+      ? await pool.query('SELECT id,file_url,storage_key,storage_provider FROM provider_work WHERE id=$1 AND provider_id=$2',[req.params.workId,req.params.id])
+      : await pool.query('SELECT w.id,w.file_url,w.storage_key,w.storage_provider FROM provider_work w JOIN provider_profiles p ON p.id=w.provider_id WHERE w.id=$1 AND w.provider_id=$2 AND p.user_id=$3',[req.params.workId,req.params.id,req.user.sub]);
     const item=owner.rows[0];
     if(!item)return res.status(404).json({error:'Portfolio item not found.'});
     await pool.query('DELETE FROM provider_work WHERE id=$1',[item.id]);
-    const filename=String(item.file_url||'').replace(/^\/uploads\//,'');
-    const filePath=path.resolve(uploadDir,filename);
-    if(filePath.startsWith(path.resolve(uploadDir)+path.sep)){try{fs.unlinkSync(filePath)}catch{}}
+    await removeStoredFile(item.storage_provider,item.storage_key,item.file_url);
     res.json({ok:true});
-  }catch(e){res.status(500).json({error:'Unable to delete portfolio item'})}
+  }catch(e){console.error('Portfolio delete error:',e);res.status(500).json({error:'Unable to delete portfolio item'})}
 });
 app.post('/api/incidents',requireAuth,async(req,res)=>{
   const {reported_user_id,job_id,reason,details}=req.body||{};
