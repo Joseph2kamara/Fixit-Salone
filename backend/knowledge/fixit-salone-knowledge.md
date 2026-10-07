@@ -125,7 +125,7 @@ FixIt Salone has account verification features.
 
 Phone verification can use SMS through the configured SMS provider when the service is enabled.
 
-Identity/KYC features are still being developed. Do not claim that a user's identity has been verified unless the website explicitly shows a verified status.
+Identity/KYC submission is available when secure KYC storage is configured. Identity documents and selfies are encrypted before database storage and are only accessible to authorized Trust & Safety administrators. Do not claim that a user's identity has been verified unless the website explicitly shows a verified status.
 
 Sensitive identity information should not be displayed publicly.
 
