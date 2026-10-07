@@ -305,19 +305,33 @@ async function providerNotificationsCenter(){
     $('closeProviderNotes').onclick=providerPortal;
   }catch(e){alert(e.message)}
 }
-function subscriptionCenter(){
-  openModal('<p class="eyebrow">PROVIDER SUBSCRIPTION</p><h2>Choose your FixIt plan</h2><p>Your first <b>3 customer referrals are free</b>. After that, request details stay locked until you activate a paid plan.</p><div class="plan-grid">'+
-    '<div><b>FREE</b><strong>SLE 0 / month</strong><small>3 referrals · 1% FixIt fee</small></div>'+
-    '<div><b>PRO</b><strong>SLE 20 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribePro">Choose Pro</button></div>'+
-    '<div><b>BUSINESS</b><strong>SLE 40 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribeBusiness">Choose Business</button></div>'+
-    '<div><b>PREMIUM</b><strong>SLE 60 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" id="subscribePremium">Choose Premium</button></div>'+
-  '</div><p class="quote-note">Subscription payment is not connected yet. These plan prices are the current beta pricing. We can connect Orange Money when you are ready.</p><button class="btn outline" id="subscriptionBack">Back</button>');
-  const choose=plan=>alert(plan+' subscription payment is coming next. No payment has been collected.');
-  $('subscribePro').onclick=()=>choose('Pro');
-  $('subscribeBusiness').onclick=()=>choose('Business');
-  $('subscribePremium').onclick=()=>choose('Premium');
-  $('subscriptionBack').onclick=providerPortal;
+async function subscriptionCenter(){
+  try{
+    const data=await api('/api/provider/subscription');
+    const active=data.subscription;
+    const pending=data.payments?.find(p=>p.status==='pending'||p.status==='processing');
+    openModal('<p class="eyebrow">PROVIDER SUBSCRIPTION</p><h2>'+ (active?'Your subscription is active':'Choose your FixIt plan') +'</h2>'+
+      (active?'<div class="card"><b>'+esc(active.plan_name)+' plan</b><p class="desc">Active until '+esc(new Date(active.expires_at).toLocaleDateString())+'. You receive unlimited referrals and 0% FixIt fee while active.</p></div>':'<p>Your first <b>3 customer referrals are free</b>. After that, request details stay locked until you activate a paid plan.</p>')+
+      '<div class="plan-grid">'+
+      '<div><b>FREE</b><strong>SLE 0 / month</strong><small>3 referrals · 1% FixIt fee</small></div>'+
+      '<div><b>PRO</b><strong>SLE 20 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" data-subscribe-plan="Pro" '+(active?'disabled':'')+'>Choose Pro</button></div>'+
+      '<div><b>BUSINESS</b><strong>SLE 40 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" data-subscribe-plan="Business" '+(active?'disabled':'')+'>Choose Business</button></div>'+
+      '<div><b>PREMIUM</b><strong>SLE 60 / month</strong><small>Unlimited referrals · 0% fee</small><button class="btn" data-subscribe-plan="Premium" '+(active?'disabled':'')+'>Choose Premium</button></div></div>'+
+      (pending?'<div class="card"><b>Payment request pending</b><p class="desc">'+esc(pending.plan_name)+' · SLE '+Number(pending.amount_sle).toLocaleString()+'</p><small>We have recorded your subscription request. Live Orange Money payment is not connected yet.</small></div>':'')+
+      '<p class="quote-note">Payment gateway status: <b>Not connected</b>. This step records the subscription request safely; no money is collected until Orange Money is connected.</p><button class="btn outline" id="subscriptionBack">Back</button>');
+    document.querySelectorAll('[data-subscribe-plan]').forEach(btn=>btn.onclick=async()=>{
+      const plan=btn.dataset.subscribePlan;
+      btn.disabled=true;
+      try{
+        const result=await api('/api/provider/subscription/request',{method:'POST',body:JSON.stringify({plan_name:plan})});
+        alert(result.message);
+        subscriptionCenter();
+      }catch(e){alert(e.message);btn.disabled=false}
+    });
+    $('subscriptionBack').onclick=providerPortal;
+  }catch(e){alert(e.message)}
 }
+
 async function providerPortfolio(){
   try{
     const profile=await api('/api/providers/me/profile');
