@@ -122,5 +122,13 @@
     <p>© 2026 FixIt Salone · Public beta · <a href="#support">Support</a></p>
   </div>
 </footer>
-</body>
+<div class="fixit-chat-widget">
+<button class="fixit-chat-button" id="fixitChatButton" aria-label="Open FixIt Salone Support Assistant" aria-expanded="false">💬</button>
+<div class="fixit-chat-window" id="fixitChatWindow" hidden>
+  <div class="fixit-chat-head"><div><strong>FixIt Support</strong><small>AI assistant · 24/7</small></div><button id="fixitChatClose" aria-label="Close chat">×</button></div>
+  <div class="fixit-chat-messages" id="fixitChatMessages"></div>
+  <div class="fixit-chat-quick"><button data-support-question="How do I find a service provider?">Find a provider</button><button data-support-question="How do I become a provider?">Become a provider</button><button data-support-question="How can I contact support?">Contact support</button></div>
+  <div class="fixit-chat-compose"><textarea id="fixitChatInput" rows="1" maxlength="1200" placeholder="Type your question..."></textarea><button id="fixitChatSend" aria-label="Send">➤</button></div>
+  <div class="fixit-chat-note">Don't share passwords, PINs, OTPs or card details.</div>
+</div></div><script src="chatbot.js?v=1"></script></body>
 </html>
