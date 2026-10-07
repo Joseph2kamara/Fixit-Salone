@@ -279,6 +279,15 @@ app.get('/api/providers/me/services',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load provider services.'})}
 });
 
+async function providerSubscriptionState(providerId){
+  const {rows}=await pool.query("SELECT id,plan_name,status,starts_at,expires_at FROM provider_subscriptions WHERE provider_id=$1 AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1",[providerId]);
+  return rows[0]||null;
+}
+async function providerReferralCount(providerId){
+  const {rows}=await pool.query("SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1",[providerId]);
+  return Number(rows[0]?.count||0);
+}
+
 app.post('/api/service-requests',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   const {provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details}=req.body||{};
@@ -292,8 +301,16 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
     const {rows}=await pool.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,status,created_at`,
       [req.user.sub,provider_id,service_id,String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,pricing_type,String(job_details).trim()]);
-    await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id});
-    res.status(201).json(rows[0]);
+    const referralCount=await providerReferralCount(provider_id);
+    const subscription=await providerSubscriptionState(provider_id);
+    const locked=referralCount>3&&!subscription;
+    await pool.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',[
+      provider_id,'job_request','New service request',
+      locked?'A customer has requested your service. You have used your 3 free referrals. Subscribe to view the request details and receive new requests.':'A customer has requested your service. Open your Provider Portal to view the request details.',
+      rows[0].id
+    ]);
+    await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id,referral_count:referralCount,locked});
+    res.status(201).json(Object.assign({},rows[0],{provider_locked:locked}));
   }catch(e){console.error('Service request error:',e);res.status(500).json({error:'Unable to create service request.'})}
 });
 
@@ -343,15 +360,54 @@ app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load your requests.'})}
 });
 
+app.get('/api/provider/notifications',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1 LIMIT 1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(404).json({error:'Provider profile not found.'});
+    const {rows}=await pool.query('SELECT id,type,title,message,service_request_id,is_read,created_at FROM provider_notifications WHERE provider_id=$1 ORDER BY created_at DESC LIMIT 50',[profile.rows[0].id]);
+    res.json(rows);
+  }catch(e){res.status(500).json({error:'Unable to load notifications.'})}
+});
+app.patch('/api/provider/notifications/:id/read',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1 LIMIT 1',[req.user.sub]);
+    const {rows}=await pool.query('UPDATE provider_notifications SET is_read=true WHERE id=$1 AND provider_id=$2 RETURNING id,is_read',[req.params.id,profile.rows[0]?.id]);
+    if(!rows[0])return res.status(404).json({error:'Notification not found.'});
+    res.json(rows[0]);
+  }catch(e){res.status(500).json({error:'Unable to update notification.'})}
+});
+app.get('/api/provider/subscription',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1 LIMIT 1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(404).json({error:'Provider profile not found.'});
+    const subscription=await providerSubscriptionState(profile.rows[0].id);
+    const referrals=await providerReferralCount(profile.rows[0].id);
+    res.json({subscription,referral_count:referrals,free_referrals:3,can_receive_requests:!!subscription||referrals<3});
+  }catch(e){res.status(500).json({error:'Unable to load subscription status.'})}
+});
+
 app.get('/api/provider/requests',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
   try{
-    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1 LIMIT 1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(404).json({error:'Provider profile not found.'});
+    const providerId=profile.rows[0].id;
+    const subscription=await providerSubscriptionState(providerId);
+    const referralCount=await providerReferralCount(providerId);
+    const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
       u.full_name AS customer_name,u.phone AS customer_phone,s.name AS service_name
-      FROM service_requests sr JOIN provider_profiles pp ON pp.id=sr.provider_id JOIN users u ON u.id=sr.customer_user_id LEFT JOIN services s ON s.id=sr.service_id
-      WHERE pp.user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
-    res.json(rows);
-  }catch(e){res.status(500).json({error:'Unable to load provider requests.'})}
+      FROM service_requests sr
+      LEFT JOIN users u ON u.id=sr.customer_user_id
+      LEFT JOIN services s ON s.id=sr.service_id
+      WHERE sr.provider_id=$1
+      ORDER BY sr.created_at DESC LIMIT 100`;
+    const result=await pool.query(base,[providerId]);
+    const requests=subscription?result.rows:result.rows.filter((r,idx)=>idx<3);
+    res.json({requests,subscription:subscription||null,referral_count:referralCount,free_referrals:3,locked_requests:subscription?0:Math.max(0,referralCount-3),can_receive_requests:!!subscription||referralCount<3});
+  }catch(e){console.error('Provider requests error:',e);res.status(500).json({error:'Unable to load provider requests.'})}
 });
 
 app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
