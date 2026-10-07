@@ -52,3 +52,7 @@
   .job-actions .btn{width:100%}
   .founder-box{display:block;padding:22px}
 }
+
+
+.photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}.photo-grid a{display:block;overflow:hidden;border-radius:12px;border:1px solid #e3eae5;background:#f5f7f6}.photo-grid img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover}.photo-grid a:hover{opacity:.9}
+@media(max-width:600px){.photo-grid{grid-template-columns:1fr 1fr;gap:8px}}
