@@ -372,40 +372,6 @@ app.get('/api/payments/mine',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load your payments.'})}
 });
 
-app.post('/api/payments/intent',requireAuth,async(req,res)=>{
-  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
-  const {service_request_id}=req.body||{};
-  if(!service_request_id)return res.status(400).json({error:'service_request_id is required.'});
-  try{
-    const current=await pool.query('SELECT id,customer_user_id,provider_id,status,quoted_amount FROM service_requests WHERE id=$1',[service_request_id]);
-    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
-    const r=current.rows[0];
-    if(r.customer_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
-    if(r.status!=='approved')return res.status(409).json({error:'Approve the provider quote before starting payment.'});
-    if(!r.quoted_amount)return res.status(409).json({error:'This request has no approved quote.'});
-    const existing=await pool.query('SELECT id,status,amount_sle,platform_fee,provider_earnings,gateway FROM payment_transactions WHERE service_request_id=$1',[r.id]);
-    if(existing.rows[0])return res.json({payment:existing.rows[0],gateway_ready:false,message:'Payment gateway is not configured yet. No money was collected.'});
-    const fee=Number((Number(r.quoted_amount)*0.01).toFixed(2));
-    const earnings=Number((Number(r.quoted_amount)-fee).toFixed(2));
-    const {rows}=await pool.query(`INSERT INTO payment_transactions(service_request_id,customer_user_id,provider_id,amount_sle,platform_fee,provider_earnings,gateway,status)
-      VALUES($1,$2,$3,$4,$5,$6,'not_configured','pending')
-      RETURNING id,status,amount_sle,platform_fee,provider_earnings,gateway,created_at`,[r.id,req.user.sub,r.provider_id,r.quoted_amount,fee,earnings]);
-    await audit(req.user.sub,null,'payment.intent_created','payment_transaction',rows[0].id,{service_request_id:r.id,amount_sle:Number(r.quoted_amount),gateway:'not_configured'});
-    res.status(201).json({payment:rows[0],gateway_ready:false,message:'Payment gateway is not configured yet. No money was collected.'});
-  }catch(e){console.error('Payment intent error:',e);res.status(500).json({error:'Unable to prepare payment.'})}
-});
-
-app.get('/api/payments/mine',requireAuth,async(req,res)=>{
-  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
-  try{
-    const {rows}=await pool.query(`SELECT pt.id,pt.service_request_id,pt.amount_sle,pt.platform_fee,pt.provider_earnings,pt.currency,pt.gateway,pt.status,pt.provider_reference,pt.created_at,s.name AS service_name,pp.business_name
-      FROM payment_transactions pt JOIN service_requests sr ON sr.id=pt.service_request_id
-      LEFT JOIN services s ON s.id=sr.service_id LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id
-      WHERE pt.customer_user_id=$1 ORDER BY pt.created_at DESC LIMIT 100`,[req.user.sub]);
-    res.json(rows);
-  }catch(e){res.status(500).json({error:'Unable to load your payments.'})}
-});
-
 app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   const {status}=req.body||{};
   const allowed=['quoted','approved','in_progress','completed','cancelled','declined'];
