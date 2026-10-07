@@ -84,7 +84,7 @@ Never commit the key to GitHub or send it in chat. Keep it only in the backend e
 
 ## Permanent file storage
 
-FixIt uses Cloudflare R2 through its S3-compatible API for provider portfolio media and service-request photos. The backend keeps the bucket private and serves objects through short-lived signed access URLs. Cloudflare documents the S3 endpoint format as `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` and recommends scoped Object Read & Write credentials for a specific bucket. citeturn1search0turn1search1
+FixIt uses Cloudflare R2 through its S3-compatible API for provider portfolio media and service-request photos. The backend keeps the bucket private and serves objects through short-lived signed access URLs. Cloudflare R2 uses the S3-compatible endpoint format `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` and supports bucket-scoped Object Read & Write credentials.
 
 Render variables:
 
@@ -95,6 +95,6 @@ R2_SECRET_ACCESS_KEY=...
 R2_BUCKET=fixit-salone
 ```
 
-Create an R2 bucket named `fixit-salone`, then create an R2 API token with **Object Read & Write** access scoped only to that bucket. Keep the Access Key ID and Secret Access Key private and store them only in Render. citeturn1search0turn1search1
+Create an R2 bucket named `fixit-salone`, then create an R2 API token with **Object Read & Write** access scoped only to that bucket. Keep the Access Key ID and Secret Access Key private and store them only in Render.
 
 When these variables are present, new uploads go to R2. If they are absent, the backend temporarily falls back to local storage for development; Render local storage should not be treated as permanent.
