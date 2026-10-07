@@ -207,3 +207,29 @@ CREATE TABLE IF NOT EXISTS password_resets (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id,created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS provider_subscriptions (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ plan_name VARCHAR(50) NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active','expired','cancelled')),
+ starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ expires_at TIMESTAMPTZ NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_provider_subscriptions_active ON provider_subscriptions(provider_id,status,expires_at DESC);
+
+CREATE TABLE IF NOT EXISTS provider_subscription_payments (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ plan_name VARCHAR(50) NOT NULL,
+ amount_sle NUMERIC(14,2) NOT NULL CHECK (amount_sle > 0),
+ gateway VARCHAR(40) NOT NULL DEFAULT 'manual',
+ status VARCHAR(30) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','paid','failed','cancelled')),
+ provider_reference VARCHAR(180),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_provider_subscription_payments_provider ON provider_subscription_payments(provider_id,created_at DESC);
