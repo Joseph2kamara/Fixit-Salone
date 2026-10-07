@@ -5,7 +5,7 @@ const AUTH_TOKEN_KEY='fixit_access_token';
 function authToken(){return sessionStorage.getItem(AUTH_TOKEN_KEY)||'';}
 async function api(path,options={}){
   const headers=Object.assign({},options.headers||{});
-  if(options.body && !headers['Content-Type']) headers['Content-Type']='application/json';
+  if(options.body && !(typeof FormData!=='undefined' && options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type']='application/json';
   if(authToken()) headers.Authorization='Bearer '+authToken();
   const res=await fetch(API_BASE+path,Object.assign({},options,{headers}));
   let data={}; try{data=await res.json()}catch{}
