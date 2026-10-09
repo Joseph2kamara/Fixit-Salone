@@ -1,6 +1,7 @@
 (() => {
 'use strict';
 const API_BASE=(localStorage.getItem('fixit_api_base')||'https://fixit-salone-api.onrender.com').replace(/\/$/,'');
+function mediaUrl(url){const value=String(url||'').trim();return /^https?:\/\//i.test(value)?value:API_BASE+(value.startsWith('/')?value:'/'+value);}
 const AUTH_TOKEN_KEY='fixit_access_token';
 function authToken(){return sessionStorage.getItem(AUTH_TOKEN_KEY)||'';}
 async function api(path,options={}){
@@ -273,7 +274,7 @@ async function customerRequests(){
       try{
         if(btn.dataset.customerAction==='photos'){
           const photos=await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/photos');
-          openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(API_BASE+p.file_url)+'" target="_blank" rel="noopener"><img src="'+esc(API_BASE+p.file_url)+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
+          openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
         }
         if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
         if(btn.dataset.customerAction==='pay'){
@@ -295,8 +296,8 @@ async function loadProviderWork(providerId){
   try{
     const work=await api('/api/providers/'+encodeURIComponent(providerId)+'/work');
     box.innerHTML=work.length?'<div class="photo-grid">'+work.map(w=>w.media_type==='video'
-      ? '<figure class="work-card"><video src="'+esc(API_BASE+w.file_url)+'" controls preload="metadata"></video><figcaption>'+esc(w.caption)+'</figcaption></figure>'
-      : '<figure class="work-card"><img src="'+esc(API_BASE+w.file_url)+'" alt="'+esc(w.caption)+'"><figcaption>'+esc(w.caption)+'</figcaption></figure>').join('')+'</div>'
+      ? '<figure class="work-card"><video src="'+esc(mediaUrl(w.file_url))+'" controls preload="metadata"></video><figcaption>'+esc(w.caption)+'</figcaption></figure>'
+      : '<figure class="work-card"><img src="'+esc(mediaUrl(w.file_url))+'" alt="'+esc(w.caption)+'"><figcaption>'+esc(w.caption)+'</figcaption></figure>').join('')+'</div>'
       : '<p class="quote-note">No portfolio items yet.</p>';
   }catch(e){box.innerHTML='<p class="quote-note">Portfolio could not be loaded.</p>'}
 }
@@ -393,7 +394,7 @@ async function providerPortfolio(){
     if(!providerId)throw new Error('Please save your provider profile first.');
     const work=await api('/api/providers/'+encodeURIComponent(providerId)+'/work');
     const items=work.length?work.map(w=>{
-      const media=w.media_type==='video'?'<video src="'+esc(API_BASE+w.file_url)+'" controls preload="metadata"></video>':'<img src="'+esc(API_BASE+w.file_url)+'" alt="'+esc(w.caption)+'">';
+      const media=w.media_type==='video'?'<video src="'+esc(mediaUrl(w.file_url))+'" controls preload="metadata"></video>':'<img src="'+esc(mediaUrl(w.file_url))+'" alt="'+esc(w.caption)+'">';
       return '<article class="work-card">'+media+'<b>'+esc(w.caption)+'</b><button class="btn outline" data-work-delete="'+esc(w.id)+'">Delete</button></article>';
     }).join(''):'<p class="quote-note">Your portfolio is empty. Add photos or short videos of completed work to help customers choose you.</p>';
     openModal('<p class="eyebrow">PROVIDER PORTFOLIO</p><h2>Show customers your work</h2><p class="quote-note">Upload clear work photos or short videos. Do not upload IDs or private customer information.</p><label class="form-label">Photo or video</label><input id="workMedia" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"><label class="form-label">Caption</label><input id="workCaption" class="form-control" maxlength="300" placeholder="e.g. Kitchen sink installation in Lumley"><button class="btn" id="uploadWork">Add to portfolio</button><div class="photo-grid" id="myPortfolio">'+items+'</div><button class="btn outline" id="portfolioBack">Back to dashboard</button>');
@@ -435,7 +436,7 @@ async function handleProviderJob(id,action){
   try{
     if(action==='photos'){
       const photos=await api('/api/service-requests/'+encodeURIComponent(id)+'/photos');
-      openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(API_BASE+p.file_url)+'" target="_blank" rel="noopener"><img src="'+esc(API_BASE+p.file_url)+'" alt="Customer job photo"></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;return;
+      openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Customer job photo"></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;return;
     }
     if(action==='quote'){
       const amount=prompt('Enter your final quote in SLE:');
