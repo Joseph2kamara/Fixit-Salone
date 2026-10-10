@@ -305,10 +305,38 @@ app.get('/api/auth/me',requireAuth,async(req,res)=>{
 app.get('/api/services',async(req,res)=>{
   try{
     const {rows}=await pool.query('SELECT id,name,description FROM services WHERE active=true ORDER BY name');
-    res.json(rows);
+    res.json(await Promise.all(rows.map(async row=>({...row,profile_photo_url:row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null}))));
   }catch(e){res.status(500).json({error:'Unable to load services.'})}
 });
 
+app.get('/api/provider/profile-photo',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const {rows}=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    if(!rows[0])return res.status(404).json({error:'Provider account not found.'});
+    const row=rows[0];
+    const photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled
+      ? await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900)
+      : row.profile_photo_file_url||null;
+    res.json({photo_url});
+  }catch(e){console.error('Provider profile photo error:',e);res.status(500).json({error:'Unable to load profile photo.'})}
+});
+app.post('/api/provider/profile-photo',requireAuth,upload.single('photo'),async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  if(!req.file)return res.status(400).json({error:'Choose a JPG, PNG or WEBP profile photo.'});
+  if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype))return res.status(400).json({error:'Profile photo must be JPG, PNG or WEBP.'});
+  if(req.file.size>5*1024*1024)return res.status(400).json({error:'Profile photo must be 5 MB or smaller.'});
+  let stored;
+  try{
+    const old=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    if(!old.rows[0])return res.status(404).json({error:'Provider account not found.'});
+    stored=await storeUpload(req.file,'provider-profile-photos/'+req.user.sub);
+    await pool.query('UPDATE users SET profile_photo_storage_key=$1,profile_photo_storage_provider=$2,profile_photo_file_url=$3,updated_at=NOW() WHERE id=$4',[stored.storage_key,stored.storage_provider,stored.file_url,req.user.sub]);
+    if(old.rows[0].profile_photo_storage_key)try{await removeStoredFile(old.rows[0].profile_photo_storage_provider,old.rows[0].profile_photo_storage_key,old.rows[0].profile_photo_file_url)}catch(e){console.warn('Old provider photo cleanup failed:',e.message)}
+    const photo_url=stored.storage_provider==='r2'?await storedFileUrl('r2',stored.storage_key,stored.file_url,900):stored.file_url;
+    res.status(201).json({photo_url,message:'Provider profile photo updated.'});
+  }catch(e){if(stored)try{await removeStoredFile(stored.storage_provider,stored.storage_key,stored.file_url)}catch{};console.error('Provider profile photo upload error:',e);res.status(500).json({error:'Unable to save profile photo.'})}
+});
 app.get('/api/providers',async(req,res)=>{
   const {service,region,district}=req.query;
   try{
@@ -335,7 +363,7 @@ app.get('/api/providers/:id',async(req,res)=>{
       FROM provider_profiles pp JOIN users u ON u.id=pp.user_id WHERE pp.id=$1`,[req.params.id]);
     if(!profile.rows[0])return res.status(404).json({error:'Provider not found.'});
     const services=await pool.query(`SELECT ps.service_id,s.name,ps.pricing_type,ps.price_sle,ps.description FROM provider_services ps JOIN services s ON s.id=ps.service_id WHERE ps.provider_id=$1 ORDER BY s.name`,[req.params.id]);
-    res.json({profile:profile.rows[0],services:services.rows});
+    const row=profile.rows[0];\n    row.profile_photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null;\n    res.json({profile:row,services:services.rows});
   }catch(e){res.status(500).json({error:'Unable to load provider.'})}
 });
 
