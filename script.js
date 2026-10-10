@@ -112,8 +112,24 @@ function customerLogin(mode='login',role='customer'){
   const saved=localStorage.getItem('fixit_customer');
   if(authToken()&&saved){
     const u=JSON.parse(saved);
-    openModal('<p class="eyebrow">'+(u.role==='provider'?'PROVIDER':'CUSTOMER')+' ACCOUNT</p><h2>Welcome back, '+esc(u.name)+'</h2><p>'+esc(u.phone)+'</p><button class="btn" id="accountContinue">Continue</button>'+(u.role==='customer'?'<button class="btn outline" id="myRequests">My requests</button>':'<button class="btn outline" id="providerJobsBtn">Incoming jobs</button>')+'<button class="btn outline" id="accountSignOut">Sign out</button>');
+    openModal('<p class="eyebrow">'+(u.role==='provider'?'PROVIDER':'CUSTOMER')+' ACCOUNT</p><h2>Welcome back, '+esc(u.name)+'</h2><p>'+esc(u.phone)+'</p>'+(u.role==='customer'?'<div class="profile-photo-editor"><label class="form-label">Profile photo</label><div id="customerPhotoPreview" class="customer-photo-preview">👤</div><input id="customerProfilePhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control"><small>JPG, PNG or WEBP, maximum 5 MB.</small><button class="btn" id="uploadCustomerPhoto">Upload profile photo</button><p id="customerPhotoMessage" class="form-message"></p></div>':'')+'<button class="btn" id="accountContinue">Continue</button>'+(u.role==='customer'?'<button class="btn outline" id="myRequests">My requests</button>':'<button class="btn outline" id="providerJobsBtn">Incoming jobs</button>')+'<button class="btn outline" id="accountSignOut">Sign out</button>');
     $('accountContinue').onclick=closeModal;
+    if(u.role==='customer'){
+      api('/api/customer/profile-photo').then(photo=>{if(photo.photo_url&&$('customerPhotoPreview'))$('customerPhotoPreview').innerHTML='<img src="'+esc(photo.photo_url)+'" alt="Your profile photo">'}).catch(()=>{});
+      $('uploadCustomerPhoto').onclick=async()=>{
+        const file=$('customerProfilePhoto').files[0];
+        if(!file){$('customerPhotoMessage').textContent='Choose a photo first.';return}
+        if(file.size>5*1024*1024){$('customerPhotoMessage').textContent='Photo must be 5 MB or smaller.';return}
+        const data=new FormData();data.append('photo',file);
+        $('uploadCustomerPhoto').disabled=true;$('customerPhotoMessage').textContent='Uploading photo…';
+        try{
+          const result=await api('/api/customer/profile-photo',{method:'POST',body:data});
+          $('customerPhotoPreview').innerHTML='<img src="'+esc(result.photo_url)+'" alt="Your profile photo">';
+          $('customerPhotoMessage').textContent=result.message||'Profile photo updated.';
+        }catch(e){$('customerPhotoMessage').textContent=e.message}
+        finally{$('uploadCustomerPhoto').disabled=false}
+      };
+    }
     if(u.role==='customer')$('myRequests').onclick=customerRequests; else $('providerJobsBtn').onclick=providerJobs;
     $('accountSignOut').onclick=()=>{clearAuth();customerLogin('login',role)};
     return;
