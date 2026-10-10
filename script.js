@@ -36,6 +36,7 @@ const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,
 const modal=$('modal'),body=$('modalBody');
 let liveProviders=[];
 let visibleProviders=[];
+let providerNotificationPoll=null;
 async function loadLiveProviders(){
   try{
     const params=new URLSearchParams();
@@ -61,7 +62,7 @@ async function loadLiveProviders(){
   }
 }
 function activeProviders(){return liveProviders.length?liveProviders:providers}
-function openModal(html){body.innerHTML=html;modal.hidden=false} function closeModal(){modal.hidden=true} window.closeModal=closeModal;
+function openModal(html){if(providerNotificationPoll){clearInterval(providerNotificationPoll);providerNotificationPoll=null}body.innerHTML=html;modal.hidden=false} function closeModal(){if(providerNotificationPoll){clearInterval(providerNotificationPoll);providerNotificationPoll=null}modal.hidden=true} window.closeModal=closeModal;
 function updateDistricts(){const r=$('region').value,d=$('district'),list=districts[r]||[];d.innerHTML='<option value="">All districts</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('');d.disabled=!list.length;render()}window.updateDistricts=updateDistricts;
 async function render(){
   const ok=await loadLiveProviders();
@@ -341,6 +342,15 @@ async function providerPortal(){
     $('refreshProvider').onclick=()=>providerPortal();
     $('providerNotifications').onclick=()=>providerNotificationsCenter();
     if($('subscribeProvider'))$('subscribeProvider').onclick=()=>subscriptionCenter();
+    providerNotificationPoll=setInterval(async()=>{
+      if(modal.hidden||!$('providerNotifications')){clearInterval(providerNotificationPoll);providerNotificationPoll=null;return}
+      try{
+        const latest=await api('/api/provider/notifications');
+        const count=latest.filter(n=>!n.is_read).length;
+        const button=$('providerNotifications');
+        if(button)button.textContent='Notifications'+(count?' ('+count+')':'');
+      }catch(e){console.warn('Notification refresh failed:',e.message)}
+    },15000);
   }catch(e){
     if(/invalid or expired session/i.test(e.message||'')){
       clearAuth();
