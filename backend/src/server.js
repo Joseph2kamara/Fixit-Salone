@@ -1088,4 +1088,10 @@ app.get('/api/admin/audit',async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load audit history.'})}
 });
 
-initializeDatabase().then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+async function ensureProfilePhotoColumns(){
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_key TEXT');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_provider VARCHAR(30)');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
+  console.log('Profile photo database columns checked.');
+}
+initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
