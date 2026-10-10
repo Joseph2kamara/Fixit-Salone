@@ -16,11 +16,28 @@ async function api(path,options={}){
 function saveAuth(data){
   sessionStorage.setItem(AUTH_TOKEN_KEY,data.token);
   localStorage.setItem('fixit_customer',JSON.stringify({id:data.user.id,name:data.user.full_name,phone:data.user.phone,role:data.user.role}));
+  updateCustomerAccountButton();
 }
 function clearAuth(){
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem('fixit_customer');
   localStorage.removeItem('fixit_phone_verified');
+}
+function updateCustomerAccountButton(){
+  const button=$('customerAccountButton');
+  if(!button)return;
+  let user=null;
+  try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  if(authToken()&&user&&user.role==='customer'){
+    const firstName=String(user.name||'Customer').trim().split(/\s+/)[0]||'Customer';
+    button.textContent='👤 '+firstName;
+    button.setAttribute('aria-label','Customer profile for '+(user.name||'Customer'));
+    button.title='Open your customer profile and requests';
+  }else{
+    button.textContent='Customer Login';
+    button.setAttribute('aria-label','Customer login');
+    button.title='Sign in to your customer account';
+  }
 }
 const providers=[
 {name:'Kamara Electricals',service:'Electrical',region:'Western Area',district:'Western Area Urban',area:'Lumley',address:'Lumley, Freetown',price:'From SLE 250',rating:'4.9',reviews:28,initials:'KE',plan:'Pro',featured:true,completed:127,completion:'98%',verified:true,desc:'Wiring, installations, repairs and troubleshooting.'},
@@ -611,5 +628,5 @@ window.reportProvider=reportProvider;
 function featuredListing(){openModal('<p class="eyebrow">FEATURED LISTING</p><h2>Get more visibility</h2><p>Featured providers appear prominently in relevant searches.</p><div class="plan-grid"><div><b>7 days</b><strong>SLE 25</strong><small>Featured placement</small></div><div><b>30 days</b><strong>SLE 75</strong><small>Featured placement</small></div></div><p class="quote-note">This is a beta pricing model; no payment is collected yet.</p><button class="btn" onclick="closeModal()">Got it</button>')}
 function joinProvider(){providerPortal()}window.providerPortal=providerPortal;window.joinProvider=joinProvider;window.featuredListing=featuredListing;window.render=render;
 document.addEventListener('click',e=>{const p=e.target.closest('.profile-btn'),r=e.target.closest('.request-btn'),cat=e.target.closest('.category-btn');if(p){showProfile(+p.dataset.index);return}if(r){showRequest(+r.dataset.index);return}if(cat){$('search').value=cat.dataset.service;render();$('providers').scrollIntoView({behavior:'smooth'})}});
-$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();render();
+$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();render();
 })();
