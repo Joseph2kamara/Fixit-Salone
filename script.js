@@ -360,7 +360,7 @@ async function customerRequests(){
     if(me.user.role!=='customer')throw new Error('Please sign in with a customer account to view your requests.');
     const requests=await api('/api/service-requests/mine');
     const cards=requests.length?requests.map(r=>{
-      const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'Awaiting provider quote';
+      const quote=r.quoted_amount!=null?'<div class="quote-panel quote-ready"><div class="quote-panel-top"><span class="quote-kicker">PROVIDER QUOTE</span><span class="quote-status">Ready for review</span></div><strong class="quote-total">SLE '+Number(r.quoted_amount).toLocaleString()+'</strong><small class="quote-help">Review the final price before approving. Payment comes after approval.</small></div>':'<div class="quote-panel quote-pending"><span class="quote-kicker">PROVIDER QUOTE</span><strong class="quote-awaiting">Awaiting provider quote</strong><small class="quote-help">You will be able to review the price here when it arrives.</small></div>';
       const actions=[];
       if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
@@ -527,7 +527,7 @@ async function providerJobs(){
     const requests=jobData.requests||[];
     const cards=requests.length?requests.map(r=>{
       const status=r.status.replaceAll('_',' ');
-      const quote=r.quoted_amount!=null?'SLE '+Number(r.quoted_amount).toLocaleString():'No quote yet';
+      const quote=r.quoted_amount!=null?'<div class="quote-panel quote-ready"><div class="quote-panel-top"><span class="quote-kicker">YOUR QUOTE</span><span class="quote-status">Sent</span></div><strong class="quote-total">SLE '+Number(r.quoted_amount).toLocaleString()+'</strong><small class="quote-help">Customer approval is required before work starts.</small></div>':'<div class="quote-panel quote-pending"><span class="quote-kicker">QUOTE</span><strong class="quote-awaiting">Not sent yet</strong><small class="quote-help">Send a clear final price for the customer to review.</small></div>';
       const actions=[];
       if(r.status==='requested')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="quote">Send quote</button>','<button class="btn outline" data-job="'+esc(r.id)+'" data-action="decline">Decline</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
@@ -547,11 +547,16 @@ async function handleProviderJob(id,action){
       openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Customer job photo"></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;return;
     }
     if(action==='quote'){
-      const amount=prompt('Enter your final quote in SLE:');
-      if(amount===null)return;
-      const n=Number(amount);
-      if(!Number.isFinite(n)||n<=0){alert('Enter a valid positive amount.');return}
-      await api('/api/service-requests/'+encodeURIComponent(id)+'/quote',{method:'PATCH',body:JSON.stringify({quoted_amount:n})});
+      openModal('<p class="eyebrow">SEND A QUOTE</p><h2>Set your final price</h2><p class="quote-note">Enter the total amount in Sierra Leonean leones. Check labour, materials and transport costs before sending. The customer must approve the quote before work starts.</p><div class="quote-entry-card"><label class="form-label" for="providerQuoteAmount">Total quote (SLE)</label><div class="quote-input-wrap"><span>SLE</span><input id="providerQuoteAmount" class="form-control" type="number" min="1" step="1" inputmode="decimal" placeholder="e.g. 2500" required></div><small>Be clear about what is included in this final price.</small></div><p id="providerQuoteMessage" class="form-message"></p><button class="btn" id="sendProviderQuote">Send quote to customer</button><button class="btn outline" id="cancelProviderQuote">Cancel</button>');
+      $('cancelProviderQuote').onclick=providerJobs;
+      $('sendProviderQuote').onclick=async()=>{
+        const n=Number($('providerQuoteAmount').value);
+        if(!Number.isFinite(n)||n<=0){$('providerQuoteMessage').textContent='Enter a valid amount greater than zero.';return}
+        $('sendProviderQuote').disabled=true;$('providerQuoteMessage').textContent='Sending quote…';
+        try{await api('/api/service-requests/'+encodeURIComponent(id)+'/quote',{method:'PATCH',body:JSON.stringify({quoted_amount:n})});providerJobs()}
+        catch(e){$('providerQuoteMessage').textContent=e.message;$('sendProviderQuote').disabled=false}
+      };
+      return;
     }else{
       const map={decline:'declined',start:'in_progress',complete:'completed',cancel:'cancelled'};
       await api('/api/service-requests/'+encodeURIComponent(id)+'/status',{method:'PATCH',body:JSON.stringify({status:map[action]})});
