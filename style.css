@@ -76,3 +76,5 @@
   .nav-actions .btn{font-size:12px;padding:10px 12px}
   .nav-actions .outline:first-child{display:inline-flex}
 }
+
+.profile-photo-editor{display:grid;gap:8px;margin:16px 0}.customer-photo-preview{width:88px;height:88px;border-radius:50%;background:#eaf5ee;display:grid;place-items:center;font-size:34px;overflow:hidden}.customer-photo-preview img{width:100%;height:100%;object-fit:cover}.profile-photo-editor small{color:#64736b;font-size:12px}
