@@ -396,7 +396,7 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
       rows[0].id
     ]);
     await client.query('COMMIT');
-    await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id,referral_count:referralCount,locked});
+    try{await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id,referral_count:referralCount,locked})}catch(auditError){console.error('Service request audit error:',auditError)}
     res.status(201).json(Object.assign({},rows[0],{provider_locked:locked}));
   }catch(e){
     if(client){try{await client.query('ROLLBACK')}catch{}}
