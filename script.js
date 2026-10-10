@@ -30,9 +30,13 @@ function updateCustomerAccountButton(){
   try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
   if(authToken()&&user&&user.role==='customer'){
     const firstName=String(user.name||'Customer').trim().split(/\s+/)[0]||'Customer';
-    button.textContent='👤 '+firstName;
+    button.innerHTML='<span class="customer-nav-avatar" id="customerNavAvatar">👤</span><span>'+esc(firstName)+'</span>';
     button.setAttribute('aria-label','Customer profile for '+(user.name||'Customer'));
     button.title='Open your customer profile and requests';
+    api('/api/customer/profile-photo').then(photo=>{
+      const avatar=$('customerNavAvatar');
+      if(avatar&&photo.photo_url)avatar.innerHTML='<img src="'+esc(photo.photo_url)+'" alt="">';
+    }).catch(()=>{});
   }else{
     button.textContent='Customer Login';
     button.setAttribute('aria-label','Customer login');
@@ -125,6 +129,7 @@ function customerLogin(mode='login',role='customer'){
         try{
           const result=await api('/api/customer/profile-photo',{method:'POST',body:data});
           $('customerPhotoPreview').innerHTML='<img src="'+esc(result.photo_url)+'" alt="Your profile photo">';
+          updateCustomerAccountButton();
           $('customerPhotoMessage').textContent=result.message||'Profile photo updated.';
         }catch(e){$('customerPhotoMessage').textContent=e.message}
         finally{$('uploadCustomerPhoto').disabled=false}
