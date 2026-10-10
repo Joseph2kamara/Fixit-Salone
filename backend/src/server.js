@@ -598,7 +598,7 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
 app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
   const labour=Number(req.body&&req.body.labour_amount);
-  const materials=Number(req.body&&req.body.materials_amount);
+  let materials=Number(req.body&&req.body.materials_amount);
   let transport=Number(req.body&&req.body.transport_amount);
   const submittedItems=Array.isArray(req.body&&req.body.materials_items)?req.body.materials_items:[];
   if(submittedItems.length>100)return res.status(400).json({error:'Please list no more than 100 material items.'});
