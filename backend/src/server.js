@@ -261,6 +261,36 @@ app.post('/api/auth/reset-password',authLimiter,async(req,res)=>{
   }catch(e){console.error('Reset password error:',e);res.status(500).json({error:'Unable to reset password.'})}
 });
 
+app.get('/api/customer/profile-photo',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  try{
+    const {rows}=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    if(!rows[0])return res.status(404).json({error:'Customer account not found.'});
+    const row=rows[0];
+    const photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled
+      ? await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900)
+      : row.profile_photo_file_url||null;
+    res.json({photo_url});
+  }catch(e){console.error('Customer profile photo error:',e);res.status(500).json({error:'Unable to load profile photo.'})}
+});
+app.post('/api/customer/profile-photo',requireAuth,upload.single('photo'),async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  if(!req.file)return res.status(400).json({error:'Choose a JPG, PNG or WEBP profile photo.'});
+  if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype))return res.status(400).json({error:'Profile photo must be JPG, PNG or WEBP.'});
+  if(req.file.size>5*1024*1024)return res.status(400).json({error:'Profile photo must be 5 MB or smaller.'});
+  let stored;
+  try{
+    const old=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    if(!old.rows[0])return res.status(404).json({error:'Customer account not found.'});
+    stored=await storeUpload(req.file,'customer-profile-photos/'+req.user.sub);
+    await pool.query('UPDATE users SET profile_photo_storage_key=$1,profile_photo_storage_provider=$2,profile_photo_file_url=$3,updated_at=NOW() WHERE id=$4',[stored.storage_key,stored.storage_provider,stored.file_url,req.user.sub]);
+    if(old.rows[0].profile_photo_storage_key){
+      try{await removeStoredFile(old.rows[0].profile_photo_storage_provider,old.rows[0].profile_photo_storage_key,old.rows[0].profile_photo_file_url)}catch(e){console.warn('Old customer photo cleanup failed:',e.message)}
+    }
+    const photo_url=stored.storage_provider==='r2'?await storedFileUrl('r2',stored.storage_key,stored.file_url,900):stored.file_url;
+    res.status(201).json({photo_url,message:'Profile photo updated.'});
+  }catch(e){if(stored)try{await removeStoredFile(stored.storage_provider,stored.storage_key,stored.file_url)}catch{};console.error('Customer profile photo upload error:',e);res.status(500).json({error:'Unable to save profile photo.'})}
+});
 app.get('/api/auth/me',requireAuth,async(req,res)=>{
   try{
     const {rows}=await pool.query('SELECT id,full_name,phone,role,status,created_at,last_login_at FROM users WHERE id=$1',[req.user.sub]);
