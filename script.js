@@ -92,7 +92,7 @@ async function render(){
   const list=source.filter(p=>(!q||Object.values(p).join(' ').toLowerCase().includes(q))&&(r==='All regions'||p.region===r)&&(!d||p.district===d));
   visibleProviders=list;
   $('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found'+(ok?'':' · demo data');
-  $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+esc(p.initials)+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
+  $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+(p.profile_photo_url?'<img src="'+esc(p.profile_photo_url)+'" alt="'+esc(p.name)+' profile photo">':esc(p.initials))+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
 }
 function renderCategories(){$('categories').innerHTML=categories.map(c=>'<button class="category-btn" data-service="'+esc(c[1])+'">'+c[0]+'<b>'+esc(c[1])+'</b><small>'+esc(c[2])+'</small></button>').join('')}
 async function showProfile(i){
@@ -534,6 +534,7 @@ async function providerProfile(){
     const existing=await api('/api/providers/me/profile');
     const p=existing.profile||{};
     openModal('<p class="eyebrow">PROVIDER PROFILE</p><h2>Your live business profile</h2>'+
+      '<div class="profile-photo-editor"><label class="form-label">Business profile photo</label><div id="providerPhotoPreview" class="customer-photo-preview">🏪</div><input id="providerProfilePhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control"><small>JPG, PNG or WEBP, maximum 5 MB. This photo appears on your public provider listing.</small><button class="btn outline" id="uploadProviderPhoto">Upload profile photo</button><p id="providerPhotoMessage" class="form-message"></p></div>'+
       '<label class="form-label">Business name</label><input id="providerBusiness" class="form-control" value="'+esc(p.business_name||'')+'" placeholder="e.g. Joe Electrical Services">'+
       locationFields('provider')+
       '<label class="form-label">Main service</label><select id="providerService" class="form-control"><option value="">Select service</option>'+services.map(s=>'<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>').join('')+'</select>'+
@@ -547,6 +548,20 @@ async function providerProfile(){
       const s=existing.services[0];$('providerService').value=s.service_id;$('providerPricing').value=s.pricing_type;$('providerPrice').value=s.price_sle??'';$('providerDesc').value=s.description||'';
     }
     $('saveProvider').onclick=saveProvider;
+    api('/api/provider/profile-photo').then(photo=>{if(photo.photo_url&&$('providerPhotoPreview'))$('providerPhotoPreview').innerHTML='<img src="'+esc(photo.photo_url)+'" alt="Provider profile photo">'}).catch(()=>{});
+    $('uploadProviderPhoto').onclick=async()=>{
+      const file=$('providerProfilePhoto').files[0];
+      if(!file){$('providerPhotoMessage').textContent='Choose a photo first.';return}
+      if(file.size>5*1024*1024){$('providerPhotoMessage').textContent='Photo must be 5 MB or smaller.';return}
+      const data=new FormData();data.append('photo',file);
+      $('uploadProviderPhoto').disabled=true;$('providerPhotoMessage').textContent='Uploading photo…';
+      try{
+        const result=await api('/api/provider/profile-photo',{method:'POST',body:data});
+        $('providerPhotoPreview').innerHTML='<img src="'+esc(result.photo_url)+'" alt="Provider profile photo">';
+        $('providerPhotoMessage').textContent=result.message||'Profile photo updated.';
+      }catch(e){$('providerPhotoMessage').textContent=e.message}
+      finally{$('uploadProviderPhoto').disabled=false}
+    };
   }catch(e){alert(e.message)}
 }
 async function saveProvider(){
