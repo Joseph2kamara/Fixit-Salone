@@ -145,3 +145,19 @@
   body.mobile-nav-open{overflow:hidden}
 }
 @media(min-width:851px){.mobile-nav-drawer,.mobile-nav-backdrop,.mobile-menu-toggle{display:none!important}}
+
+/* Clear, customer-friendly quote presentation */
+.quote-panel{margin:14px 0 16px;padding:16px;border-radius:14px;border:1px solid #dce9e0;display:flex;flex-direction:column;gap:7px}
+.quote-ready{background:linear-gradient(135deg,#f0faf4,#fff);border-color:#b9dfc8}
+.quote-pending{background:#f7f9f7;border-color:#e2e9e4}
+.quote-panel-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.quote-kicker{font-size:10px;letter-spacing:1.5px;font-weight:850;color:#557366}
+.quote-status{font-size:11px;font-weight:750;color:#147a50;background:#e0f3e7;border-radius:99px;padding:5px 9px}
+.quote-total{font-size:clamp(25px,6vw,32px);line-height:1.15;letter-spacing:-.7px;color:#126b49;font-weight:850}
+.quote-awaiting{font-size:16px;color:#4e6257}
+.quote-help{font-size:12px;line-height:1.5;color:#66786d}
+.quote-entry-card{margin:16px 0;padding:16px;border:1px solid #dce9e0;border-radius:14px;background:#f8fbf9}
+.quote-input-wrap{display:flex;align-items:center;gap:10px;margin:8px 0}
+.quote-input-wrap>span{font-weight:800;color:#147a50}
+.quote-input-wrap .form-control{flex:1;min-width:0;margin:0}
+.quote-entry-card small{display:block;color:#66786d;font-size:12px;line-height:1.5}
