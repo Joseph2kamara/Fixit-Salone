@@ -269,11 +269,29 @@ async function showRequest(i){
     $('submitRequest').onclick=()=>submitRequest(p,match.id);
   }catch(e){alert(e.message)}
 }
+async function prepareRequestPhoto(file){
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Please choose a JPG, PNG or WEBP photo. iPhone HEIC photos must be converted to JPG first.');
+  if(file.size>15*1024*1024)throw new Error('Each original photo must be 15 MB or less.');
+  if(file.size<=2.5*1024*1024)return file;
+  let bitmap;
+  try{
+    if(typeof createImageBitmap==='function')bitmap=await createImageBitmap(file);
+    else bitmap=await new Promise((resolve,reject)=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('This photo could not be opened. Please choose another image.'))};img.src=url});
+  }catch{throw new Error('This photo could not be opened. Please choose a JPG, PNG or WEBP image.')}
+  const scale=Math.min(1,1600/Math.max(bitmap.width||bitmap.naturalWidth,bitmap.height||bitmap.naturalHeight));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round((bitmap.width||bitmap.naturalWidth)*scale));canvas.height=Math.max(1,Math.round((bitmap.height||bitmap.naturalHeight)*scale));
+  const ctx=canvas.getContext('2d');if(!ctx){if(bitmap.close)bitmap.close();throw new Error('Your browser could not prepare this photo. Please try a smaller image.')}
+  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);if(bitmap.close)bitmap.close();
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.82));
+  if(!blob)throw new Error('This photo could not be compressed. Please choose another image.');
+  if(blob.size>3*1024*1024)throw new Error('This photo is still too large after compression. Please choose a smaller photo.');
+  return new File([blob],(file.name||'job-photo').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg',lastModified:Date.now()});
+}
 async function submitRequest(provider,serviceId){
   const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),files=[...$('jobPhotos').files,...$('jobCamera').files];
   if(!r||!d||!a||!addr||!details){alert('Please complete your region, district, area, address and job details.');return}
   if(files.length>5){alert('Maximum 5 photos.');return}
-  for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
+  for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>15*1024*1024){alert('Choose JPG, PNG or WEBP photos, each 15 MB or less. Large photos will be compressed automatically.');return}
   $('submitRequest').disabled=true;
   try{
     const session=await api('/api/auth/me');
@@ -288,14 +306,18 @@ async function submitRequest(provider,serviceId){
     const providerId=live?live.id:null;
     if(!providerId)throw new Error('This provider is not yet connected to the live marketplace.');
     const created=await api('/api/service-requests',{method:'POST',body:JSON.stringify({provider_id:providerId,service_id:serviceId,region:r,district:d,area:a,service_address:addr,directions,pricing_type:$('quoteType').value,job_details:details})});
+    let photoWarning='';
     if(files.length){
-      const form=new FormData();
-      for(const file of files)form.append('photos',file);
-      const uploadRes=await fetch(API_BASE+'/api/service-requests/'+encodeURIComponent(created.id)+'/photos',{method:'POST',headers:{Authorization:'Bearer '+authToken()},body:form});
-      let uploadData={};try{uploadData=await uploadRes.json()}catch{}
-      if(!uploadRes.ok)throw new Error(uploadData.error||'Request was created, but the photos could not be uploaded.');
+      try{
+        const prepared=await Promise.all(files.map(prepareRequestPhoto));
+        const form=new FormData();
+        for(const file of prepared)form.append('photos',file,file.name);
+        const uploadRes=await fetch(API_BASE+'/api/service-requests/'+encodeURIComponent(created.id)+'/photos',{method:'POST',headers:{Authorization:'Bearer '+authToken()},body:form});
+        let uploadData={};try{uploadData=await uploadRes.json()}catch{}
+        if(!uploadRes.ok)throw new Error(uploadData.error||'The server could not save the photos.');
+      }catch(photoError){photoWarning='<p class="quote-note">Your request was submitted, but the photos were not attached: '+esc(photoError.message||'Please try uploading them again from your request.')+'</p>';}
     }
-    openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+(files.length?files.length+' photo'+(files.length===1?'':'s')+' attached. ':'')+'The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
+    openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+(files.length&&!photoWarning?files.length+' photo'+(files.length===1?'':'s')+' attached. ':'')+'The provider can now review the job and respond.</p>'+photoWarning+'<button class="btn" id="closeRequest">Done</button>');
     $('closeRequest').onclick=closeModal;
   }catch(e){
     $('submitRequest').disabled=false;
