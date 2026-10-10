@@ -172,6 +172,19 @@ function wireLocation(prefix){
 }
 async function showRequest(i){
   if(!authToken()||!localStorage.getItem('fixit_customer')){customerLogin('login','customer');return}
+  try{
+    const session=await api('/api/auth/me');
+    if(session.user.role!=='customer'){
+      openModal('<p class="eyebrow">CUSTOMER ACCOUNT REQUIRED</p><h2>Sign in as a customer</h2><p>You are currently signed in with a '+esc(session.user.role)+' account. Provider accounts cannot submit service requests. Sign in with your customer account to continue.</p><button class="btn" id="switchToCustomer">Customer sign in</button><button class="btn outline" id="cancelCustomerSwitch">Cancel</button>');
+      $('switchToCustomer').onclick=()=>customerLogin('login','customer');
+      $('cancelCustomerSwitch').onclick=closeModal;
+      return;
+    }
+  }catch(e){
+    clearAuth();
+    customerLogin('login','customer');
+    return;
+  }
   const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
   try{
