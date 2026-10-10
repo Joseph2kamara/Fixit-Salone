@@ -23,6 +23,37 @@ function clearAuth(){
   localStorage.removeItem('fixit_customer');
   localStorage.removeItem('fixit_phone_verified');
 }
+function closeMobileNav(){
+  const drawer=$('mobileNav'),toggle=$('mobileMenuToggle'),backdrop=$('mobileNavBackdrop');
+  if(!drawer||!toggle||!backdrop)return;
+  drawer.classList.remove('is-open');drawer.setAttribute('aria-hidden','true');
+  toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Open navigation menu');
+  backdrop.hidden=true;document.body.classList.remove('mobile-nav-open');
+}
+function openMobileNav(){
+  const drawer=$('mobileNav'),toggle=$('mobileMenuToggle'),backdrop=$('mobileNavBackdrop');
+  if(!drawer||!toggle||!backdrop)return;
+  drawer.classList.add('is-open');drawer.setAttribute('aria-hidden','false');
+  toggle.setAttribute('aria-expanded','true');toggle.setAttribute('aria-label','Close navigation menu');
+  backdrop.hidden=false;document.body.classList.add('mobile-nav-open');
+  updateMobileAccountAction();
+}
+function updateMobileAccountAction(){
+  const button=$('mobileAccountAction');if(!button)return;
+  let user=null;try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  const avatar=button.querySelector('.mobile-account-avatar');
+  const strong=button.querySelector('strong');const small=button.querySelector('small');
+  if(authToken()&&user){
+    strong.textContent=user.name|| (user.role==='provider'?'Provider account':'Customer account');
+    small.textContent=user.role==='provider'?'Open provider account':'Open your customer account';
+    if(avatar)avatar.textContent='👤';
+    const endpoint=user.role==='provider'?'/api/provider/profile-photo':user.role==='customer'?'/api/customer/profile-photo':null;
+    if(endpoint&&avatar)api(endpoint).then(photo=>{if(photo.photo_url&&avatar.isConnected)avatar.innerHTML='<img src="'+esc(photo.photo_url)+'" alt="">'}).catch(()=>{});
+  }else{
+    strong.textContent='Customer Login';small.textContent='Sign in or manage your account';
+    if(avatar)avatar.textContent='👤';
+  }
+}
 function updateCustomerAccountButton(){
   const button=$('customerAccountButton');
   if(!button)return;
@@ -664,5 +695,11 @@ window.reportProvider=reportProvider;
 function featuredListing(){openModal('<p class="eyebrow">FEATURED LISTING</p><h2>Get more visibility</h2><p>Featured providers appear prominently in relevant searches.</p><div class="plan-grid"><div><b>7 days</b><strong>SLE 25</strong><small>Featured placement</small></div><div><b>30 days</b><strong>SLE 75</strong><small>Featured placement</small></div></div><p class="quote-note">This is a beta pricing model; no payment is collected yet.</p><button class="btn" onclick="closeModal()">Got it</button>')}
 function joinProvider(){providerPortal()}window.providerPortal=providerPortal;window.joinProvider=joinProvider;window.featuredListing=featuredListing;window.render=render;
 document.addEventListener('click',e=>{const p=e.target.closest('.profile-btn'),r=e.target.closest('.request-btn'),cat=e.target.closest('.category-btn');if(p){showProfile(+p.dataset.index);return}if(r){showRequest(+r.dataset.index);return}if(cat){$('search').value=cat.dataset.service;render();$('providers').scrollIntoView({behavior:'smooth'})}});
-$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();render();
+$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();updateMobileAccountAction();render();
+$('mobileMenuToggle')?.addEventListener('click',()=>{if($('mobileMenuToggle').getAttribute('aria-expanded')==='true')closeMobileNav();else openMobileNav()});
+$('mobileMenuClose')?.addEventListener('click',closeMobileNav);
+$('mobileNavBackdrop')?.addEventListener('click',closeMobileNav);
+$('mobileNav')?.querySelectorAll('a,button').forEach(el=>el.addEventListener('click',()=>{if(el.id!=='mobileAccountAction')closeMobileNav()}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMobileNav()});
+window.addEventListener('resize',()=>{if(window.innerWidth>850)closeMobileNav()});
 })();
