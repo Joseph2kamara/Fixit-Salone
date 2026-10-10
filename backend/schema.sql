@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS service_requests (
  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS labour_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS materials_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS transport_amount NUMERIC(14,2) NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_requests_customer ON service_requests(customer_user_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_requests_provider ON service_requests(provider_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON service_requests(status,created_at DESC);

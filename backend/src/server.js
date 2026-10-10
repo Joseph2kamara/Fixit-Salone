@@ -520,7 +520,7 @@ app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
 app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   try{
-    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
+    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
       pp.business_name,u.full_name AS provider_name,s.name AS service_name
       FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id LEFT JOIN users u ON u.id=pp.user_id LEFT JOIN services s ON s.id=sr.service_id
       WHERE sr.customer_user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
@@ -582,7 +582,7 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
     const providerId=profile.rows[0].id;
     const subscription=await providerSubscriptionState(providerId);
     const referralCount=await providerReferralCount(providerId);
-    const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.created_at,
+    const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
       u.full_name AS customer_name,u.phone AS customer_phone,s.name AS service_name
       FROM service_requests sr
       LEFT JOIN users u ON u.id=sr.customer_user_id
@@ -597,8 +597,12 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
 
 app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
-  const amount=Number(req.body&&req.body.quoted_amount);
-  if(!Number.isFinite(amount)||amount<=0||amount>100000000)return res.status(400).json({error:'Enter a valid quote amount.'});
+  const labour=Number(req.body&&req.body.labour_amount);
+  const materials=Number(req.body&&req.body.materials_amount);
+  const transport=Number(req.body&&req.body.transport_amount);
+  if([labour,materials,transport].some(v=>!Number.isFinite(v)||v<0||v>100000000))return res.status(400).json({error:'Enter valid non-negative labour, materials and transport costs.'});
+  const amount=Number((labour+materials+transport).toFixed(2));
+  if(amount<=0||amount>100000000)return res.status(400).json({error:'The total quotation must be greater than zero and within the allowed limit.'});
   try{
     const current=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
     if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
@@ -609,8 +613,8 @@ app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
     const subscription=await providerSubscriptionState(r.provider_id);
     const fee=subscription?0:Number((amount*0.01).toFixed(2));
     const earnings=Number((amount-fee).toFixed(2));
-    const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,platform_fee=$2,provider_earnings=$3,updated_at=NOW() WHERE id=$4 RETURNING id,status,quoted_amount,platform_fee,provider_earnings,updated_at`,[amount,fee,earnings,r.id]);
-    await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,platform_fee:fee,provider_earnings:earnings,subscription_active:!!subscription});
+    const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,labour_amount=$2,materials_amount=$3,transport_amount=$4,platform_fee=$5,provider_earnings=$6,updated_at=NOW() WHERE id=$7 RETURNING id,status,quoted_amount,labour_amount,materials_amount,transport_amount,platform_fee,provider_earnings,updated_at`,[amount,labour,materials,transport,fee,earnings,r.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,labour_amount:labour,materials_amount:materials,transport_amount:transport,platform_fee:fee,provider_earnings:earnings,subscription_active:!!subscription});
     res.json(rows[0]);
   }catch(e){console.error('Quote error:',e);res.status(500).json({error:'Unable to send quote.'})}
 });
@@ -663,7 +667,7 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
     const isProvider=profile&&profile.rows[0];
     if(!isCustomer&&!isProvider)return res.status(403).json({error:'You do not have access to this request.'});
     const transitions={
-      customer:{quoted:['approved','cancelled'],requested:['cancelled'],approved:['cancelled'],in_progress:['cancelled']},
+      customer:{quoted:['approved','declined','cancelled'],requested:['cancelled'],approved:['cancelled'],in_progress:['cancelled']},
       provider:{requested:['declined','cancelled'],quoted:['in_progress','cancelled'],approved:['in_progress','cancelled'],in_progress:['completed','cancelled'],completed:[],declined:[],cancelled:[]}
     };
     const next=(transitions[req.user.role]&&transitions[req.user.role][r.status])||[];
