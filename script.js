@@ -207,6 +207,13 @@ async function submitRequest(provider,serviceId){
   for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
   $('submitRequest').disabled=true;
   try{
+    const session=await api('/api/auth/me');
+    if(session.user.role!=='customer'){
+      clearAuth();
+      openModal('<p class="eyebrow">CUSTOMER ACCOUNT REQUIRED</p><h2>Please sign in as a customer</h2><p>The account currently signed in is a '+esc(session.user.role)+' account. Sign in with your customer account before submitting this request.</p><button class="btn" id="requestCustomerSignIn">Customer sign in</button>');
+      $('requestCustomerSignIn').onclick=()=>customerLogin('login','customer');
+      return;
+    }
     const profile=await api('/api/providers');
     const live=profile.find(x=>x.business_name===provider.name);
     const providerId=live?live.id:null;
