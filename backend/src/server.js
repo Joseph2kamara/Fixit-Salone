@@ -345,7 +345,7 @@ app.get('/api/providers',async(req,res)=>{
     if(region){values.push(String(region));where.push('pp.region=$'+values.length)}
     if(district){values.push(String(district));where.push('pp.district=$'+values.length)}
     const sql=`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,
-      u.full_name,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description
+      u.full_name,u.profile_photo_storage_key,u.profile_photo_storage_provider,u.profile_photo_file_url,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description
       FROM provider_profiles pp
       JOIN users u ON u.id=pp.user_id AND u.status='active'
       JOIN provider_services ps ON ps.provider_id=pp.id
@@ -353,17 +353,19 @@ app.get('/api/providers',async(req,res)=>{
       ${where.length?'WHERE '+where.join(' AND '):''}
       ORDER BY pp.created_at DESC LIMIT 200`;
     const {rows}=await pool.query(sql,values);
-    res.json(rows);
+    res.json(await Promise.all(rows.map(async row=>({...row,profile_photo_url:row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null}))));
   }catch(e){res.status(500).json({error:'Unable to load providers.'})}
 });
 
 app.get('/api/providers/:id',async(req,res)=>{
   try{
-    const profile=await pool.query(`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,u.full_name
+    const profile=await pool.query(`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,u.full_name,u.profile_photo_storage_key,u.profile_photo_storage_provider,u.profile_photo_file_url
       FROM provider_profiles pp JOIN users u ON u.id=pp.user_id WHERE pp.id=$1`,[req.params.id]);
     if(!profile.rows[0])return res.status(404).json({error:'Provider not found.'});
     const services=await pool.query(`SELECT ps.service_id,s.name,ps.pricing_type,ps.price_sle,ps.description FROM provider_services ps JOIN services s ON s.id=ps.service_id WHERE ps.provider_id=$1 ORDER BY s.name`,[req.params.id]);
-    const row=profile.rows[0];\n    row.profile_photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null;\n    res.json({profile:row,services:services.rows});
+    const row=profile.rows[0];
+    row.profile_photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null;
+    res.json({profile:row,services:services.rows});
   }catch(e){res.status(500).json({error:'Unable to load provider.'})}
 });
 
