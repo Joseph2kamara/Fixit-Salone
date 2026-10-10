@@ -221,7 +221,16 @@ async function submitRequest(provider,serviceId){
     }
     openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+(files.length?files.length+' photo'+(files.length===1?'':'s')+' attached. ':'')+'The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
     $('closeRequest').onclick=closeModal;
-  }catch(e){alert(e.message);$('submitRequest').disabled=false}
+  }catch(e){
+    $('submitRequest').disabled=false;
+    if(/invalid or expired session|authentication required|account not found/i.test(e.message||'')){
+      clearAuth();
+      openModal('<p class="eyebrow">SESSION EXPIRED</p><h2>Please sign in again</h2><p>Your FixIt Salone sign-in session has expired. Your request was not submitted. Sign in with your customer account, then send the request again.</p><button class="btn" id="requestSignIn">Customer sign in</button>');
+      $('requestSignIn').onclick=()=>customerLogin('login','customer');
+      return;
+    }
+    alert(e.message);
+  }
 }
 
 async function reviewCompletedJob(id){
