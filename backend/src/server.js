@@ -375,25 +375,34 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
   const {provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details}=req.body||{};
   if(!provider_id||!service_id||!region||!district||!area||!service_address||!pricing_type||!job_details)return res.status(400).json({error:'Provider, service, location, pricing type and job details are required.'});
   if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
+  let client;
   try{
     const provider=await pool.query('SELECT id FROM provider_profiles WHERE id=$1',[provider_id]);
     const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
     const offered=await pool.query('SELECT 1 FROM provider_services WHERE provider_id=$1 AND service_id=$2',[provider_id,service_id]);
     if(!provider.rows[0]||!service.rows[0]||!offered.rows[0])return res.status(400).json({error:'That provider does not currently offer the selected service.'});
-    const {rows}=await pool.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details)
+    client=await pool.connect();
+    await client.query('BEGIN');
+    const {rows}=await client.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,status,created_at`,
       [req.user.sub,provider_id,service_id,String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,pricing_type,String(job_details).trim()]);
-    const referralCount=await providerReferralCount(provider_id);
-    const subscription=await providerSubscriptionState(provider_id);
-    const locked=referralCount>3&&!subscription;
-    await pool.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',[
+    const countResult=await client.query('SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1',[provider_id]);
+    const referralCount=Number(countResult.rows[0]?.count||0);
+    const subscriptionResult=await client.query("SELECT id FROM provider_subscriptions WHERE provider_id=$1 AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1",[provider_id]);
+    const locked=referralCount>3&&!subscriptionResult.rows[0];
+    await client.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',[
       provider_id,'job_request','New service request',
       locked?'A customer has requested your service. You have used your 3 free referrals. Subscribe to view the request details and receive new requests.':'A customer has requested your service. Open your Provider Portal to view the request details.',
       rows[0].id
     ]);
+    await client.query('COMMIT');
     await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id,referral_count:referralCount,locked});
     res.status(201).json(Object.assign({},rows[0],{provider_locked:locked}));
-  }catch(e){console.error('Service request error:',e);res.status(500).json({error:'Unable to create service request.'})}
+  }catch(e){
+    if(client){try{await client.query('ROLLBACK')}catch{}}
+    console.error('Service request error:',e);
+    res.status(500).json({error:'Unable to create service request.'});
+  }finally{if(client)client.release()}
 });
 
 app.post('/api/service-requests/:id/photos',requireAuth,upload.array('photos',5),async(req,res)=>{
