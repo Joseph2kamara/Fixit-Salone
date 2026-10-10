@@ -265,3 +265,7 @@ CREATE TABLE IF NOT EXISTS provider_subscription_payments (
  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_provider_subscription_payments_provider ON provider_subscription_payments(provider_id,created_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_key TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_provider VARCHAR(30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT;
