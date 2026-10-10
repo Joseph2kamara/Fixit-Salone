@@ -652,8 +652,11 @@ app.get('/api/providers/:id/work/:workId/file',async(req,res)=>{
   try{
     const q=await pool.query('SELECT media_type,file_url,storage_key,storage_provider FROM provider_work WHERE id=$1 AND provider_id=$2',[req.params.workId,req.params.id]);
     const row=q.rows[0];if(!row)return res.status(404).json({error:'Portfolio item not found.'});
+    // Frontend and API use different origins. Override Helmet's default same-origin
+    // CORP policy so browsers can load portfolio media and follow the R2 redirect.
+    res.setHeader('Cross-Origin-Resource-Policy','cross-origin');
     if(row.storage_provider==='r2'&&row.storage_key&&objectStorageEnabled)return res.redirect(await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600));
-    const filename=String(row.file_url||'').replace(/^\/uploads\//,'');const filePath=path.resolve(uploadDir,filename);
+    const filename=String(row.file_url||'').replace(/^\\/uploads\\//,'');const filePath=path.resolve(uploadDir,filename);
     if(!filePath.startsWith(path.resolve(uploadDir)+path.sep)||!fs.existsSync(filePath))return res.status(404).json({error:'File not found.'});
     res.sendFile(filePath);
   }catch(e){res.status(500).json({error:'Unable to load portfolio file.'})}
