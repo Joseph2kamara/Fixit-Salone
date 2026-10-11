@@ -79,7 +79,8 @@ export default function App() {
   if (!token || !user) return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
-      <KeyboardAvoidingView style={styles.authScreen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.authKeyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScreen}>
         <View style={styles.brandMark}><Text style={styles.brandIcon}>⌂</Text></View>
         <Text style={styles.brand}><Text style={{ color: COLORS.navy }}>FixIt</Text><Text style={{ color: COLORS.green }}> Salone</Text></Text>
         <Text style={styles.tagline}>Trusted local services, made simpler.</Text>
@@ -97,6 +98,7 @@ export default function App() {
           <Pressable onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }} style={styles.switchMode}><Text style={styles.link}>{mode === 'login' ? 'New to FixIt Salone? Create an account' : 'Already registered? Sign in'}</Text></Pressable>
           <Text style={styles.footnote}>Your account uses the existing FixIt Salone service.</Text>
         </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -134,7 +136,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.pale },
-  authScreen: { flex: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 28, backgroundColor: COLORS.pale },
+  authKeyboard: { flex: 1 },
+  authScreen: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 28, backgroundColor: COLORS.pale },
   brandMark: { alignSelf: 'center', width: 62, height: 62, borderRadius: 20, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   brandIcon: { color: '#FFFFFF', fontSize: 40, fontWeight: '700', marginTop: -5 },
   brand: { fontSize: 30, fontWeight: '900', textAlign: 'center', letterSpacing: -1 },
