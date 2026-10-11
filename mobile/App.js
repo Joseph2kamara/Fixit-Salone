@@ -23,7 +23,7 @@ const DISTRICTS = {
 function Button({ title, onPress, secondary = false, disabled = false, compact = false }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled}
-      style={[styles.button, secondary && styles.buttonSecondary, compact && styles.buttonCompact, disabled && styles.disabled]}>
+      style={({ pressed }) => [styles.button, secondary && styles.buttonSecondary, compact && styles.buttonCompact, disabled && styles.disabled, pressed && !disabled && styles.buttonPressed]}>
       <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
     </Pressable>
   );
@@ -40,7 +40,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
   );
 }
 function Chip({ title, active = false, onPress }) {
-  return <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text></Pressable>;
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.chipPressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text></Pressable>;
 }
 function Card({ children }) { return <View style={styles.card}>{children}</View>; }
 function Status({ value }) {
@@ -523,11 +523,17 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerBrand}><Text style={{ color: COLORS.white }}>FixIt</Text><Text style={{ color: '#7DDBA4' }}> Salone</Text></Text>
-            <Text style={styles.headerSmall}>Hello, {(user.full_name || 'there').split(' ')[0]}</Text>
+          <View style={styles.headerIdentity}>
+            <View style={styles.headerLogo}><Text style={styles.headerLogoIcon}>⌂</Text></View>
+            <View>
+              <Text style={styles.headerBrand}><Text style={{ color: COLORS.white }}>FixIt</Text><Text style={{ color: '#7DDBA4' }}> Salone</Text></Text>
+              <Text style={styles.headerSmall}>Hello, {(user.full_name || 'there').split(' ')[0]}</Text>
+            </View>
           </View>
-          <View style={styles.roleBadge}><Text style={styles.roleBadgeText}>{user.role === 'provider' ? 'PROVIDER' : 'CUSTOMER'}</Text></View>
+          <Pressable onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.roleBadge, pressed && styles.badgePressed]}>
+            <Text style={styles.roleBadgeText}>{user.role === 'provider' ? 'PROVIDER' : 'CUSTOMER'}</Text>
+            <Text style={styles.roleBadgeArrow}>⌄</Text>
+          </Pressable>
         </View>
         <Text style={styles.headerTitle}>{pageTitle}</Text>
       </View>
@@ -535,8 +541,26 @@ export default function App() {
       {noticePanel}
       <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainContent} keyboardShouldPersistTaps="handled">
         {screen === 'home' && user.role === 'customer' && <>
-          <Text style={styles.sectionLead}>Find trusted help for your home and business.</Text>
-          <Field value={search} onChangeText={setSearch} placeholder="Search plumbing, electrical, cleaning…" autoCapitalize="none" />
+          <View style={styles.marketHero}>
+            <View style={styles.heroEyebrowRow}>
+              <View style={styles.heroLiveDot} />
+              <Text style={styles.heroEyebrow}>SIERRA LEONE SERVICE MARKETPLACE</Text>
+            </View>
+            <Text style={styles.heroTitle}>Find the right help, right here.</Text>
+            <Text style={styles.heroCopy}>Discover trusted local professionals for repairs, home services and more.</Text>
+            <View style={styles.heroStats}>
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatNumber}>{filteredProviders.length}</Text>
+                <Text style={styles.heroStatLabel}>Providers found</Text>
+              </View>
+              <View style={styles.heroStatDivider} />
+              <View style={styles.heroStat}>
+                <Text style={styles.heroStatNumber}>{services.length}</Text>
+                <Text style={styles.heroStatLabel}>Service types</Text>
+              </View>
+            </View>
+          </View>
+          <Field value={search} onChangeText={setSearch} placeholder="⌕  Search plumbing, electrical, cleaning…" autoCapitalize="none" />
           <Text style={styles.fieldLabel}>Filter by region</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
             <Chip title="All" active={regionFilter === 'All'} onPress={() => setRegionFilter('All')} />
@@ -851,9 +875,18 @@ export default function App() {
       </ScrollView>
 
       <View style={styles.tabBar}>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('home'); clearMessages(); }}><Text style={[styles.tabText, screen === 'home' && styles.tabTextActive]}>⌂  Home</Text></Pressable>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}><Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? '▤  Jobs' : '▤  My requests'}</Text></Pressable>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}><Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>◉  Account</Text></Pressable>
+        <Pressable style={styles.tabItem} onPress={() => { setScreen('home'); clearMessages(); }}>
+          <Text style={[styles.tabIcon, screen === 'home' && styles.tabIconActive]}>⌂</Text>
+          <Text style={[styles.tabText, screen === 'home' && styles.tabTextActive]}>Home</Text>
+        </Pressable>
+        <Pressable style={styles.tabItem} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}>
+          <Text style={[styles.tabIcon, screen === 'requests' && styles.tabIconActive]}>▤</Text>
+          <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'Jobs' : 'My requests'}</Text>
+        </Pressable>
+        <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}>
+          <Text style={[styles.tabIcon, screen === 'account' && styles.tabIconActive]}>◉</Text>
+          <Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>Account</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -863,79 +896,99 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32 },
   authScreen: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24, backgroundColor: COLORS.pale },
-  brandMark: { alignSelf: 'center', width: 62, height: 62, borderRadius: 20, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  brandIcon: { color: COLORS.white, fontSize: 40, fontWeight: '700', marginTop: -5 },
-  brand: { fontSize: 30, fontWeight: '900', textAlign: 'center', letterSpacing: -1 },
-  tagline: { textAlign: 'center', color: COLORS.muted, marginTop: 7, marginBottom: 24, fontSize: 15 },
-  authCard: { backgroundColor: COLORS.white, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: COLORS.line },
-  heading: { fontSize: 24, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.5 },
-  subheading: { color: COLORS.muted, lineHeight: 21, marginTop: 5, marginBottom: 18 },
-  header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingVertical: 15 },
+  brandMark: { alignSelf: 'center', width: 68, height: 68, borderRadius: 23, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 13, elevation: 5 },
+  brandIcon: { color: COLORS.white, fontSize: 42, fontWeight: '700', marginTop: -5 },
+  brand: { fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1.1 },
+  tagline: { textAlign: 'center', color: COLORS.muted, marginTop: 8, marginBottom: 25, fontSize: 15, lineHeight: 21 },
+  authCard: { backgroundColor: COLORS.white, borderRadius: 26, padding: 21, borderWidth: 1, borderColor: '#E5ECE8', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 18, elevation: 3 },
+  heading: { fontSize: 26, fontWeight: '900', color: COLORS.ink, letterSpacing: -0.7 },
+  subheading: { color: COLORS.muted, lineHeight: 22, marginTop: 6, marginBottom: 18, fontSize: 14 },
+  header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 5 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerBrand: { fontSize: 21, fontWeight: '900' },
-  headerSmall: { color: '#D0D5DD', marginTop: 3, fontSize: 12 },
-  roleBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#26435E' },
-  roleBadgeText: { color: COLORS.white, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  headerTitle: { color: COLORS.white, fontSize: 22, fontWeight: '800', marginTop: 12 },
+  headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLogo: { width: 43, height: 43, borderRadius: 15, backgroundColor: '#193956', borderWidth: 1, borderColor: '#35526D', alignItems: 'center', justifyContent: 'center' },
+  headerLogoIcon: { fontSize: 29, color: COLORS.white, marginTop: -2, fontWeight: '800' },
+  headerBrand: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  headerSmall: { color: '#D0D9E2', marginTop: 3, fontSize: 12 },
+  roleBadge: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 13, backgroundColor: '#23435E', flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: '#3C5870' },
+  roleBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '900', letterSpacing: 0.65 },
+  roleBadgeArrow: { color: '#B8E3C7', fontSize: 13, fontWeight: '900' },
+  badgePressed: { opacity: 0.8 },
+  headerTitle: { color: COLORS.white, fontSize: 24, fontWeight: '900', marginTop: 17, letterSpacing: -0.5 },
   mainScroll: { flex: 1 },
-  mainContent: { paddingHorizontal: 16, paddingVertical: 18, paddingBottom: 30 },
+  mainContent: { paddingHorizontal: 16, paddingTop: 17, paddingBottom: 25 },
   sectionLead: { color: COLORS.muted, fontSize: 15, lineHeight: 22, marginBottom: 12 },
   headingSmall: { fontSize: 18, color: COLORS.ink, fontWeight: '800' },
-  sectionTitle: { fontSize: 18, color: COLORS.ink, fontWeight: '800', marginTop: 12, marginBottom: 8 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 6 },
+  sectionTitle: { fontSize: 18, color: COLORS.ink, fontWeight: '900', marginTop: 15, marginBottom: 9, letterSpacing: -0.25 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 7, marginBottom: 3 },
+  marketHero: { backgroundColor: COLORS.navy, borderRadius: 22, padding: 19, marginBottom: 17, overflow: 'hidden', borderWidth: 1, borderColor: '#163B5B' },
+  heroEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 11 },
+  heroLiveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#7DDBA4' },
+  heroEyebrow: { color: '#A5DAB9', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  heroTitle: { color: COLORS.white, fontSize: 25, fontWeight: '900', lineHeight: 30, letterSpacing: -0.6, maxWidth: 290 },
+  heroCopy: { color: '#D3DEE8', fontSize: 13, lineHeight: 19, marginTop: 8, maxWidth: 300 },
+  heroStats: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#35516A', marginTop: 17, paddingTop: 13 },
+  heroStat: { flex: 1 },
+  heroStatNumber: { color: COLORS.white, fontSize: 21, fontWeight: '900' },
+  heroStatLabel: { color: '#C5D2DE', fontSize: 10, marginTop: 2, fontWeight: '700' },
+  heroStatDivider: { height: 32, width: 1, backgroundColor: '#35516A', marginHorizontal: 13 },
   fieldWrap: { marginBottom: 11 },
-  fieldLabel: { color: COLORS.ink, fontSize: 13, fontWeight: '700', marginBottom: 6 },
-  input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: COLORS.ink, minHeight: 48 },
-  textArea: { minHeight: 100, paddingTop: 12 },
-  button: { backgroundColor: COLORS.green, paddingVertical: 13, paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 7, marginBottom: 2 },
-  buttonSecondary: { backgroundColor: COLORS.lightGreen, borderWidth: 1, borderColor: '#B8E3C7' },
-  buttonCompact: { paddingVertical: 8, paddingHorizontal: 12, marginTop: 0, marginBottom: 0 },
-  buttonText: { color: COLORS.white, fontWeight: '800', fontSize: 14, textAlign: 'center' },
+  fieldLabel: { color: COLORS.ink, fontSize: 12, fontWeight: '800', marginBottom: 6, letterSpacing: 0.15 },
+  input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDE5E1', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 13, fontSize: 15, color: COLORS.ink, minHeight: 49 },
+  textArea: { minHeight: 108, paddingTop: 12 },
+  button: { backgroundColor: COLORS.green, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 7, marginBottom: 3, minHeight: 46, shadowColor: COLORS.green, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 2 },
+  buttonSecondary: { backgroundColor: '#ECF7F0', borderWidth: 1, borderColor: '#C8E7D2', shadowOpacity: 0, elevation: 0 },
+  buttonCompact: { paddingVertical: 8, paddingHorizontal: 12, marginTop: 0, marginBottom: 0, minHeight: 34 },
+  buttonText: { color: COLORS.white, fontWeight: '900', fontSize: 13, textAlign: 'center', letterSpacing: 0.1 },
   buttonSecondaryText: { color: COLORS.green },
-  disabled: { opacity: 0.5 },
+  buttonPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] },
+  disabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
   buttonRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
   buttonRowItem: { flex: 1 },
-  roleRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  chip: { borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: COLORS.white, marginRight: 7, marginBottom: 7 },
-  chipActive: { backgroundColor: COLORS.lightGreen, borderColor: COLORS.green },
-  chipText: { color: COLORS.muted, fontWeight: '700', fontSize: 12 },
+  roleRow: { flexDirection: 'row', gap: 8, marginBottom: 15 },
+  chip: { borderWidth: 1, borderColor: '#DFE7E2', borderRadius: 13, paddingVertical: 9, paddingHorizontal: 12, backgroundColor: COLORS.white, marginRight: 7, marginBottom: 7 },
+  chipActive: { backgroundColor: '#E4F4E9', borderColor: COLORS.green },
+  chipPressed: { opacity: 0.78 },
+  chipText: { color: COLORS.muted, fontWeight: '800', fontSize: 12 },
   chipTextActive: { color: COLORS.green },
   horizontalChips: { marginVertical: 7, flexGrow: 0 },
   wrapChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
-  card: { backgroundColor: COLORS.white, borderRadius: 16, padding: 15, marginBottom: 12, borderWidth: 1, borderColor: COLORS.line },
+  card: { backgroundColor: COLORS.white, borderRadius: 19, padding: 16, marginBottom: 13, borderWidth: 1, borderColor: '#E3EAE6', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 10, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 },
-  providerCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  providerCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   grow: { flex: 1 },
-  avatar: { width: 42, height: 42, borderRadius: 14, backgroundColor: COLORS.lightGreen, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: COLORS.green, fontSize: 18, fontWeight: '900' },
-  cardTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '800' },
-  bigTitle: { color: COLORS.ink, fontSize: 22, fontWeight: '900', marginBottom: 5 },
+  avatar: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#E4F4E9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CDE8D5' },
+  avatarText: { color: COLORS.green, fontSize: 19, fontWeight: '900' },
+  cardTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '900', letterSpacing: -0.2 },
+  bigTitle: { color: COLORS.ink, fontSize: 23, fontWeight: '900', marginBottom: 5, letterSpacing: -0.5 },
   cardMeta: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  cardDescription: { color: COLORS.ink, fontSize: 14, lineHeight: 20, marginTop: 9 },
-  priceText: { color: COLORS.green, fontSize: 15, fontWeight: '800', marginTop: 9 },
-  verified: { color: COLORS.green, fontSize: 10, fontWeight: '800' },
-  status: { paddingVertical: 5, paddingHorizontal: 9, backgroundColor: '#EEF2F6', borderRadius: 10 },
-  statusText: { color: COLORS.ink, fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
-  empty: { color: COLORS.muted, textAlign: 'center', paddingVertical: 25, lineHeight: 21 },
+  cardDescription: { color: '#344054', fontSize: 14, lineHeight: 21, marginTop: 9 },
+  priceText: { color: COLORS.green, fontSize: 15, fontWeight: '900', marginTop: 9 },
+  verified: { color: COLORS.green, fontSize: 10, fontWeight: '900' },
+  status: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#EEF2F6', borderRadius: 10, borderWidth: 1, borderColor: '#E2E7ED' },
+  statusText: { color: COLORS.ink, fontSize: 10, fontWeight: '900', textTransform: 'capitalize' },
+  empty: { color: COLORS.muted, textAlign: 'center', paddingHorizontal: 20, paddingVertical: 30, lineHeight: 21, backgroundColor: COLORS.white, borderRadius: 17, borderWidth: 1, borderColor: '#E5ECE8', overflow: 'hidden' },
   helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginVertical: 8 },
   spinner: { paddingVertical: 40 },
-  message: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderColor: COLORS.line },
+  message: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 14, borderBottomWidth: 1, borderColor: COLORS.line },
   messageError: { backgroundColor: '#FEF3F2' },
   messageSuccess: { backgroundColor: '#E7F5EC' },
-  messageText: { flex: 1, color: COLORS.green, fontSize: 13, lineHeight: 18 },
+  messageText: { flex: 1, color: COLORS.green, fontSize: 13, lineHeight: 18, fontWeight: '700' },
   errorText: { color: COLORS.red },
   messageClose: { color: COLORS.muted, fontSize: 20, paddingHorizontal: 4 },
   fieldFoot: { fontSize: 11, color: COLORS.muted },
   footnote: { textAlign: 'center', color: COLORS.muted, fontSize: 11, marginTop: 16, lineHeight: 17 },
-  reviewBox: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 12, marginTop: 8, borderWidth: 1, borderColor: COLORS.line },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.line, paddingVertical: 9, paddingBottom: Platform.OS === 'ios' ? 18 : 10 },
-  tabItem: { flex: 1, alignItems: 'center', paddingVertical: 6 },
-  tabText: { color: COLORS.muted, fontSize: 12, fontWeight: '700' },
+  reviewBox: { backgroundColor: '#F7FAF8', borderRadius: 15, padding: 13, marginTop: 9, borderWidth: 1, borderColor: '#E1EAE5' },
+  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E3EAE6', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 10, paddingHorizontal: 8, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: 13 },
+  tabIcon: { color: '#8A96A3', fontSize: 20, lineHeight: 22, fontWeight: '800', marginBottom: 2 },
+  tabIconActive: { color: COLORS.green },
+  tabText: { color: '#7A8794', fontSize: 10, fontWeight: '800' },
   tabTextActive: { color: COLORS.green },
-  chatLog: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 10, marginBottom: 10 },
-  chatBubble: { borderRadius: 12, padding: 11, marginVertical: 4, maxWidth: '92%' },
-  chatUser: { alignSelf: 'flex-end', backgroundColor: COLORS.lightGreen },
+  chatLog: { backgroundColor: '#F5F8F6', borderRadius: 17, padding: 11, marginBottom: 10, borderWidth: 1, borderColor: '#E5ECE8' },
+  chatBubble: { borderRadius: 13, padding: 12, marginVertical: 4, maxWidth: '92%' },
+  chatUser: { alignSelf: 'flex-end', backgroundColor: '#E4F4E9' },
   chatAssistant: { alignSelf: 'flex-start', backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line },
-  chatLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '800', marginBottom: 4 },
+  chatLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '900', marginBottom: 4 },
   chatText: { color: COLORS.ink, fontSize: 14, lineHeight: 20 }
 });
