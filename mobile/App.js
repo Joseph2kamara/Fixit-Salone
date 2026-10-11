@@ -63,7 +63,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
 function Chip({ title, active = false, onPress }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.chipPressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text></Pressable>;
 }
-function Card({ children }) { return <View style={styles.card}>{children}</View>; }
+function Card({ children, style }) { return <View style={[styles.card, style]}>{children}</View>; }
 function Status({ value }) {
   const label = String(value || 'unknown').replaceAll('_', ' ');
   return <View style={styles.status}><Text style={styles.statusText}>{label}</Text></View>;
