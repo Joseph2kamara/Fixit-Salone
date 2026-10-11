@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "FixIt Salone",
+    "slug": "fixit-salone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fixitsalone.app"
+    },
+    "android": {
+      "package": "com.fixitsalone.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0C2340"
+      }
+    },
+    "splash": {
+      "backgroundColor": "#0C2340"
+    },
+    "extra": {
+      "apiBaseUrl": "https://fixit-salone-api.onrender.com"
+    }
+  }
+}
