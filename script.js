@@ -545,7 +545,23 @@ async function handleProviderJob(id,action){
   try{
     if(action==='photos'){
       const photos=await api('/api/service-requests/'+encodeURIComponent(id)+'/photos');
-      openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Customer job photo"></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;return;
+      openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map((p,i)=>'<a href="#" class="job-photo-link" data-photo-index="'+i+'" target="_blank" rel="noopener"><span class="job-photo-loading">Loading photo…</span></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;
+      const links=body.querySelectorAll('.job-photo-link');
+      await Promise.all(photos.map(async(p,i)=>{
+        const link=links[i];if(!link)return;
+        try{
+          const response=await fetch(API_BASE+'/api/service-requests/'+encodeURIComponent(id)+'/photos/'+encodeURIComponent(p.id)+'/file',{headers:{Authorization:'Bearer '+authToken()}});
+          if(!response.ok)throw new Error('Photo request failed ('+response.status+').');
+          const blob=await response.blob();
+          const objectUrl=URL.createObjectURL(blob);
+          link.href=objectUrl;link.target='_blank';
+          link.innerHTML='<img src="'+objectUrl+'" alt="Customer job photo">';
+        }catch(error){
+          link.removeAttribute('href');link.innerHTML='<span class="job-photo-loading">Photo unavailable</span>';
+          console.error('Unable to load job photo:',error);
+        }
+      }));
+      return;
     }
     if(action==='quote'){
       openModal('<p class="eyebrow">SERVICE QUOTATION</p><h2>Build your quote</h2><p class="quote-note">Enter each cost separately. The total is calculated automatically. Customer approval is required before work starts.</p><div class="quote-entry-card quote-builder"><label class="form-label" for="quoteLabour">Labour (SLE)</label><input id="quoteLabour" class="form-control quote-cost-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required><label class="form-label" for="quoteMaterials">Materials (SLE)</label><input id="quoteMaterials" class="form-control quote-cost-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required><label class="form-label" for="quoteTransport">Transport (SLE)</label><input id="quoteTransport" class="form-control quote-cost-input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required><div class="quote-grand-total quote-live-total"><span>Total quotation</span><strong id="quoteCalculatedTotal">SLE 0.00</strong></div></div><p id="providerQuoteMessage" class="form-message"></p><button class="btn" id="sendProviderQuote">Send quotation to customer</button><button class="btn outline" id="cancelProviderQuote">Cancel</button>');
