@@ -498,7 +498,7 @@ app.get('/api/service-requests/:id/photos/:photoId/file',requireAuth,async(req,r
     const row=current.rows[0];if(!row)return res.status(404).json({error:'Photo not found.'});
     const allowed=req.user.role==='customer'&&row.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[row.provider_id,req.user.sub])).rows[0] || req.user.role==='admin';
     if(!allowed)return res.status(403).json({error:'You do not have access to this photo.'});
-    if(row.storage_provider==='r2'&&row.storage_key&&objectStorageEnabled)return res.redirect(await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600));
+    if(row.storage_provider==='r2'&&row.storage_key&&objectStorageEnabled){const object=await objectStorage.send(new GetObjectCommand({Bucket:R2_BUCKET,Key:row.storage_key}));if(object.ContentType)res.setHeader('Content-Type',object.ContentType);if(object.ContentLength!=null)res.setHeader('Content-Length',String(object.ContentLength));res.setHeader('Cache-Control','private, max-age=60');object.Body.pipe(res);return;}
     const filename=String(row.file_url||'').replace(/^\/uploads\//,'');const filePath=path.resolve(uploadDir,filename);
     if(!filePath.startsWith(path.resolve(uploadDir)+path.sep)||!fs.existsSync(filePath))return res.status(404).json({error:'File not found.'});
     res.sendFile(filePath);
