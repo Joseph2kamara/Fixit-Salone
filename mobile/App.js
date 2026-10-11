@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Platform,
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform,
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -19,6 +19,27 @@ const DISTRICTS = {
   'North West': ['Kambia', 'Karene', 'Port Loko'],
   Southern: ['Bo', 'Bonthe', 'Moyamba', 'Pujehun']
 };
+
+function mediaUri(path) {
+  const value = String(path || '').trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return API_BASE + (value.startsWith('/') ? value : '/' + value);
+}
+
+function RemoteImage({ uri, style, fallbackText = 'Photo unavailable', resizeMode = 'cover' }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [uri]);
+  const resolved = mediaUri(uri);
+  if (!resolved || failed) {
+    return (
+      <View style={[style, styles.imagePlaceholder]}>
+        <Text style={styles.imagePlaceholderText}>{fallbackText}</Text>
+      </View>
+    );
+  }
+  return <Image source={{ uri: resolved }} style={style} resizeMode={resizeMode} onError={() => setFailed(true)} />;
+}
 
 function Button({ title, onPress, secondary = false, disabled = false, compact = false }) {
   return (
@@ -576,7 +597,9 @@ export default function App() {
             filteredProviders.map((p, index) => (
               <Card key={String(p.id) + '-' + String(p.service_id || index)}>
                 <View style={styles.providerCardHeader}>
-                  <View style={styles.avatar}><Text style={styles.avatarText}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>
+                  {p.profile_photo_url
+                    ? <RemoteImage uri={p.profile_photo_url} style={styles.avatarImage} fallbackText={String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()} />
+                    : <View style={styles.avatar}><Text style={styles.avatarText}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
                   <View style={styles.grow}>
                     <Text style={styles.cardTitle}>{p.business_name || p.full_name || 'Service provider'}</Text>
                     <Text style={styles.cardMeta}>{p.service_name || 'Local services'} · {p.region || 'Sierra Leone'}</Text>
@@ -621,11 +644,20 @@ export default function App() {
           <Button title="← Back to providers" secondary onPress={() => setScreen('home')} />
           {!providerInfo ? <ActivityIndicator size="large" color={COLORS.green} style={styles.spinner} /> : <>
             <Card>
-              <Text style={styles.bigTitle}>{providerInfo.profile?.business_name || selectedProvider?.business_name || 'Provider profile'}</Text>
-              <Text style={styles.cardMeta}>{providerInfo.profile?.verification_status === 'verified' ? '✓ Verified provider' : 'Verification not complete'}</Text>
+              <View style={styles.providerProfileHero}>
+                <RemoteImage
+                  uri={providerInfo.profile?.profile_photo_url || selectedProvider?.profile_photo_url}
+                  style={styles.profilePhoto}
+                  fallbackText="No photo yet"
+                />
+                <View style={styles.profileIdentity}>
+                  <Text style={styles.bigTitle}>{providerInfo.profile?.business_name || selectedProvider?.business_name || 'Provider profile'}</Text>
+                  <Text style={styles.cardMeta}>{providerInfo.profile?.verification_status === 'verified' ? '✓ Verified provider' : 'Verification not complete'}</Text>
+                  <Text style={styles.profileRating}>★ {providerInfo.rating ?? '—'} <Text style={styles.cardMeta}>({providerInfo.reviewCount ?? 0} reviews)</Text></Text>
+                </View>
+              </View>
               <Text style={styles.cardDescription}>{providerInfo.profile?.service_address}</Text>
               <Text style={styles.cardMeta}>{providerInfo.profile?.area}, {providerInfo.profile?.district}, {providerInfo.profile?.region}</Text>
-              <Text style={styles.priceText}>Rating: {providerInfo.rating ?? '—'} ({providerInfo.reviewCount ?? 0} reviews)</Text>
             </Card>
             <Text style={styles.sectionTitle}>Services and prices</Text>
             {(providerInfo.services || []).map(s => (
@@ -641,8 +673,19 @@ export default function App() {
               <Card key={String(r.id || i)}><Text style={styles.cardTitle}>{'★'.repeat(Number(r.rating || 0))} · {r.customer_name || 'Customer'}</Text><Text style={styles.cardDescription}>{r.review_text || 'No written comment.'}</Text></Card>)}
             <Text style={styles.sectionTitle}>Portfolio</Text>
             {(providerInfo.work || []).length === 0 ? <Empty text="No portfolio items available yet." /> : providerInfo.work.map((w, i) =>
-              <Card key={String(w.id || i)}><Text style={styles.cardTitle}>{w.caption || 'Provider work'}</Text><Text style={styles.cardMeta}>{w.media_type || 'Media'} · {w.created_at ? new Date(w.created_at).toLocaleDateString() : ''}</Text>
-                <Button title="Open portfolio item" secondary onPress={() => Linking.openURL(API_BASE + (String(w.file_url || '').startsWith('/') ? w.file_url : '/' + (w.file_url || ''))).catch(() => setError('Could not open this portfolio item.'))} />
+              <Card key={String(w.id || i)} style={styles.portfolioCard}>
+                {String(w.media_type || '').toLowerCase().includes('image')
+                  ? <Pressable onPress={() => { const uri = mediaUri(w.file_url); if (uri) Linking.openURL(uri).catch(() => setError('Could not open this portfolio image.')); }}>
+                      <RemoteImage uri={w.file_url} style={styles.portfolioImage} fallbackText="Image could not be loaded" />
+                    </Pressable>
+                  : <View style={styles.videoPreview}><Text style={styles.videoPreviewIcon}>▶</Text><Text style={styles.videoPreviewText}>Video portfolio item</Text></View>}
+                <Text style={styles.cardTitle}>{w.caption || 'Provider work'}</Text>
+                <Text style={styles.cardMeta}>{w.media_type || 'Media'} · {w.created_at ? new Date(w.created_at).toLocaleDateString() : ''}</Text>
+                <Button title={String(w.media_type || '').toLowerCase().includes('video') ? 'Play portfolio video' : 'Open full image'} secondary onPress={() => {
+                  const uri = mediaUri(w.file_url);
+                  if (uri) Linking.openURL(uri).catch(() => setError('Could not open this portfolio item.'));
+                  else setError('This portfolio item has no file URL.');
+                }} />
               </Card>)}
             <Button title="Report a safety concern about this provider" secondary onPress={() => { setIncidentDetails(''); setScreen('safety'); }} />
           </>}
@@ -956,6 +999,18 @@ const styles = StyleSheet.create({
   card: { backgroundColor: COLORS.white, borderRadius: 19, padding: 16, marginBottom: 13, borderWidth: 1, borderColor: '#E3EAE6', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 10, elevation: 2 },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 },
   providerCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  avatarImage: { width: 46, height: 46, borderRadius: 16, borderWidth: 1, borderColor: '#CDE8D5', backgroundColor: '#E4F4E9' },
+  providerProfileHero: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 14 },
+  profilePhoto: { width: 94, height: 94, borderRadius: 25, backgroundColor: '#E4F4E9', borderWidth: 1, borderColor: '#CDE8D5' },
+  profileIdentity: { flex: 1, minWidth: 0 },
+  profileRating: { color: '#A66A00', fontSize: 14, fontWeight: '900', marginTop: 8 },
+  imagePlaceholder: { backgroundColor: '#EAF2ED', borderWidth: 1, borderColor: '#D8E7DE', alignItems: 'center', justifyContent: 'center', padding: 5, overflow: 'hidden' },
+  imagePlaceholderText: { color: '#597363', fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  portfolioCard: { overflow: 'hidden' },
+  portfolioImage: { width: '100%', height: 220, borderRadius: 14, marginBottom: 13, backgroundColor: '#EAF2ED' },
+  videoPreview: { height: 160, borderRadius: 14, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
+  videoPreviewIcon: { color: COLORS.white, fontSize: 30, fontWeight: '900' },
+  videoPreviewText: { color: '#C9D8E4', fontSize: 12, fontWeight: '800', marginTop: 6 },
   grow: { flex: 1 },
   avatar: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#E4F4E9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CDE8D5' },
   avatarText: { color: COLORS.green, fontSize: 19, fontWeight: '900' },
