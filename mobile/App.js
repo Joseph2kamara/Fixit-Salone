@@ -5,6 +5,20 @@ import Constants from 'expo-constants';
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
 const COLORS = { navy: '#0C2340', green: '#16834A', pale: '#F2F7F4', ink: '#1D2939', muted: '#667085', line: '#E4E7EC', white: '#FFFFFF', red: '#B42318' };
 
+function Button({ title, onPress, secondary = false, disabled = false }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} style={[styles.button, secondary && styles.buttonSecondary, disabled && styles.disabled]}>
+      <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+function Field({ value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences' }) {
+  return (
+    <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#98A2B3" secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize} style={styles.input} />
+  );
+}
+
 export default function App() {
   const [role, setRole] = useState('customer');
   const [mode, setMode] = useState('login');
@@ -61,15 +75,6 @@ export default function App() {
   useEffect(() => { if (token && user?.role === 'customer') loadProviders(); }, [search]);
 
   function signOut() { setToken(''); setUser(null); setJobs([]); setProviders([]); setPassword(''); setTab('home'); }
-
-  const Button = ({ title, onPress, secondary = false, disabled = false }) => (
-    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled} style={[styles.button, secondary && styles.buttonSecondary, disabled && styles.disabled]}>
-      <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
-    </Pressable>
-  );
-  const Field = ({ value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences' }) => (
-    <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#98A2B3" secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize} style={styles.input} />
-  );
 
   if (!token || !user) return (
     <SafeAreaView style={styles.safe}>
