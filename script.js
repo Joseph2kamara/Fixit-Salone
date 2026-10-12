@@ -17,11 +17,19 @@ function saveAuth(data){
   sessionStorage.setItem(AUTH_TOKEN_KEY,data.token);
   localStorage.setItem('fixit_customer',JSON.stringify({id:data.user.id,name:data.user.full_name,phone:data.user.phone,role:data.user.role}));
   updateCustomerAccountButton();
+  updateMobileAccountAction();
+  updateHomeGreeting();
+  loadCustomerHomeJobs();
 }
 function clearAuth(){
   sessionStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem('fixit_customer');
   localStorage.removeItem('fixit_phone_verified');
+  const section=$('homeActiveJobs'),container=$('activeJobs');
+  if(section)section.hidden=true;
+  if(container)container.innerHTML='';
+  updateHomeGreeting();
+  updateMobileAccountAction();
 }
 function closeMobileNav(){
   const drawer=$('mobileNav'),toggle=$('mobileMenuToggle'),backdrop=$('mobileNavBackdrop');
@@ -82,23 +90,35 @@ const providers=[
 {name:'Mobile Doctor SL',service:'Phone Repair',region:'Western Area',district:'Western Area Urban',area:'Congo Town',address:'Congo Town, Freetown',price:'From SLE 150',rating:'4.8',reviews:22,initials:'MD',plan:'Pro',featured:false,completed:89,completion:'97%',verified:true,desc:'Screen, battery, charging-port and software repairs.'},
 {name:'Bai Motors',service:'Auto Repair',region:'Southern',district:'Bo',area:'Bo Town',address:'Bo, Sierra Leone',price:'From SLE 350',rating:'4.6',reviews:13,initials:'BM',plan:'Free',featured:false,completed:27,completion:'92%',verified:false,desc:'Diagnostics, servicing, brakes and general vehicle repairs.'}
 ];
-const categories=[['🔧','Plumbing','Leaks & pipes'],['⚡','Electrical','Wiring & installs'],['🧹','Cleaning','Home & office'],['📱','Phone Repair','Devices & screens'],['💻','IT & Computer','Tech support'],['🚗','Auto Repair','Mechanics'],['💇','Beauty','Barbers & stylists'],['🏠','Construction','Building & painting']];
+const categories=[
+  ['🔧','Plumbing','Leaks, pipes & fittings','Plumbing'],
+  ['💡','Electrical','Wiring & installations','Electrical'],
+  ['🏠','General Home','Home maintenance & repairs','home'],
+  ['🪜','Roofing','Roof & gutter repairs','roof'],
+  ['🧊','Appliance Repair','Appliances & devices','appliance'],
+  ['🚨','Emergency Services','Urgent repair help','emergency']
+];
 const districts={'Western Area':['Western Area Urban','Western Area Rural'],'Eastern':['Kailahun','Kenema','Kono'],'Northern':['Bombali','Falaba','Koinadugu','Tonkolili'],'North West':['Kambia','Karene','Port Loko'],'Southern':['Bo','Bonthe','Moyamba','Pujehun']};
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const modal=$('modal'),body=$('modalBody');
 let liveProviders=[];
 let visibleProviders=[];
 let providerNotificationPoll=null;
-async function loadLiveProviders(){
+let liveProvidersLoadedAt=0;
+let liveProvidersQueryKey='';
+let liveProvidersPromise=null;
+async function loadLiveProviders(force=false){
+  const r=$('region').value;
+  const d=$('district').value;
+  const queryKey=[r||'',d||''].join('|');
+  if(!force&&liveProvidersLoadedAt&&queryKey===liveProvidersQueryKey&&Date.now()-liveProvidersLoadedAt<15000)return true;
+  if(liveProvidersPromise)return liveProvidersPromise;
+  liveProvidersPromise=(async()=>{
   try{
     const params=new URLSearchParams();
-    const q=$('search').value.trim();
-    const r=$('region').value;
-    const d=$('district').value;
-    if(q)params.set('service',q);
     if(r&&r!=='All regions')params.set('region',r);
     if(d)params.set('district',d);
-    const rows=await api('/api/providers?'+params.toString());
+    const rows=await api('/api/providers'+(params.toString()?'?'+params.toString():''));
     liveProviders=rows.map(x=>({
       id:x.id,userId:x.user_id,name:x.business_name||x.full_name,profile_photo_url:x.profile_photo_url||null,service:x.service_name,serviceId:x.service_id,
       region:x.region,district:x.district,area:x.area,address:x.service_address,rating:x.rating,review_count:x.review_count,
@@ -107,11 +127,18 @@ async function loadLiveProviders(){
       plan:'Free',featured:false,completed:0,completion:'—',verified:x.verification_status==='verified',
       desc:x.service_description||'Local FixIt Salone service provider.',pricingType:x.pricing_type
     }));
+    liveProvidersLoadedAt=Date.now();
+    liveProvidersQueryKey=queryKey;
     return true;
   }catch(e){
     liveProviders=[];
+    liveProvidersLoadedAt=Date.now();
+    liveProvidersQueryKey=queryKey;
     return false;
   }
+  })();
+  try{return await liveProvidersPromise}
+  finally{liveProvidersPromise=null}
 }
 function activeProviders(){return liveProviders.length?liveProviders:providers}
 function openModal(html){if(providerNotificationPoll){clearInterval(providerNotificationPoll);providerNotificationPoll=null}body.innerHTML=html;modal.hidden=false} function closeModal(){if(providerNotificationPoll){clearInterval(providerNotificationPoll);providerNotificationPoll=null}modal.hidden=true} window.closeModal=closeModal;
@@ -125,7 +152,75 @@ async function render(){
   $('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found'+(ok?'':' · demo data');
   $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+(p.profile_photo_url?'<img src="'+esc(p.profile_photo_url)+'" alt="'+esc(p.name)+' profile photo">':esc(p.initials))+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
 }
-function renderCategories(){$('categories').innerHTML=categories.map(c=>'<button class="category-btn" data-service="'+esc(c[1])+'">'+c[0]+'<b>'+esc(c[1])+'</b><small>'+esc(c[2])+'</small></button>').join('')}
+function renderCategories(){
+  $('categories').innerHTML=categories.map(c=>'<button type="button" class="category-btn" data-service="'+esc(c[3]||c[1])+'" title="'+esc(c[2])+'" aria-label="'+esc(c[1]+': '+c[2])+'"><span class="category-art"><span class="category-emoji" aria-hidden="true">'+c[0]+'</span></span><b>'+esc(c[1])+'</b></button>').join('');
+}
+function updateHomeGreeting(){
+  const heading=$('homeGreeting');
+  if(!heading)return;
+  let user=null;try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  if(authToken()&&user&&user.role==='customer'){
+    const first=String(user.name||'there').trim().split(/\s+/)[0]||'there';
+    heading.textContent='Welcome, '+first+'!';
+  }else{
+    heading.innerHTML='Find the right help, <em>right here.</em>';
+  }
+}
+async function loadCustomerHomeJobs(){
+  const section=$('homeActiveJobs'),container=$('activeJobs');
+  if(!section||!container)return;
+  let user=null;try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  if(!authToken()||!user||user.role!=='customer'){
+    section.hidden=true;container.innerHTML='';return;
+  }
+  section.hidden=false;
+  container.innerHTML='<p class="home-jobs-loading">Loading your jobs…</p>';
+  try{
+    const rows=await api('/api/service-requests/mine');
+    const active=(Array.isArray(rows)?rows:[]).filter(job=>['requested','quoted','approved','in_progress'].includes(job.status)).slice(0,8);
+    if(!active.length){
+      container.innerHTML='<article class="home-job-empty"><span class="home-job-empty-icon" aria-hidden="true">▤</span><h3>No active jobs yet</h3><p>Your requests and provider updates will appear here.</p><button class="btn home-empty-book" type="button" onclick="browseServices()">Book Now</button></article>';
+      return;
+    }
+    const progress={requested:20,quoted:42,approved:60,in_progress:80};
+    container.innerHTML=active.map(job=>{
+      const status=String(job.status||'requested');
+      return '<article class="active-job-card"><div class="active-job-top"><div class="active-job-art" aria-hidden="true">🛠️</div><div class="active-job-copy"><h3>'+esc(job.service_name||'Service request')+'</h3><p>Status: <b class="home-status">'+esc(status.replaceAll('_',' '))+'</b></p><p class="home-job-provider">Technician: '+esc(job.business_name||job.provider_name||'Awaiting provider')+'</p><p class="home-job-location">📍 '+esc(job.area||job.district||job.region||'Location provided')+'</p></div></div><div class="home-job-progress" aria-label="Job progress"><span style="width:'+(progress[status]||20)+'%"></span></div><button class="home-job-detail" type="button" onclick="openMobileJobs()">View Details</button></article>';
+    }).join('');
+  }catch(e){
+    container.innerHTML='<article class="home-job-empty"><h3>Active jobs</h3><p>We could not load your latest requests just now. Open My Jobs to try again.</p><button class="btn home-empty-book" type="button" onclick="openMobileJobs()">View My Jobs</button></article>';
+  }
+}
+function browseServices(){
+  render().then(()=>{const target=$('providers');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});});
+}
+function mobileNavHome(){
+  document.querySelectorAll('.mobile-bottom-item').forEach(el=>el.classList.toggle('is-active',el.dataset.nav==='home'));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function setMobileNavActive(name){
+  document.querySelectorAll('.mobile-bottom-item').forEach(el=>el.classList.toggle('is-active',el.dataset.nav===name));
+}
+function openMobileJobs(){
+  setMobileNavActive('jobs');
+  if(!authToken()){customerLogin('login','customer');return;}
+  let user=null;try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  if(user&&user.role==='provider')providerJobs();else customerRequests();
+}
+function openMobileInbox(){
+  setMobileNavActive('inbox');
+  if(!authToken()){customerLogin('login','customer');return;}
+  let user=null;try{user=JSON.parse(localStorage.getItem('fixit_customer')||'null')}catch{}
+  if(user&&user.role==='provider'){providerNotificationsCenter();return;}
+  openModal('<p class="eyebrow">MESSAGE INBOX</p><h2>Your FixIt updates</h2><p>Provider quotes and job updates are available in My Jobs. Direct customer-to-provider chat is not enabled on this website yet.</p><button class="btn" id="mobileInboxJobs">Open My Jobs</button><button class="btn outline" id="mobileInboxSupport">Open FixIt Support Assistant</button><button class="btn outline" id="mobileInboxClose">Done</button>');
+  $('mobileInboxJobs').onclick=()=>{closeModal();openMobileJobs();};
+  $('mobileInboxSupport').onclick=()=>{closeModal();$('fixitChatButton')?.click();};
+  $('mobileInboxClose').onclick=closeModal;
+}
+window.browseServices=browseServices;
+window.mobileNavHome=mobileNavHome;
+window.openMobileJobs=openMobileJobs;
+window.openMobileInbox=openMobileInbox;
 async function showProfile(i){
   const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
@@ -720,7 +815,7 @@ window.reportProvider=reportProvider;
 function featuredListing(){openModal('<p class="eyebrow">FEATURED LISTING</p><h2>Get more visibility</h2><p>Featured providers appear prominently in relevant searches.</p><div class="plan-grid"><div><b>7 days</b><strong>SLE 25</strong><small>Featured placement</small></div><div><b>30 days</b><strong>SLE 75</strong><small>Featured placement</small></div></div><p class="quote-note">This is a beta pricing model; no payment is collected yet.</p><button class="btn" onclick="closeModal()">Got it</button>')}
 function joinProvider(){providerPortal()}window.providerPortal=providerPortal;window.joinProvider=joinProvider;window.featuredListing=featuredListing;window.render=render;
 document.addEventListener('click',e=>{const p=e.target.closest('.profile-btn'),r=e.target.closest('.request-btn'),cat=e.target.closest('.category-btn');if(p){showProfile(+p.dataset.index);return}if(r){showRequest(+r.dataset.index);return}if(cat){$('search').value=cat.dataset.service;render();$('providers').scrollIntoView({behavior:'smooth'})}});
-$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();updateMobileAccountAction();render();
+$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();updateMobileAccountAction();updateHomeGreeting();render();loadCustomerHomeJobs();
 $('mobileMenuToggle')?.addEventListener('click',()=>{if($('mobileMenuToggle').getAttribute('aria-expanded')==='true')closeMobileNav();else openMobileNav()});
 $('mobileMenuClose')?.addEventListener('click',closeMobileNav);
 $('mobileNavBackdrop')?.addEventListener('click',closeMobileNav);
