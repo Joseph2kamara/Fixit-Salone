@@ -88,6 +88,19 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
     </View>
   );
 }
+function ActionTile({ icon, title, subtitle, onPress, disabled = false }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled}
+      style={({ pressed }) => [styles.accountTile, pressed && styles.accountTilePressed, disabled && styles.disabled]}>
+      <View style={styles.accountTileTop}>
+        <View style={styles.accountTileIconWrap}><Text style={styles.accountTileIcon}>{icon}</Text></View>
+        <Text style={styles.accountTileArrow}>↗</Text>
+      </View>
+      <Text style={styles.accountTileTitle}>{title}</Text>
+      <Text style={styles.accountTileSubtitle}>{subtitle}</Text>
+    </Pressable>
+  );
+}
 function Chip({ title, active = false, onPress }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.chipPressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text></Pressable>;
 }
@@ -1113,22 +1126,44 @@ export default function App() {
         </>}
 
         {screen === 'account' && <>
-          <Card>
-            <Text style={styles.bigTitle}>{user.full_name || 'FixIt account'}</Text>
-            <Text style={styles.cardMeta}>{user.phone}</Text>
-            <Text style={styles.cardMeta}>Account type: {user.role === 'provider' ? 'Service provider' : 'Customer'}</Text>
+          <Card style={styles.accountSummaryCard}>
+            <View style={styles.accountSummaryRow}>
+              <View style={styles.accountAvatar}>
+                <Text style={styles.accountAvatarText}>{(user.full_name || 'F').trim().slice(0, 1).toUpperCase()}</Text>
+              </View>
+              <View style={styles.accountIdentity}>
+                <Text style={styles.bigTitle}>{user.full_name || 'FixIt account'}</Text>
+                <Text style={styles.cardMeta}>{user.phone}</Text>
+                <View style={styles.accountTypeBadge}>
+                  <Text style={styles.accountTypeText}>{user.role === 'provider' ? 'SERVICE PROVIDER' : 'CUSTOMER ACCOUNT'}</Text>
+                </View>
+              </View>
+            </View>
           </Card>
-          {user.role === 'provider' && <>
-            <Button title="Business profile and services" onPress={openProviderSetup} />
-            <Button title="Subscription and plan" secondary onPress={openSubscription} />
-            <Button title="Provider notifications" secondary onPress={loadNotifications} />
-          </>}
-          {user.role === 'customer' && <Button title="My payment records" secondary onPress={async () => { await loadPayments(); setScreen('payments'); }} />}
-          <Button title="Verify account" secondary onPress={loadVerification} />
-          <Button title="Safety Center / report an issue" secondary onPress={() => { setScreen('safety'); clearMessages(); }} />
-          <Button title="FixIt support assistant" secondary onPress={() => { setScreen('support'); clearMessages(); }} />
-          <Button title="Refresh app data" secondary onPress={refreshHomeData} disabled={busy} />
-          <Button title="Sign out" secondary onPress={signOut} />
+
+          <View style={styles.accountSectionHeading}>
+            <Text style={styles.accountSectionTitle}>Quick actions</Text>
+            <Text style={styles.accountSectionSubtitle}>Manage your FixIt account</Text>
+          </View>
+
+          <View style={styles.accountGrid}>
+            {user.role === 'provider' && <>
+              <ActionTile icon="▣" title="Business profile" subtitle="Services and location" onPress={openProviderSetup} />
+              <ActionTile icon="♧" title="Subscription" subtitle="Plans and referrals" onPress={openSubscription} />
+              <ActionTile icon="✉" title="Notifications" subtitle="Provider updates" onPress={loadNotifications} />
+            </>}
+            {user.role === 'customer' && <ActionTile icon="▤" title="Payment records" subtitle="View payments" onPress={async () => { await loadPayments(); setScreen('payments'); }} />}
+            <ActionTile icon="✓" title="Verify account" subtitle="Check verification" onPress={loadVerification} />
+            <ActionTile icon="⚑" title="Safety Center" subtitle="Report an issue" onPress={() => { setScreen('safety'); clearMessages(); }} />
+            <ActionTile icon="✉" title="FixIt Support" subtitle="Get help" onPress={() => { setScreen('support'); clearMessages(); }} />
+            <ActionTile icon="↻" title="Refresh data" subtitle="Update latest details" onPress={refreshHomeData} disabled={busy} />
+          </View>
+
+          <Pressable accessibilityRole="button" onPress={signOut}
+            style={({ pressed }) => [styles.signOutAction, pressed && styles.buttonPressed]}>
+            <Text style={styles.signOutIcon}>↪</Text>
+            <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
         </>}
 
         {screen === 'provider-setup' && <>
@@ -1434,6 +1469,28 @@ const styles = StyleSheet.create({
   horizontalChips: { marginVertical: 7, flexGrow: 0 },
   wrapChips: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
   card: { backgroundColor: COLORS.white, borderRadius: 19, padding: 16, marginBottom: 13, borderWidth: 1, borderColor: '#E3EAE6', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.045, shadowRadius: 10, elevation: 2 },
+  accountSummaryCard: { paddingVertical: 17, marginBottom: 14 },
+  accountSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  accountAvatar: { width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FCE7D7', borderWidth: 1, borderColor: '#F2CEB1' },
+  accountAvatarText: { color: '#8D4A12', fontSize: 25, fontWeight: '900' },
+  accountIdentity: { flex: 1, minWidth: 0 },
+  accountTypeBadge: { alignSelf: 'flex-start', marginTop: 7, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, backgroundColor: '#E8F5EC' },
+  accountTypeText: { color: COLORS.green, fontSize: 9, fontWeight: '900', letterSpacing: 0.45 },
+  accountSectionHeading: { marginTop: 2, marginBottom: 11 },
+  accountSectionTitle: { color: COLORS.ink, fontSize: 19, fontWeight: '900', letterSpacing: -0.3 },
+  accountSectionSubtitle: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
+  accountGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10, marginBottom: 8 },
+  accountTile: { width: '48.5%', minHeight: 104, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: '#E2E9E5', padding: 12, justifyContent: 'space-between', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.035, shadowRadius: 7, elevation: 1 },
+  accountTilePressed: { borderColor: '#9BD2AE', backgroundColor: '#F7FCF8' },
+  accountTileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 },
+  accountTileIconWrap: { width: 31, height: 31, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E8F5EC' },
+  accountTileIcon: { color: COLORS.green, fontSize: 18, fontWeight: '900' },
+  accountTileArrow: { color: '#9BA6B0', fontSize: 15, fontWeight: '800' },
+  accountTileTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900' },
+  accountTileSubtitle: { color: COLORS.muted, fontSize: 10, lineHeight: 14, marginTop: 3 },
+  signOutAction: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#F0CECE', backgroundColor: '#FFF8F8', flexDirection: 'row', gap: 9, alignItems: 'center', justifyContent: 'center', marginTop: 2, marginBottom: 8 },
+  signOutIcon: { color: COLORS.red, fontSize: 18, fontWeight: '900' },
+  signOutText: { color: COLORS.red, fontSize: 13, fontWeight: '900' },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 },
   providerCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   avatarImage: { width: 46, height: 46, borderRadius: 16, borderWidth: 1, borderColor: '#CDE8D5', backgroundColor: '#E4F4E9' },
