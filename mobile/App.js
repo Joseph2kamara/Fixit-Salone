@@ -694,12 +694,18 @@ export default function App() {
         {screen === 'request-form' && <>
           <Button title="← Back" secondary onPress={() => setScreen('provider-detail')} />
           <Text style={styles.sectionLead}>Send a request to {selectedProvider?.business_name || selectedProvider?.full_name || 'this provider'}.</Text>
-          <Field label="Region" value={requestForm.region} onChangeText={v => setRequestValue('region', v)} placeholder="Western Area" />
-          {REGIONS.includes(requestForm.region) && <>
-            <Text style={styles.fieldLabel}>District</Text>
-            <View style={styles.wrapChips}>{(DISTRICTS[requestForm.region] || []).map(d => <Chip key={d} title={d} active={requestForm.district === d} onPress={() => setRequestValue('district', d)} />)}</View>
-          </>}
-          <Field label="District" value={requestForm.district} onChangeText={v => setRequestValue('district', v)} placeholder="District" />
+          <Text style={styles.fieldLabel}>Region</Text>
+          <View style={styles.wrapChips}>
+            {REGIONS.map(r => <Chip key={r} title={r} active={requestForm.region === r} onPress={() => {
+              setRequestValue('region', r);
+              const firstDistrict = (DISTRICTS[r] || [])[0] || '';
+              if (firstDistrict) setRequestValue('district', firstDistrict);
+            }} />)}
+          </View>
+          <Text style={styles.fieldLabel}>District</Text>
+          <View style={styles.wrapChips}>
+            {(DISTRICTS[requestForm.region] || []).map(d => <Chip key={d} title={d} active={requestForm.district === d} onPress={() => setRequestValue('district', d)} />)}
+          </View>
           <Field label="Area / community" value={requestForm.area} onChangeText={v => setRequestValue('area', v)} placeholder="e.g. Lumley" />
           <Field label="Service address" value={requestForm.address} onChangeText={v => setRequestValue('address', v)} placeholder="Street, landmark or address" />
           <Field label="Directions (optional)" value={requestForm.directions} onChangeText={v => setRequestValue('directions', v)} placeholder="How the provider can find you" />
@@ -801,12 +807,18 @@ export default function App() {
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
           <Text style={styles.sectionLead}>Customers need a business name, location, service, and clear description to find you.</Text>
           <Field label="Business name" value={providerForm.businessName} onChangeText={v => setProviderFormValue('businessName', v)} placeholder="e.g. Joe Electrical Services" />
-          <Field label="Region" value={providerForm.region} onChangeText={v => { setProviderFormValue('region', v); const first = (DISTRICTS[v] || [])[0]; if (first) setProviderFormValue('district', first); }} placeholder="Western Area" />
-          {REGIONS.includes(providerForm.region) && <>
-            <Text style={styles.fieldLabel}>District</Text>
-            <View style={styles.wrapChips}>{(DISTRICTS[providerForm.region] || []).map(d => <Chip key={d} title={d} active={providerForm.district === d} onPress={() => setProviderFormValue('district', d)} />)}</View>
-          </>}
-          <Field label="District" value={providerForm.district} onChangeText={v => setProviderFormValue('district', v)} placeholder="District" />
+          <Text style={styles.fieldLabel}>Region</Text>
+          <View style={styles.wrapChips}>
+            {REGIONS.map(r => <Chip key={r} title={r} active={providerForm.region === r} onPress={() => {
+              setProviderFormValue('region', r);
+              const firstDistrict = (DISTRICTS[r] || [])[0] || '';
+              if (firstDistrict) setProviderFormValue('district', firstDistrict);
+            }} />)}
+          </View>
+          <Text style={styles.fieldLabel}>District</Text>
+          <View style={styles.wrapChips}>
+            {(DISTRICTS[providerForm.region] || []).map(d => <Chip key={d} title={d} active={providerForm.district === d} onPress={() => setProviderFormValue('district', d)} />)}
+          </View>
           <Field label="Area / community" value={providerForm.area} onChangeText={v => setProviderFormValue('area', v)} placeholder="e.g. Lumley" />
           <Field label="Service address" value={providerForm.address} onChangeText={v => setProviderFormValue('address', v)} placeholder="Street, landmark or address" />
           <Text style={styles.fieldLabel}>Main service</Text>
