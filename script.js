@@ -217,10 +217,15 @@ function openMobileInbox(){
   $('mobileInboxSupport').onclick=()=>{closeModal();$('fixitChatButton')?.click();};
   $('mobileInboxClose').onclick=closeModal;
 }
+function mobileNavProfile(){
+  setMobileNavActive('profile');
+  customerLogin();
+}
 window.browseServices=browseServices;
 window.mobileNavHome=mobileNavHome;
 window.openMobileJobs=openMobileJobs;
 window.openMobileInbox=openMobileInbox;
+window.mobileNavProfile=mobileNavProfile;
 async function showProfile(i){
   const p=visibleProviders[i]||activeProviders()[i];
   if(!p)return;
@@ -390,6 +395,7 @@ async function submitRequest(provider,serviceId){
       let uploadData={};try{uploadData=await uploadRes.json()}catch{}
       if(!uploadRes.ok)throw new Error(uploadData.error||'Request was created, but the photos could not be uploaded.');
     }
+    loadCustomerHomeJobs();
     openModal('<p class="eyebrow">REQUEST SUBMITTED</p><h2>Your request is live</h2><p>Request ID: <b>'+esc(created.id)+'</b></p><p>📍 '+esc(a)+', '+esc(addr)+'</p><p>'+(files.length?files.length+' photo'+(files.length===1?'':'s')+' attached. ':'')+'The provider can now review the job and respond.</p><button class="btn" id="closeRequest">Done</button>');
     $('closeRequest').onclick=closeModal;
   }catch(e){
