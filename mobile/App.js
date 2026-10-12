@@ -42,6 +42,25 @@ function RemoteImage({ uri, style, fallbackText = 'Photo unavailable', resizeMod
   return <Image source={{ uri: resolved }} style={style} resizeMode={resizeMode} onError={() => setFailed(true)} />;
 }
 
+function AuthenticatedRequestImage({ uri, token, style }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [uri]);
+  const resolved = mediaUri(uri);
+  if (!resolved || failed) {
+    return (
+      <View style={[style, styles.imagePlaceholder]}>
+        <Text style={styles.imagePlaceholderText}>Photo could not be loaded</Text>
+      </View>
+    );
+  }
+  const raw = String(uri || '');
+  const needsAuthHeader = raw.startsWith('/api/service-requests/');
+  const source = needsAuthHeader && token
+    ? { uri: resolved, headers: { Authorization: 'Bearer ' + token } }
+    : { uri: resolved };
+  return <Image source={source} style={style} resizeMode="cover" onError={() => setFailed(true)} />;
+}
+
 function Button({ title, onPress, secondary = false, disabled = false, compact = false }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled}
@@ -142,6 +161,8 @@ export default function App() {
   });
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [pendingPhotoRequestId, setPendingPhotoRequestId] = useState('');
+  const [jobPhotos, setJobPhotos] = useState([]);
+  const [jobPhotosRequestId, setJobPhotosRequestId] = useState('');
   const [providerForm, setProviderForm] = useState({
     businessName: '', region: 'Western Area', district: 'Western Area Urban', area: '', address: '',
     serviceId: '', pricingType: 'starting_price', price: '', description: ''
@@ -218,6 +239,18 @@ export default function App() {
   async function loadPayments() {
     try { const rows = await api('/api/payments/mine'); setPayments(Array.isArray(rows) ? rows : []); }
     catch (e) { reportError(e); }
+  }
+  async function openJobPhotos(jobId) {
+    setJobPhotosRequestId(String(jobId));
+    setJobPhotos([]);
+    setScreen('job-photos');
+    clearMessages();
+    setBusy(true);
+    try {
+      const rows = await api('/api/service-requests/' + encodeURIComponent(jobId) + '/photos');
+      setJobPhotos(Array.isArray(rows) ? rows : []);
+    } catch (e) { reportError(e); }
+    finally { setBusy(false); }
   }
   async function loadProviderDashboard() {
     try {
@@ -301,6 +334,8 @@ export default function App() {
       setScreen('auth'); setAuthMode('login'); setRole('customer'); return;
     }
     setSelectedProvider(provider);
+    setSelectedPhotos([]);
+    setPendingPhotoRequestId('');
     setSelectedServiceId(String(service.service_id || service.id || provider.service_id || ''));
     setRequestForm({
       region: provider.region || 'Western Area', district: provider.district || 'Western Area Urban',
@@ -631,6 +666,7 @@ export default function App() {
 
   const pageTitle = screen === 'home' ? (user?.role === 'provider' ? 'Provider dashboard' : 'Find a professional')
     : screen === 'requests' ? (user?.role === 'provider' ? 'Incoming jobs' : 'My requests')
+    : screen === 'job-photos' ? 'Job photos'
     : screen === 'account' ? 'Your account'
     : screen === 'provider-detail' ? 'Provider profile'
     : screen === 'request-form' ? 'Request a service'
@@ -876,6 +912,18 @@ export default function App() {
             onPress={createServiceRequest} disabled={busy} />
         </>}
 
+        {screen === 'job-photos' && <>
+          <Button title="← Back to jobs" secondary onPress={() => setScreen('requests')} />
+          <Text style={styles.sectionLead}>Photos attached to service request {jobPhotosRequestId}.</Text>
+          {busy && jobPhotos.length === 0 ? <ActivityIndicator size="large" color={COLORS.green} style={styles.spinner} /> :
+            jobPhotos.length === 0 ? <Empty text="No photos are attached to this request yet." /> :
+            jobPhotos.map((photo, index) => <Card key={String(photo.id || index)}>
+              <AuthenticatedRequestImage uri={photo.file_url} token={token} style={styles.jobPhotoLarge} />
+              <Text style={styles.cardTitle}>{photo.original_name || 'Job photo ' + (index + 1)}</Text>
+              <Text style={styles.cardMeta}>Photo {index + 1} of {jobPhotos.length}</Text>
+            </Card>)}
+        </>}
+
         {screen === 'requests' && user.role === 'customer' && <>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your service activity</Text><Button title="Refresh" secondary compact onPress={loadCustomerRequests} disabled={busy} /></View>
           {jobs.length === 0 ? <Empty text="You have no service requests yet. Find a provider on Home and tap Request service." /> :
@@ -885,6 +933,7 @@ export default function App() {
                 <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Provider'} · {j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
+                <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
                 {j.quoted_amount != null && <Card>
                   <Text style={styles.cardTitle}>Quotation · SLE {Number(j.quoted_amount).toLocaleString()}</Text>
                   <Text style={styles.cardMeta}>Labour: SLE {Number(j.labour_amount || 0).toLocaleString()}</Text>
@@ -919,6 +968,7 @@ export default function App() {
                 <Text style={styles.cardMeta}>Customer: {j.customer_name || 'Customer'}{j.customer_phone ? ' · ' + j.customer_phone : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
+                <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
                 {j.quoted_amount != null && <Text style={styles.priceText}>Quote: SLE {Number(j.quoted_amount).toLocaleString()}</Text>}
                 {j.status === 'requested' && <>
                   <Button title="Send itemized quote" onPress={() => { setQuoteJobId(String(j.id)); setQuoteForm({ labour: '', materials: '', transport: '' }); }} />
@@ -1201,6 +1251,7 @@ const styles = StyleSheet.create({
   imagePlaceholderText: { color: '#597363', fontSize: 11, fontWeight: '800', textAlign: 'center' },
   portfolioCard: { overflow: 'hidden' },
   portfolioImage: { width: '100%', height: 220, borderRadius: 14, marginBottom: 13, backgroundColor: '#EAF2ED' },
+  jobPhotoLarge: { width: '100%', height: 245, borderRadius: 14, backgroundColor: '#EAF2ED', marginBottom: 10 },
   videoPreview: { height: 160, borderRadius: 14, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
   videoPreviewIcon: { color: COLORS.white, fontSize: 30, fontWeight: '900' },
   videoPreviewText: { color: '#C9D8E4', fontSize: 12, fontWeight: '800', marginTop: 6 },
