@@ -8,10 +8,18 @@ import * as ImagePicker from 'expo-image-picker';
 
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
 const COLORS = {
-  navy: '#0C2340', green: '#16834A', pale: '#F2F7F4', ink: '#1D2939',
+  navy: '#0C2340', green: '#16834A', pale: '#F6F7F8', ink: '#1D2939',
   muted: '#667085', line: '#E4E7EC', white: '#FFFFFF', red: '#B42318',
-  lightGreen: '#E7F5EC', amber: '#9A6700'
+  lightGreen: '#E7F5EC', amber: '#9A6700', orange: '#E5791B', orangeLight: '#FFF0E3'
 };
+const HOME_CATEGORIES = [
+  { label: 'Plumbing', symbol: '🔧', query: 'plumbing', tint: '#DCECFB' },
+  { label: 'Electrical', symbol: '💡', query: 'electrical', tint: '#FBE9D8' },
+  { label: 'General Home', symbol: '🏠', query: 'home', tint: '#DFF2E8' },
+  { label: 'Roofing', symbol: '🪜', query: 'roofing', tint: '#FBE7D4' },
+  { label: 'Appliance Repair', symbol: '🧊', query: 'appliance repair', tint: '#E6E8F6' },
+  { label: 'Emergency Services', symbol: '🚨', query: 'emergency', tint: '#F9E2E6' }
+];
 const REGIONS = ['Western Area', 'Eastern', 'Northern', 'North West', 'Southern'];
 const DISTRICTS = {
   'Western Area': ['Western Area Urban', 'Western Area Rural'],
@@ -665,7 +673,9 @@ export default function App() {
   }
 
   const pageTitle = screen === 'home' ? (user?.role === 'provider' ? 'Provider dashboard' : 'Find a professional')
-    : screen === 'requests' ? (user?.role === 'provider' ? 'Incoming jobs' : 'My requests')
+    : screen === 'providers' ? 'Find a professional'
+    : screen === 'requests' ? (user?.role === 'provider' ? 'Incoming jobs' : 'My Jobs')
+    : screen === 'inbox' ? 'Message Inbox'
     : screen === 'job-photos' ? 'Job photos'
     : screen === 'account' ? 'Your account'
     : screen === 'provider-detail' ? 'Provider profile'
@@ -718,58 +728,157 @@ export default function App() {
   return (
     <View style={styles.safe}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerIdentity}>
-            <View style={styles.headerLogo}><Text style={styles.headerLogoIcon}>⌂</Text></View>
-            <View>
-              <Text style={styles.headerBrand}><Text style={{ color: COLORS.white }}>FixIt</Text><Text style={{ color: '#7DDBA4' }}> Salone</Text></Text>
-              <Text style={styles.headerSmall}>Hello, {(user.full_name || 'there').split(' ')[0]}</Text>
+      {screen === 'home' && user.role === 'customer' ? (
+        <View style={styles.homeHeader}>
+          <View style={styles.homeBrandRow}>
+            <View style={styles.homeLogoMark}><Text style={styles.homeLogoSymbol}>🔧</Text></View>
+            <View style={styles.homeBrandText}>
+              <Text style={styles.homeBrand}><Text style={styles.homeBrandFix}>FixIt</Text><Text style={styles.homeBrandSalone}> Salone</Text></Text>
+              <Text style={styles.homeGreeting}>Welcome, {(user.full_name || 'there').split(' ')[0]}!</Text>
             </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.homeProfileButton, pressed && styles.buttonPressed]}>
+              <Text style={styles.homeProfileIcon}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>
+            </Pressable>
           </View>
-          <Pressable onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.roleBadge, pressed && styles.badgePressed]}>
-            <Text style={styles.roleBadgeText}>{user.role === 'provider' ? 'PROVIDER' : 'CUSTOMER'}</Text>
-            <Text style={styles.roleBadgeArrow}>⌄</Text>
-          </Pressable>
         </View>
-        <Text style={styles.headerTitle}>{pageTitle}</Text>
-      </View>
+      ) : (
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View style={styles.headerIdentity}>
+              <View style={styles.headerLogo}><Text style={styles.headerLogoIcon}>⌂</Text></View>
+              <View>
+                <Text style={styles.headerBrand}><Text style={{ color: COLORS.white }}>FixIt</Text><Text style={{ color: '#7DDBA4' }}> Salone</Text></Text>
+                <Text style={styles.headerSmall}>Hello, {(user.full_name || 'there').split(' ')[0]}</Text>
+              </View>
+            </View>
+            <Pressable onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.roleBadge, pressed && styles.badgePressed]}>
+              <Text style={styles.roleBadgeText}>{user.role === 'provider' ? 'PROVIDER' : 'CUSTOMER'}</Text>
+              <Text style={styles.roleBadgeArrow}>⌄</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.headerTitle}>{pageTitle}</Text>
+        </View>
+      )}
 
       {noticePanel}
       <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainContent} keyboardShouldPersistTaps="handled">
         {screen === 'home' && user.role === 'customer' && <>
-          <View style={styles.marketHero}>
-            <View style={styles.heroEyebrowRow}>
-              <View style={styles.heroLiveDot} />
-              <Text style={styles.heroEyebrow}>SIERRA LEONE SERVICE MARKETPLACE</Text>
-            </View>
-            <Text style={styles.heroTitle}>Find the right help, right here.</Text>
-            <Text style={styles.heroCopy}>Discover trusted local professionals for repairs, home services and more.</Text>
-            <View style={styles.heroStats}>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatNumber}>{filteredProviders.length}</Text>
-                <Text style={styles.heroStatLabel}>Providers found</Text>
-              </View>
-              <View style={styles.heroStatDivider} />
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatNumber}>{services.length}</Text>
-                <Text style={styles.heroStatLabel}>Service types</Text>
-              </View>
-            </View>
+          <Field value={search} onChangeText={setSearch} placeholder="⌕  Search repairs or technicians..." autoCapitalize="none" />
+
+          <View style={styles.homeSectionHeading}>
+            <Text style={styles.homeSectionTitle}>Quick Categories</Text>
           </View>
-          <Field value={search} onChangeText={setSearch} placeholder="⌕  Search plumbing, electrical, cleaning…" autoCapitalize="none" />
+          <View style={styles.categoryGrid}>
+            {HOME_CATEGORIES.map(category => (
+              <Pressable key={category.label} accessibilityRole="button"
+                onPress={() => {
+                  setSearch(category.query);
+                  setRegionFilter('All');
+                  setDistrictFilter('');
+                  setScreen('providers');
+                  clearMessages();
+                }}
+                style={({ pressed }) => [styles.categoryTile, pressed && styles.categoryTilePressed]}>
+                <View style={[styles.categoryArt, { backgroundColor: category.tint }]}>
+                  <Text style={styles.categorySymbol}>{category.symbol}</Text>
+                </View>
+                <Text style={styles.categoryLabel}>{category.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable accessibilityRole="button" onPress={() => {
+            setSearch('');
+            setRegionFilter('All');
+            setDistrictFilter('');
+            setScreen('providers');
+            clearMessages();
+          }} style={({ pressed }) => [styles.bookNowButton, pressed && styles.buttonPressed]}>
+            <Text style={styles.bookNowText}>Book Now</Text>
+            <Text style={styles.bookNowArrow}>→</Text>
+          </Pressable>
+
+          <View style={styles.homeSectionHeader}>
+            <Text style={styles.homeSectionTitle}>Active Jobs</Text>
+            <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }}>
+              <Text style={styles.seeAllText}>View all  ›</Text>
+            </Pressable>
+          </View>
+          {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).length === 0 ? (
+            <View style={styles.activeJobEmpty}>
+              <View style={styles.emptyJobIcon}><Text style={styles.emptyJobIconText}>▤</Text></View>
+              <Text style={styles.activeJobEmptyTitle}>No active jobs yet</Text>
+              <Text style={styles.activeJobEmptyCopy}>Your service requests and provider updates will appear here.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
+              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => {
+                const progress = ({ requested: 22, quoted: 42, approved: 58, in_progress: 78 })[job.status] || 18;
+                return (
+                  <View key={String(job.id || index)} style={styles.activeJobCard}>
+                    <View style={styles.activeJobTop}>
+                      <View style={styles.jobIllustration}><Text style={styles.jobIllustrationText}>🛠️</Text></View>
+                      <View style={styles.activeJobSummary}>
+                        <Text numberOfLines={2} style={styles.activeJobTitle}>{job.service_name || 'Service request'}</Text>
+                        <Text style={styles.activeJobStatus}>Status: <Text style={styles.activeJobStatusValue}>{String(job.status || 'requested').replaceAll('_', ' ')}</Text></Text>
+                        <Text numberOfLines={1} style={styles.activeJobProvider}>{job.business_name || job.provider_name || 'Waiting for provider'}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.progressTrack}><View style={[styles.progressFill, { width: progress + '%' }]} /></View>
+                    <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} style={styles.jobDetailButton}>
+                      <Text style={styles.jobDetailButtonText}>View details</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <View style={styles.homeSectionHeader}>
+            <Text style={styles.homeSectionTitle}>Local Professionals</Text>
+            <Pressable onPress={() => { setSearch(''); setScreen('providers'); clearMessages(); }}>
+              <Text style={styles.seeAllText}>View all  ›</Text>
+            </Pressable>
+          </View>
+          {filteredProviders.length === 0 ? (
+            <View style={styles.activeJobEmpty}>
+              <Text style={styles.activeJobEmptyCopy}>No live providers match your current search. Search another service or tap Book Now to browse.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerCarousel}>
+              {filteredProviders.slice(0, 8).map((p, index) => (
+                <View key={String(p.id) + '-' + String(p.service_id || index)} style={styles.homeProviderCard}>
+                  {p.profile_photo_url
+                    ? <RemoteImage uri={p.profile_photo_url} style={styles.homeProviderPhoto} fallbackText="No photo" />
+                    : <View style={styles.homeProviderPhotoFallback}><Text style={styles.homeProviderInitial}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
+                  <Text numberOfLines={1} style={styles.homeProviderName}>{p.business_name || p.full_name || 'Service provider'}</Text>
+                  <Text numberOfLines={1} style={styles.homeProviderService}>{p.service_name || 'Local services'}</Text>
+                  <Text numberOfLines={1} style={styles.homeProviderLocation}>{p.area || p.district || 'Sierra Leone'}</Text>
+                  <Text style={styles.homeProviderPrice}>{p.price_sle != null ? 'SLE ' + Number(p.price_sle).toLocaleString() : 'Quote needed'}</Text>
+                  <Button title="View profile" secondary compact onPress={() => openProvider(p)} />
+                  <Button title="Request service" compact onPress={() => startRequest(p, p)} />
+                </View>
+              ))}
+            </ScrollView>
+          )}
+          <Button title="Refresh services and jobs" secondary onPress={refreshHomeData} disabled={busy} />
+        </>}
+
+        {screen === 'providers' && user.role === 'customer' && <>
+          <Button title="← Back to home" secondary onPress={() => { setScreen('home'); clearMessages(); }} />
+          <Text style={styles.sectionLead}>Browse available professionals and choose a service.</Text>
+          <Field value={search} onChangeText={setSearch} placeholder="⌕  Search repairs or technicians..." autoCapitalize="none" />
           <Text style={styles.fieldLabel}>Filter by region</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-            <Chip title="All" active={regionFilter === 'All'} onPress={() => setRegionFilter('All')} />
+            <Chip title="All regions" active={regionFilter === 'All'} onPress={() => setRegionFilter('All')} />
             {REGIONS.map(r => <Chip key={r} title={r} active={regionFilter === r} onPress={() => setRegionFilter(r)} />)}
           </ScrollView>
           <Field value={districtFilter} onChangeText={setDistrictFilter} placeholder="District filter (optional)" />
-          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Popular services</Text><Button title="Refresh" secondary compact onPress={refreshHomeData} disabled={busy} /></View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-            {services.map(s => <Chip key={String(s.id)} title={s.name} active={search.toLowerCase() === String(s.name).toLowerCase()} onPress={() => setSearch(search.toLowerCase() === String(s.name).toLowerCase() ? '' : s.name)} />)}
-          </ScrollView>
-          <Text style={styles.sectionTitle}>Service providers ({filteredProviders.length})</Text>
-          {filteredProviders.length === 0 ? <Empty text="No live providers match this search yet. Try another service or region." /> :
+          <View style={styles.homeSectionHeader}>
+            <Text style={styles.homeSectionTitle}>Service providers ({filteredProviders.length})</Text>
+            <Button title="Refresh" secondary compact onPress={loadProviders} disabled={busy} />
+          </View>
+          {filteredProviders.length === 0 ? <Empty text="No live providers match this search yet. Try a different category or region." /> :
             filteredProviders.map((p, index) => (
               <Card key={String(p.id) + '-' + String(p.service_id || index)}>
                 <View style={styles.providerCardHeader}>
@@ -924,7 +1033,19 @@ export default function App() {
             </Card>)}
         </>}
 
+        {screen === 'inbox' && user.role === 'customer' && <>
+          <Text style={styles.sectionLead}>Updates about your service requests will appear in My Jobs. Direct customer-to-provider chat is not enabled in this mobile version yet.</Text>
+          <Card>
+            <View style={styles.inboxIllustration}><Text style={styles.inboxIllustrationText}>✉</Text></View>
+            <Text style={styles.cardTitle}>Your message inbox</Text>
+            <Text style={styles.cardDescription}>Once provider messaging is enabled, this is where you will chat with professionals about your jobs.</Text>
+            <Button title="Check my jobs" onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} />
+            <Button title="Chat with FixIt Support" secondary onPress={() => { setScreen('support'); clearMessages(); }} />
+          </Card>
+        </>}
+
         {screen === 'requests' && user.role === 'customer' && <>
+
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your service activity</Text><Button title="Refresh" secondary compact onPress={loadCustomerRequests} disabled={busy} /></View>
           {jobs.length === 0 ? <Empty text="You have no service requests yet. Find a provider on Home and tap Request service." /> :
             jobs.map((j, i) => (
@@ -1139,11 +1260,24 @@ export default function App() {
         </Pressable>
         <Pressable style={styles.tabItem} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}>
           <Text style={[styles.tabIcon, screen === 'requests' && styles.tabIconActive]}>▤</Text>
-          <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'Jobs' : 'My requests'}</Text>
+          <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'My Jobs' : 'My Jobs'}</Text>
+        </Pressable>
+        <Pressable style={styles.tabItem} onPress={() => {
+          clearMessages();
+          if (user.role === 'provider') loadNotifications();
+          else setScreen('inbox');
+        }}>
+          <View style={styles.tabIconWrap}>
+            <Text style={[styles.tabIcon, (screen === 'inbox' || screen === 'notifications') && styles.tabIconActive]}>✉</Text>
+            {user.role === 'provider' && notifications.some(n => !n.is_read) ? <View style={styles.tabBadge}><Text style={styles.tabBadgeText}>{notifications.filter(n => !n.is_read).length > 9 ? '9+' : notifications.filter(n => !n.is_read).length}</Text></View> : null}
+          </View>
+          <Text style={[styles.tabText, (screen === 'inbox' || screen === 'notifications') && styles.tabTextActive]}>Inbox</Text>
         </Pressable>
         <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}>
-          <Text style={[styles.tabIcon, screen === 'account' && styles.tabIconActive]}>◉</Text>
-          <Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>Account</Text>
+          <View style={[styles.profileTabAvatar, screen === 'account' && styles.profileTabAvatarActive]}>
+            <Text style={styles.profileTabAvatarText}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>
+          </View>
+          <Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>Profile</Text>
         </Pressable>
       </View>
     </View>
@@ -1162,6 +1296,66 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: '900', color: COLORS.ink, letterSpacing: -0.7 },
   subheading: { color: COLORS.muted, lineHeight: 22, marginTop: 6, marginBottom: 18, fontSize: 14 },
   header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 5 },
+  homeHeader: { backgroundColor: COLORS.white, paddingTop: Platform.OS === 'android' ? 9 : 12, paddingBottom: 15, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: '#F0F1F2' },
+  homeBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  homeLogoMark: { width: 43, height: 43, borderRadius: 13, backgroundColor: '#EFF4FA', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DDE6F0' },
+  homeLogoSymbol: { fontSize: 24 },
+  homeBrandText: { flex: 1 },
+  homeBrand: { fontSize: 21, fontWeight: '900', letterSpacing: -0.55 },
+  homeBrandFix: { color: COLORS.navy },
+  homeBrandSalone: { color: COLORS.orange },
+  homeGreeting: { color: '#343C46', fontSize: 15, fontWeight: '700', marginTop: 2 },
+  homeProfileButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FCE7D7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F2CEB1' },
+  homeProfileIcon: { color: '#8D4A12', fontSize: 16, fontWeight: '900' },
+  homeSectionHeading: { marginTop: 3, marginBottom: 10 },
+  homeSectionTitle: { color: '#1B2026', fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 5 },
+  categoryTile: { width: '31.6%', alignItems: 'center', marginBottom: 12, borderRadius: 13, paddingBottom: 3 },
+  categoryTilePressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  categoryArt: { width: '100%', aspectRatio: 1.06, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(12,35,64,0.04)' },
+  categorySymbol: { fontSize: 38 },
+  categoryLabel: { color: '#171C22', textAlign: 'center', fontWeight: '800', fontSize: 12, lineHeight: 15, marginTop: 5, minHeight: 30 },
+  bookNowButton: { height: 49, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.orange, borderRadius: 12, marginTop: 1, marginBottom: 15, shadowColor: COLORS.orange, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 5, elevation: 3 },
+  bookNowText: { color: COLORS.white, fontWeight: '900', fontSize: 15 },
+  bookNowArrow: { color: COLORS.white, fontSize: 19, marginLeft: 9, marginTop: -1 },
+  homeSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 10 },
+  seeAllText: { color: '#5C6570', fontSize: 12, fontWeight: '800' },
+  activeJobEmpty: { backgroundColor: COLORS.white, borderRadius: 15, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E8EAED', marginBottom: 10 },
+  emptyJobIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FFF0E3', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  emptyJobIconText: { fontSize: 20, color: COLORS.orange },
+  activeJobEmptyTitle: { color: COLORS.ink, fontSize: 14, fontWeight: '900' },
+  activeJobEmptyCopy: { color: COLORS.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 },
+  activeJobsRow: { paddingRight: 4, paddingBottom: 4 },
+  activeJobCard: { width: 282, backgroundColor: COLORS.white, borderRadius: 16, padding: 12, marginRight: 11, borderWidth: 1, borderColor: '#E5E8EB', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.05, shadowRadius: 7, elevation: 2 },
+  activeJobTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  jobIllustration: { width: 72, height: 72, borderRadius: 11, backgroundColor: '#F1EDE5', alignItems: 'center', justifyContent: 'center' },
+  jobIllustrationText: { fontSize: 29 },
+  activeJobSummary: { flex: 1 },
+  activeJobTitle: { color: COLORS.ink, fontSize: 14, fontWeight: '900', marginBottom: 4 },
+  activeJobStatus: { color: COLORS.muted, fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
+  activeJobStatusValue: { color: COLORS.green, fontWeight: '900', textTransform: 'capitalize' },
+  activeJobProvider: { color: '#333B44', fontSize: 10, fontWeight: '700', marginTop: 5 },
+  progressTrack: { height: 6, borderRadius: 4, backgroundColor: '#E9ECEF', marginTop: 12, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: '#2575AF' },
+  jobDetailButton: { borderWidth: 1, borderColor: '#EDCEAB', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, marginTop: 10, backgroundColor: '#FFF8EF' },
+  jobDetailButtonText: { color: '#94551A', fontSize: 12, fontWeight: '800' },
+  providerCarousel: { paddingBottom: 4, paddingRight: 4 },
+  homeProviderCard: { width: 178, backgroundColor: COLORS.white, borderRadius: 15, padding: 11, marginRight: 10, borderWidth: 1, borderColor: '#E5E8EB', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 2 },
+  homeProviderPhoto: { width: '100%', height: 96, borderRadius: 11, backgroundColor: '#F0F2F3', marginBottom: 9 },
+  homeProviderPhotoFallback: { width: '100%', height: 96, borderRadius: 11, backgroundColor: '#E4EDF5', marginBottom: 9, alignItems: 'center', justifyContent: 'center' },
+  homeProviderInitial: { color: COLORS.navy, fontSize: 27, fontWeight: '900' },
+  homeProviderName: { color: COLORS.ink, fontSize: 13, fontWeight: '900' },
+  homeProviderService: { color: COLORS.orange, fontSize: 11, fontWeight: '800', marginTop: 3 },
+  homeProviderLocation: { color: COLORS.muted, fontSize: 10, marginTop: 4 },
+  homeProviderPrice: { color: COLORS.green, fontSize: 11, fontWeight: '900', marginTop: 6, marginBottom: 2 },
+  tabIconWrap: { position: 'relative', minWidth: 26, alignItems: 'center' },
+  tabBadge: { position: 'absolute', top: -4, right: -9, backgroundColor: COLORS.orange, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  tabBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '900' },
+  profileTabAvatar: { width: 25, height: 25, borderRadius: 13, backgroundColor: '#FCE7D7', borderWidth: 1, borderColor: '#F2CEB1', alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  profileTabAvatarActive: { borderColor: COLORS.orange, borderWidth: 2 },
+  profileTabAvatarText: { color: '#8D4A12', fontSize: 10, fontWeight: '900' },
+  inboxIllustration: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FCE7D7', marginBottom: 11 },
+  inboxIllustrationText: { fontSize: 25, color: COLORS.orange },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 43, height: 43, borderRadius: 15, backgroundColor: '#193956', borderWidth: 1, borderColor: '#35526D', alignItems: 'center', justifyContent: 'center' },
@@ -1278,12 +1472,12 @@ const styles = StyleSheet.create({
   fieldFoot: { fontSize: 11, color: COLORS.muted },
   footnote: { textAlign: 'center', color: COLORS.muted, fontSize: 11, marginTop: 16, lineHeight: 17 },
   reviewBox: { backgroundColor: '#F7FAF8', borderRadius: 15, padding: 13, marginTop: 9, borderWidth: 1, borderColor: '#E1EAE5' },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E3EAE6', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 10, paddingHorizontal: 8, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
+  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E7E8EA', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 10, paddingHorizontal: 5, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: 13 },
-  tabIcon: { color: '#8A96A3', fontSize: 20, lineHeight: 22, fontWeight: '800', marginBottom: 2 },
-  tabIconActive: { color: COLORS.green },
+  tabIcon: { color: '#8A96A3', fontSize: 21, lineHeight: 24, fontWeight: '800', marginBottom: 1 },
+  tabIconActive: { color: COLORS.orange },
   tabText: { color: '#7A8794', fontSize: 10, fontWeight: '800' },
-  tabTextActive: { color: COLORS.green },
+  tabTextActive: { color: COLORS.orange },
   chatLog: { backgroundColor: '#F5F8F6', borderRadius: 17, padding: 11, marginBottom: 10, borderWidth: 1, borderColor: '#E5ECE8' },
   chatBubble: { borderRadius: 13, padding: 12, marginVertical: 4, maxWidth: '92%' },
   chatUser: { alignSelf: 'flex-end', backgroundColor: '#E4F4E9' },
