@@ -755,21 +755,14 @@ export default function App() {
           </View>
         </View>
       ) : (
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerIdentity}>
-              <View style={styles.headerLogo}><Text style={styles.headerLogoIcon}>⌂</Text></View>
-              <View>
-                <Text style={styles.headerBrand}><Text style={{ color: COLORS.white }}>FixIt</Text><Text style={{ color: '#7DDBA4' }}> Salone</Text></Text>
-                <Text style={styles.headerSmall}>Hello, {(user.full_name || 'there').split(' ')[0]}</Text>
-              </View>
-            </View>
-            <Pressable onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.roleBadge, pressed && styles.badgePressed]}>
-              <Text style={styles.roleBadgeText}>{user.role === 'provider' ? 'PROVIDER' : 'CUSTOMER'}</Text>
-              <Text style={styles.roleBadgeArrow}>⌄</Text>
+        <View style={styles.pageHeader}>
+          <Text style={styles.pageHeaderTitle}>{pageTitle}</Text>
+          {user.role === 'provider' && (
+            <Pressable accessibilityRole="button" onPress={() => { setScreen('account'); clearMessages(); }}
+              style={({ pressed }) => [styles.pageHeaderAction, pressed && styles.buttonPressed]}>
+              <Text style={styles.pageHeaderActionText}>Account</Text>
             </Pressable>
-          </View>
-          <Text style={styles.headerTitle}>{pageTitle}</Text>
+          )}
         </View>
       )}
 
@@ -1331,6 +1324,11 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: '900', color: COLORS.ink, letterSpacing: -0.7 },
   subheading: { color: COLORS.muted, lineHeight: 22, marginTop: 6, marginBottom: 18, fontSize: 14 },
   header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 5 },
+  pageHeader: { minHeight: 86, backgroundColor: COLORS.navy, paddingHorizontal: 22, paddingTop: Platform.OS === 'android' ? 16 : 23, paddingBottom: 19, borderBottomLeftRadius: 22, borderBottomRightRadius: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.11, shadowRadius: 11, elevation: 4 },
+  pageHeaderTitle: { color: COLORS.white, fontSize: 24, fontWeight: '900', letterSpacing: -0.45, flex: 1 },
+  pageHeaderAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 11, backgroundColor: '#23435E', borderWidth: 1, borderColor: '#3C5870' },
+  pageHeaderActionText: { color: COLORS.white, fontSize: 12, fontWeight: '800' },
+
   homeHeader: { backgroundColor: COLORS.white, paddingTop: Platform.OS === 'android' ? 9 : 12, paddingBottom: 15, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: '#F0F1F2' },
   homeBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   homeLogoMark: { width: 43, height: 43, borderRadius: 13, backgroundColor: '#EFF4FA', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DDE6F0' },
