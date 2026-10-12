@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform,
+  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform,
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -62,6 +62,42 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
 }
 function Chip({ title, active = false, onPress }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.chip, active && styles.chipActive, pressed && styles.chipPressed]}><Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text></Pressable>;
+}
+
+function OptionPicker({ label, value, options, placeholder = 'Choose an option', onChange, disabled = false }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View style={styles.fieldWrap}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={label + ': ' + (value || placeholder)}
+        disabled={disabled || options.length === 0}
+        onPress={() => setVisible(true)}
+        style={({ pressed }) => [styles.pickerTrigger, pressed && styles.pickerPressed, (disabled || options.length === 0) && styles.disabled]}>
+        <Text style={[styles.pickerValue, !value && styles.pickerPlaceholder]}>{value || placeholder}</Text>
+        <Text style={styles.pickerChevron}>⌄</Text>
+      </Pressable>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <View style={styles.pickerOverlay}>
+          <Pressable style={styles.pickerBackdrop} onPress={() => setVisible(false)} />
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Choose {label.toLowerCase()}</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.pickerOptions}>
+              {options.map(option => (
+                <Pressable key={String(option)} onPress={() => { onChange(option); setVisible(false); }}
+                  style={({ pressed }) => [styles.pickerOption, option === value && styles.pickerOptionSelected, pressed && styles.pickerPressed]}>
+                  <Text style={[styles.pickerOptionText, option === value && styles.pickerOptionTextSelected]}>{option}</Text>
+                  {option === value ? <Text style={styles.pickerCheck}>✓</Text> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable style={styles.pickerCancel} onPress={() => setVisible(false)}>
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
 }
 function Card({ children, style }) { return <View style={[styles.card, style]}>{children}</View>; }
 function Status({ value }) {
@@ -694,18 +730,14 @@ export default function App() {
         {screen === 'request-form' && <>
           <Button title="← Back" secondary onPress={() => setScreen('provider-detail')} />
           <Text style={styles.sectionLead}>Send a request to {selectedProvider?.business_name || selectedProvider?.full_name || 'this provider'}.</Text>
-          <Text style={styles.fieldLabel}>Region</Text>
-          <View style={styles.wrapChips}>
-            {REGIONS.map(r => <Chip key={r} title={r} active={requestForm.region === r} onPress={() => {
+          <OptionPicker label="Region" value={requestForm.region} options={REGIONS}
+            onChange={r => {
               setRequestValue('region', r);
               const firstDistrict = (DISTRICTS[r] || [])[0] || '';
-              if (firstDistrict) setRequestValue('district', firstDistrict);
-            }} />)}
-          </View>
-          <Text style={styles.fieldLabel}>District</Text>
-          <View style={styles.wrapChips}>
-            {(DISTRICTS[requestForm.region] || []).map(d => <Chip key={d} title={d} active={requestForm.district === d} onPress={() => setRequestValue('district', d)} />)}
-          </View>
+              setRequestValue('district', firstDistrict);
+            }} />
+          <OptionPicker label="District" value={requestForm.district} options={DISTRICTS[requestForm.region] || []}
+            onChange={d => setRequestValue('district', d)} />
           <Field label="Area / community" value={requestForm.area} onChangeText={v => setRequestValue('area', v)} placeholder="e.g. Lumley" />
           <Field label="Service address" value={requestForm.address} onChangeText={v => setRequestValue('address', v)} placeholder="Street, landmark or address" />
           <Field label="Directions (optional)" value={requestForm.directions} onChangeText={v => setRequestValue('directions', v)} placeholder="How the provider can find you" />
@@ -807,18 +839,14 @@ export default function App() {
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
           <Text style={styles.sectionLead}>Customers need a business name, location, service, and clear description to find you.</Text>
           <Field label="Business name" value={providerForm.businessName} onChangeText={v => setProviderFormValue('businessName', v)} placeholder="e.g. Joe Electrical Services" />
-          <Text style={styles.fieldLabel}>Region</Text>
-          <View style={styles.wrapChips}>
-            {REGIONS.map(r => <Chip key={r} title={r} active={providerForm.region === r} onPress={() => {
+          <OptionPicker label="Region" value={providerForm.region} options={REGIONS}
+            onChange={r => {
               setProviderFormValue('region', r);
               const firstDistrict = (DISTRICTS[r] || [])[0] || '';
-              if (firstDistrict) setProviderFormValue('district', firstDistrict);
-            }} />)}
-          </View>
-          <Text style={styles.fieldLabel}>District</Text>
-          <View style={styles.wrapChips}>
-            {(DISTRICTS[providerForm.region] || []).map(d => <Chip key={d} title={d} active={providerForm.district === d} onPress={() => setProviderFormValue('district', d)} />)}
-          </View>
+              setProviderFormValue('district', firstDistrict);
+            }} />
+          <OptionPicker label="District" value={providerForm.district} options={DISTRICTS[providerForm.region] || []}
+            onChange={d => setProviderFormValue('district', d)} />
           <Field label="Area / community" value={providerForm.area} onChangeText={v => setProviderFormValue('area', v)} placeholder="e.g. Lumley" />
           <Field label="Service address" value={providerForm.address} onChangeText={v => setProviderFormValue('address', v)} placeholder="Street, landmark or address" />
           <Text style={styles.fieldLabel}>Main service</Text>
@@ -989,6 +1017,23 @@ const styles = StyleSheet.create({
   heroStatDivider: { height: 32, width: 1, backgroundColor: '#35516A', marginHorizontal: 13 },
   fieldWrap: { marginBottom: 11 },
   fieldLabel: { color: COLORS.ink, fontSize: 12, fontWeight: '800', marginBottom: 6, letterSpacing: 0.15 },
+  pickerTrigger: { minHeight: 49, borderWidth: 1, borderColor: '#DDE5E1', backgroundColor: COLORS.white, borderRadius: 14, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerValue: { color: COLORS.ink, fontSize: 15, fontWeight: '600' },
+  pickerPlaceholder: { color: '#98A2B3', fontWeight: '400' },
+  pickerChevron: { color: COLORS.green, fontSize: 23, fontWeight: '800', marginLeft: 12, marginTop: -4 },
+  pickerPressed: { opacity: 0.78, backgroundColor: '#F3F8F5' },
+  pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 22, backgroundColor: 'rgba(12,35,64,0.45)' },
+  pickerBackdrop: { ...StyleSheet.absoluteFillObject },
+  pickerSheet: { width: '100%', maxWidth: 420, maxHeight: '78%', backgroundColor: COLORS.white, borderRadius: 22, padding: 16, borderWidth: 1, borderColor: '#DFE7E2', elevation: 14, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 20 },
+  pickerTitle: { fontSize: 18, fontWeight: '900', color: COLORS.ink, paddingHorizontal: 4, paddingTop: 3, paddingBottom: 12 },
+  pickerOptions: { flexGrow: 0 },
+  pickerOption: { minHeight: 48, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#F0F3F1' },
+  pickerOptionSelected: { backgroundColor: '#E7F5EC', borderBottomColor: '#D4ECDD' },
+  pickerOptionText: { color: COLORS.ink, fontSize: 15, fontWeight: '600' },
+  pickerOptionTextSelected: { color: COLORS.green, fontWeight: '900' },
+  pickerCheck: { color: COLORS.green, fontSize: 18, fontWeight: '900', marginLeft: 12 },
+  pickerCancel: { marginTop: 10, minHeight: 44, borderRadius: 12, backgroundColor: '#F2F5F3', alignItems: 'center', justifyContent: 'center' },
+  pickerCancelText: { color: COLORS.ink, fontSize: 14, fontWeight: '800' },
   input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDE5E1', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 13, fontSize: 15, color: COLORS.ink, minHeight: 49 },
   textArea: { minHeight: 108, paddingTop: 12 },
   button: { backgroundColor: COLORS.green, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 7, marginBottom: 3, minHeight: 46, shadowColor: COLORS.green, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 2 },
