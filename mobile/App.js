@@ -4,6 +4,7 @@ import {
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
+import * as ImagePicker from 'expo-image-picker';
 
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
 const COLORS = {
@@ -139,6 +140,8 @@ export default function App() {
   const [requestForm, setRequestForm] = useState({
     region: 'Western Area', district: 'Western Area Urban', area: '', address: '', directions: '', details: '', pricingType: 'quote_required'
   });
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [pendingPhotoRequestId, setPendingPhotoRequestId] = useState('');
   const [providerForm, setProviderForm] = useState({
     businessName: '', region: 'Western Area', district: 'Western Area Urban', area: '', address: '',
     serviceId: '', pricingType: 'starting_price', price: '', description: ''
@@ -307,7 +310,95 @@ export default function App() {
     setScreen('request-form');
     clearMessages();
   }
+  function addPickedPhotos(assets) {
+    const current = selectedPhotos.slice();
+    const combined = [...current];
+    let tooLarge = false;
+    let unsupported = false;
+    for (const asset of assets || []) {
+      if (!asset?.uri) continue;
+      const type = String(asset.mimeType || 'image/jpeg').toLowerCase();
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) { unsupported = true; continue; }
+      if (asset.fileSize != null && asset.fileSize > 10 * 1024 * 1024) { tooLarge = true; continue; }
+      if (combined.some(photo => photo.uri === asset.uri)) continue;
+      if (combined.length >= 5) break;
+      combined.push({ ...asset, mimeType: type });
+    }
+    setSelectedPhotos(combined.slice(0, 5));
+    if (tooLarge) setError('A photo was skipped because it is larger than 10 MB. Please choose a smaller image.');
+    else if (unsupported) setError('Only JPG, PNG, and WEBP photos are supported.');
+    else clearMessages();
+    if (assets?.length && combined.length === current.length && !tooLarge && !unsupported) {
+      setNotice('You can attach up to 5 photos to a request.');
+    }
+  }
+
+  async function pickRequestPhotos() {
+    if (pendingPhotoRequestId) { setError('This request was already created. Retry the photo upload before adding different photos.'); return; }
+    const remaining = 5 - selectedPhotos.length;
+    if (remaining <= 0) { setError('You can attach up to 5 photos. Remove one before adding another.'); return; }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.75
+      });
+      if (!result.canceled) addPickedPhotos(result.assets || []);
+    } catch (e) {
+      setError(e?.message || 'Could not open your photo library.');
+    }
+  }
+
+  async function takeRequestPhoto() {
+    if (pendingPhotoRequestId) { setError('This request was already created. Retry the photo upload before adding different photos.'); return; }
+    if (selectedPhotos.length >= 5) { setError('You can attach up to 5 photos. Remove one before taking another.'); return; }
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError('Camera permission is needed to take a photo. You can still choose a photo from your gallery.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.75 });
+      if (!result.canceled) addPickedPhotos(result.assets || []);
+    } catch (e) {
+      setError(e?.message || 'Could not open the camera.');
+    }
+  }
+
+  async function uploadRequestPhotos(requestId) {
+    const form = new FormData();
+    selectedPhotos.forEach((photo, index) => {
+      const type = photo.mimeType || 'image/jpeg';
+      const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
+      form.append('photos', {
+        uri: photo.uri,
+        name: photo.fileName || 'fixit-request-' + String(requestId) + '-' + String(index + 1) + '.' + ext,
+        type
+      });
+    });
+    return api('/api/service-requests/' + encodeURIComponent(requestId) + '/photos', {
+      method: 'POST',
+      body: form
+    });
+  }
+
   async function createServiceRequest() {
+    if (pendingPhotoRequestId) {
+      setBusy(true); clearMessages();
+      try {
+        await uploadRequestPhotos(pendingPhotoRequestId);
+        setSelectedPhotos([]);
+        setPendingPhotoRequestId('');
+        setNotice('Photos uploaded successfully to request ' + pendingPhotoRequestId + '.');
+        await loadCustomerRequests();
+        setScreen('requests');
+      } catch (e) {
+        setError('Your request ' + pendingPhotoRequestId + ' already exists, but the photos did not upload: ' + (e?.message || 'Upload failed.') + ' Tap “Retry photo upload”. Do not submit a second request.');
+      } finally { setBusy(false); }
+      return;
+    }
+
     if (!selectedProvider || !selectedServiceId) { setError('Please choose a provider service first.'); return; }
     if (!requestForm.region.trim() || !requestForm.district.trim() || !requestForm.area.trim() || !requestForm.address.trim() || !requestForm.details.trim()) {
       setError('Complete the region, district, area, address and job details.'); return;
@@ -324,7 +415,20 @@ export default function App() {
           job_details: requestForm.details.trim()
         })
       });
-      setNotice('Service request submitted. Request reference: ' + created.id);
+
+      if (selectedPhotos.length) {
+        setPendingPhotoRequestId(String(created.id));
+        try {
+          await uploadRequestPhotos(created.id);
+        } catch (uploadError) {
+          setError('Your request ' + created.id + ' was created, but the photos did not upload: ' + (uploadError?.message || 'Upload failed.') + ' Tap “Retry photo upload”. Do not submit a second request.');
+          return;
+        }
+      }
+
+      setSelectedPhotos([]);
+      setPendingPhotoRequestId('');
+      setNotice('Service request submitted successfully. Request reference: ' + created.id + (selectedPhotos.length ? ' Photos attached.' : ''));
       await loadCustomerRequests();
       setScreen('requests');
     } catch (e) { reportError(e); }
@@ -747,8 +851,29 @@ export default function App() {
               <Chip key={v} title={label} active={requestForm.pricingType === v} onPress={() => setRequestValue('pricingType', v)} />)}
           </View>
           <Field label="Describe the job" value={requestForm.details} onChangeText={v => setRequestValue('details', v)} placeholder="Describe the work you need..." multiline />
-          <Text style={styles.helper}>Final price must be approved before payment. Photos can be added in a later mobile update.</Text>
-          <Button title={busy ? 'Submitting…' : 'Send service request'} onPress={createServiceRequest} disabled={busy} />
+          <Text style={styles.sectionTitle}>Add job photos <Text style={styles.optionalText}>(optional)</Text></Text>
+          <Text style={styles.helper}>Show the provider what needs to be fixed. Attach up to 5 JPG, PNG or WEBP photos (10 MB max each).</Text>
+          {!pendingPhotoRequestId && <View style={styles.photoActions}>
+            <View style={styles.photoActionItem}><Button title="Choose from gallery" secondary onPress={pickRequestPhotos} disabled={busy || selectedPhotos.length >= 5} /></View>
+            <View style={styles.photoActionItem}><Button title="Take a photo" secondary onPress={takeRequestPhoto} disabled={busy || selectedPhotos.length >= 5} /></View>
+          </View>}
+          {selectedPhotos.length > 0 && <View style={styles.selectedPhotosWrap}>
+            <Text style={styles.photoCount}>{selectedPhotos.length} of 5 photos selected</Text>
+            <View style={styles.selectedPhotosRow}>
+              {selectedPhotos.map((photo, index) => <View key={photo.uri} style={styles.selectedPhotoItem}>
+                <Image source={{ uri: photo.uri }} style={styles.selectedPhotoThumb} resizeMode="cover" />
+                {!pendingPhotoRequestId && <Pressable accessibilityRole="button" accessibilityLabel="Remove photo" onPress={() => setSelectedPhotos(prev => prev.filter((_, i) => i !== index))} style={styles.removePhotoButton}>
+                  <Text style={styles.removePhotoText}>×</Text>
+                </Pressable>}
+                <Text style={styles.selectedPhotoLabel}>Photo {index + 1}</Text>
+              </View>)}
+            </View>
+          </View>}
+          <Text style={styles.helper}>Final price must be approved before payment. Your photos are attached to this request so the selected provider can review the job.</Text>
+          <Button title={busy
+              ? (pendingPhotoRequestId ? 'Uploading photos…' : 'Submitting…')
+              : (pendingPhotoRequestId ? 'Retry photo upload' : 'Send service request')}
+            onPress={createServiceRequest} disabled={busy} />
         </>}
 
         {screen === 'requests' && user.role === 'customer' && <>
@@ -1036,6 +1161,17 @@ const styles = StyleSheet.create({
   pickerCancelText: { color: COLORS.ink, fontSize: 14, fontWeight: '800' },
   input: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#DDE5E1', borderRadius: 14, paddingHorizontal: 15, paddingVertical: 13, fontSize: 15, color: COLORS.ink, minHeight: 49 },
   textArea: { minHeight: 108, paddingTop: 12 },
+  optionalText: { color: COLORS.muted, fontSize: 12, fontWeight: '600' },
+  photoActions: { flexDirection: 'row', gap: 8, alignItems: 'stretch', marginBottom: 8 },
+  photoActionItem: { flex: 1 },
+  selectedPhotosWrap: { backgroundColor: '#F7FAF8', borderRadius: 15, borderWidth: 1, borderColor: '#DFEAE3', padding: 10, marginTop: 2, marginBottom: 8 },
+  photoCount: { color: COLORS.ink, fontSize: 12, fontWeight: '800', marginBottom: 9 },
+  selectedPhotosRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  selectedPhotoItem: { width: 88, marginBottom: 2 },
+  selectedPhotoThumb: { width: 88, height: 88, borderRadius: 12, backgroundColor: '#EAF2ED', borderWidth: 1, borderColor: '#D8E7DE' },
+  selectedPhotoLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 4 },
+  removePhotoButton: { position: 'absolute', right: -5, top: -5, width: 25, height: 25, borderRadius: 13, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.white },
+  removePhotoText: { color: COLORS.white, fontSize: 18, fontWeight: '900', lineHeight: 20 },
   button: { backgroundColor: COLORS.green, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 7, marginBottom: 3, minHeight: 46, shadowColor: COLORS.green, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 2 },
   buttonSecondary: { backgroundColor: '#ECF7F0', borderWidth: 1, borderColor: '#C8E7D2', shadowOpacity: 0, elevation: 0 },
   buttonCompact: { paddingVertical: 8, paddingHorizontal: 12, marginTop: 0, marginBottom: 0, minHeight: 34 },
