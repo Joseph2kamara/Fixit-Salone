@@ -1321,7 +1321,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32 },
+  safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 44 : 0 },
   authScreen: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24, backgroundColor: COLORS.pale },
   brandMark: { alignSelf: 'center', width: 68, height: 68, borderRadius: 23, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 13, elevation: 5 },
   brandIcon: { color: COLORS.white, fontSize: 42, fontWeight: '700', marginTop: -5 },
@@ -1529,7 +1529,7 @@ const styles = StyleSheet.create({
   fieldFoot: { fontSize: 11, color: COLORS.muted },
   footnote: { textAlign: 'center', color: COLORS.muted, fontSize: 11, marginTop: 16, lineHeight: 17 },
   reviewBox: { backgroundColor: '#F7FAF8', borderRadius: 15, padding: 13, marginTop: 9, borderWidth: 1, borderColor: '#E1EAE5' },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E7E8EA', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 10, paddingHorizontal: 5, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
+  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E7E8EA', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 8, paddingHorizontal: 5, minHeight: Platform.OS === 'android' ? 66 : 70, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: 13 },
   tabIcon: { color: '#8A96A3', fontSize: 21, lineHeight: 24, fontWeight: '800', marginBottom: 1 },
   tabIconActive: { color: COLORS.orange },
