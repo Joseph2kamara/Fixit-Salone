@@ -46,6 +46,41 @@ async function initializeDatabase(){
   console.log('Database schema initialized.');
 }
 
+const SERVICE_CATALOGUE = [
+  ['Plumbing','Leaks, pipes and fittings'],
+  ['Electrical','Wiring, installations and electrical repairs'],
+  ['General Home','General home maintenance and repairs'],
+  ['Roofing','Roof and gutter repairs'],
+  ['Appliance Repair','Repairs for household appliances and devices'],
+  ['Emergency Services','Urgent household repair assistance'],
+  ['IT & Computer','Computer repair, software and technical support'],
+  ['Cleaning','Domestic and commercial cleaning'],
+  ['Carpentry','Woodwork, furniture, doors and fittings'],
+  ['Painting','Indoor and outdoor painting'],
+  ['Pest Control','Pest inspection and treatment'],
+  ['Moving & Delivery','House moves, item delivery and transport help'],
+  ['Beauty & Grooming','Hair, beauty, barbering and grooming services'],
+  ['AC & Refrigerator Repair','Air conditioner and refrigerator servicing and repairs'],
+  ['Generator Service & Repair','Generator servicing, maintenance and repairs'],
+  ['CCTV & Security Systems','CCTV cameras, alarms, access control and security installation'],
+  ['Welding & Metal Work','Welding, fabrication, gates and metalwork'],
+  ['Solar & Inverter Systems','Solar panels, inverters and backup power systems'],
+  ['Tiling & Masonry','Tiling, block work, concrete and masonry'],
+  ['Auto Repair & Mechanic','Vehicle diagnosis, maintenance and mechanical repair'],
+  ['Landscaping & Gardening','Garden design, lawn care and landscaping'],
+  ['Water Tank & Well Services','Water tank, well, borehole and water pump services']
+];
+
+async function ensureServiceCatalogue(){
+  for(const [name,description] of SERVICE_CATALOGUE){
+    await pool.query(
+      'INSERT INTO services(name,description,active) VALUES($1,$2,true) ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,active=true',
+      [name,description]
+    );
+  }
+  console.log('Service catalogue checked: '+SERVICE_CATALOGUE.length+' service types.');
+}
+
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||'uploads');
 fs.mkdirSync(uploadDir,{recursive:true});
 const R2_ENDPOINT=String(process.env.R2_ENDPOINT||'').trim();
@@ -1118,4 +1153,4 @@ async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
