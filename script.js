@@ -97,7 +97,22 @@ const categories=[
   ['🪜','Roofing','Roof & gutter repairs','roof'],
   ['🧊','Appliance Repair','Appliances & devices','appliance'],
   ['🚨','Emergency Services','Urgent repair help','emergency'],
-  ['💻','IT & Computer','Computer repair, software & tech support','computer']
+  ['💻','IT & Computer','Computer repair, software & tech support','computer'],
+  ['🧹','Cleaning','Domestic & commercial cleaning','Cleaning'],
+  ['🪚','Carpentry','Woodwork, doors & furniture','Carpentry'],
+  ['🖌️','Painting','Indoor & outdoor painting','Painting'],
+  ['🪲','Pest Control','Pest inspection & treatment','Pest Control'],
+  ['🚚','Moving & Delivery','Moving, delivery & transport','moving'],
+  ['💇','Beauty & Grooming','Hair, beauty, barbering & grooming','beauty'],
+  ['❄️','AC & Refrigerator','Air conditioner & refrigerator repair','refrigerator'],
+  ['⚡','Generator Service & Repair','Generator servicing & repairs','generator'],
+  ['📹','CCTV & Security Systems','CCTV cameras, alarms & access control','cctv'],
+  ['🧑‍🏭','Welding & Metal Work','Welding, fabrication, gates & metalwork','welding'],
+  ['🔋','Solar & Inverter Systems','Solar panels, inverters & backup power','solar'],
+  ['🧱','Tiling & Masonry','Tiling, block work & masonry','tiling'],
+  ['🚗','Auto Repair & Mechanic','Vehicle diagnosis & mechanical repairs','auto repair'],
+  ['🌿','Landscaping & Gardening','Garden design, lawn care & landscaping','landscaping'],
+  ['🚰','Water Tank & Well Services','Water tanks, wells & pump services','water tank']
 ];
 const districts={'Western Area':['Western Area Urban','Western Area Rural'],'Eastern':['Kailahun','Kenema','Kono'],'Northern':['Bombali','Falaba','Koinadugu','Tonkolili'],'North West':['Kambia','Karene','Port Loko'],'Southern':['Bo','Bonthe','Moyamba','Pujehun']};
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
