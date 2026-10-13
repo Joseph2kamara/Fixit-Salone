@@ -18,7 +18,8 @@ const HOME_CATEGORIES = [
   { label: 'General Home', symbol: '🏠', query: 'home', tint: '#DFF2E8' },
   { label: 'Roofing', symbol: '🪜', query: 'roofing', tint: '#FBE7D4' },
   { label: 'Appliance Repair', symbol: '🧊', query: 'appliance repair', tint: '#E6E8F6' },
-  { label: 'Emergency Services', symbol: '🚨', query: 'emergency', tint: '#F9E2E6' }
+  { label: 'Emergency Services', symbol: '🚨', query: 'emergency', tint: '#F9E2E6' },
+  { label: 'IT & Computer', symbol: '💻', query: 'computer', tint: '#E5EAF8' }
 ];
 const REGIONS = ['Western Area', 'Eastern', 'Northern', 'North West', 'Southern'];
 const DISTRICTS = {
@@ -814,7 +815,7 @@ export default function App() {
             <Text style={styles.homeSectionTitle}>Quick Categories</Text>
           </View>
           <View style={styles.categoryGrid}>
-            {HOME_CATEGORIES.map(category => (
+            {HOME_CATEGORIES.map((category, index) => (
               <Pressable key={category.label} accessibilityRole="button"
                 onPress={() => {
                   setSearch(category.query);
@@ -823,7 +824,7 @@ export default function App() {
                   setScreen('providers');
                   clearMessages();
                 }}
-                style={({ pressed }) => [styles.categoryTile, pressed && styles.categoryTilePressed]}>
+                style={({ pressed }) => [styles.categoryTile, index === 6 && styles.categoryTileLastCentered, pressed && styles.categoryTilePressed]}>
                 <View style={[styles.categoryArt, { backgroundColor: category.tint }]}>
                   <Text style={styles.categorySymbol}>{category.symbol}</Text>
                 </View>
@@ -1425,6 +1426,7 @@ const styles = StyleSheet.create({
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 5 },
   categoryTile: { width: '31.6%', alignItems: 'center', marginBottom: 12, borderRadius: 13, paddingBottom: 3 },
   categoryTilePressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
+  categoryTileLastCentered: { marginLeft: '34.2%' },
   categoryArt: { width: '100%', aspectRatio: 1.06, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(12,35,64,0.04)' },
   categorySymbol: { fontSize: 38 },
   categoryLabel: { color: '#171C22', textAlign: 'center', fontWeight: '800', fontSize: 12, lineHeight: 15, marginTop: 5, minHeight: 30 },
