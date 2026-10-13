@@ -4,6 +4,8 @@ import {
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
+import { File, Paths } from 'expo-file-system';
+import { fetch as expoFetch } from 'expo/fetch';
 import * as ImagePicker from 'expo-image-picker';
 
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
@@ -218,7 +220,7 @@ export default function App() {
     const headers = { ...(options.headers || {}) };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (options.body && !(typeof FormData !== 'undefined' && options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
-    const response = await fetch(API_BASE + path, { ...options, headers });
+    const response = await expoFetch(API_BASE + path, { ...options, headers });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Unable to complete this request.');
     return data;
@@ -233,7 +235,7 @@ export default function App() {
   async function loadCustomerProfilePhoto(accessToken = token) {
     if (!accessToken) { setProfilePhotoUrl(''); return; }
     try {
-      const response = await fetch(API_BASE + '/api/customer/profile-photo', {
+      const response = await expoFetch(API_BASE + '/api/customer/profile-photo', {
         headers: { Authorization: 'Bearer ' + accessToken }
       });
       const data = await response.json().catch(() => ({}));
@@ -270,12 +272,12 @@ export default function App() {
         return;
       }
       const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      const sourceFile = new File(asset.uri);
+      const uploadName = 'fixit-profile-photo-' + Date.now() + '.' + extension;
+      const uploadFile = new File(Paths.cache, uploadName);
+      sourceFile.copy(uploadFile);
       const form = new FormData();
-      form.append('photo', {
-        uri: asset.uri,
-        name: asset.fileName || 'fixit-profile-photo.' + extension,
-        type: mimeType
-      });
+      form.append('photo', uploadFile);
       setProfilePhotoBusy(true);
       const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
       setProfilePhotoUrl(data.photo_url || '');
@@ -496,13 +498,13 @@ export default function App() {
   async function uploadRequestPhotos(requestId) {
     const form = new FormData();
     selectedPhotos.forEach((photo, index) => {
-      const type = photo.mimeType || 'image/jpeg';
+      const type = String(photo.mimeType || 'image/jpeg').toLowerCase();
       const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
-      form.append('photos', {
-        uri: photo.uri,
-        name: photo.fileName || 'fixit-request-' + String(requestId) + '-' + String(index + 1) + '.' + ext,
-        type
-      });
+      const sourceFile = new File(photo.uri);
+      const uploadName = 'fixit-request-' + String(requestId) + '-' + String(index + 1) + '-' + Date.now() + '.' + ext;
+      const uploadFile = new File(Paths.cache, uploadName);
+      sourceFile.copy(uploadFile);
+      form.append('photos', uploadFile);
     });
     return api('/api/service-requests/' + encodeURIComponent(requestId) + '/photos', {
       method: 'POST',
