@@ -1046,11 +1046,6 @@ export default function App() {
               <Text style={styles.homeBrand}><Text style={styles.homeBrandFix}>FixIt</Text><Text style={styles.homeBrandSalone}> Salone</Text></Text>
               <Text style={styles.homeGreeting}>Welcome, {(user.full_name || 'there').split(' ')[0]}!</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.homeProfileButton, pressed && styles.buttonPressed]}>
-              {user.role === 'customer' && profilePhotoUrl
-                ? <RemoteImage uri={profilePhotoUrl} style={styles.homeProfilePhoto} fallbackText={(user.full_name || 'U').trim().slice(0, 1).toUpperCase()} />
-                : <Text style={styles.homeProfileIcon}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>}
-            </Pressable>
           </View>
         </View>
       ) : (
@@ -1744,8 +1739,6 @@ const styles = StyleSheet.create({
   homeBrandFix: { color: COLORS.navy },
   homeBrandSalone: { color: COLORS.orange },
   homeGreeting: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginTop: 2 },
-  homeProfileButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.orangeLight, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F6CDAE' },
-  homeProfileIcon: { color: COLORS.orangeDark, fontSize: 16, fontWeight: '900' },
   homeSectionHeading: { marginTop: 3, marginBottom: 10 },
   homeSectionTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 5 },
@@ -1889,7 +1882,6 @@ const styles = StyleSheet.create({
   profilePhotoCameraBadge: { position: 'absolute', width: 24, height: 24, borderRadius: 12, right: -1, bottom: -1, borderWidth: 2, borderColor: COLORS.white, backgroundColor: COLORS.orange, alignItems: 'center', justifyContent: 'center' },
   profilePhotoCameraIcon: { fontSize: 11 },
   profilePhotoActionLabel: { color: COLORS.orangeDark, fontSize: 10, fontWeight: '900', marginTop: 5, textAlign: 'center' },
-  homeProfilePhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.orangeLight },
   profileTabPhoto: { width: 25, height: 25, borderRadius: 13, backgroundColor: COLORS.orangeLight },
   accountAvatarText: { color: COLORS.orangeDark, fontSize: 25, fontWeight: '900' },
   accountIdentity: { flex: 1, minWidth: 0 },
