@@ -425,9 +425,12 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Unable to load profile photo.');
-      setProfilePhotoUrl(data.photo_url || '');
+      const photoUrl = data.authenticated_photo_url || data.photo_url || '';
+      setProfilePhotoUrl(photoUrl);
+      return photoUrl || null;
     } catch (e) {
       setProfilePhotoUrl('');
+      return null;
     }
   }
   async function pickProfilePhoto() {
@@ -466,8 +469,11 @@ export default function App() {
       setProfilePhotoBusy(true);
       const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
       // Re-read the saved URL from the server to avoid showing a stale local upload path.
-      await loadCustomerProfilePhoto(token);
-      setNotice(data.message || 'Profile picture updated successfully.');
+      const visiblePhotoUrl = await loadCustomerProfilePhoto(token);
+      if (!visiblePhotoUrl) throw new Error('The upload finished, but the server could not return the saved photo. Please retry after the backend is redeployed.');
+      setNotice(data.storage_persistent === false
+        ? 'Profile photo uploaded. Note: permanent media storage is not configured yet, so the file could be lost if the server restarts.'
+        : (data.message || 'Profile picture updated successfully.'));
     } catch (e) {
       reportError(e);
     } finally {
@@ -933,7 +939,9 @@ export default function App() {
       setProviderWorkItems(items => [visibleItem, ...items.filter(item => String(item.id) !== String(visibleItem.id))]);
       setWorkAsset(null);
       setWorkCaption('');
-      setNotice('Your work sample has been added to your portfolio.');
+      setNotice(savedItem.storage_persistent === false
+        ? 'Work sample uploaded. Note: permanent media storage is not configured yet, so this file could be lost if the server restarts.'
+        : 'Your work sample has been added to your portfolio.');
     } catch (e) {
       reportError(e);
     } finally {
