@@ -168,8 +168,60 @@ async function render(){
   $('count').textContent=list.length+' provider'+(list.length===1?'':'s')+' found'+(ok?'':' · demo data');
   $('providerGrid').innerHTML=list.map((p,i)=>'<article class="card">'+(p.featured?'<div class="featured-badge">⭐ Featured</div>':'')+'<div class="top"><div class="avatar">'+(p.profile_photo_url?'<img src="'+esc(p.profile_photo_url)+'" alt="'+esc(p.name)+' profile photo">':esc(p.initials))+'</div><div><h3>'+esc(p.name)+'</h3><div class="meta">'+esc(p.service)+' · '+esc(p.region)+' · '+esc(p.district)+'</div><div class="stars">'+(p.rating==='—'?'':'★★★★★ ')+'<span class="meta">'+esc(p.rating)+(p.reviews?' ('+p.reviews+')':'')+'</span></div></div></div><div class="price">'+esc(p.price)+'</div><div class="desc">'+esc(p.desc)+'</div><div class="meta">📍 '+esc(p.address||p.area)+'</div><div class="trust-line">'+(p.verified?'<span class="verified-badge" title="Verified provider"><span class="verified-check">✓</span> Verified</span>':'')+' · '+esc(String(p.completed))+' jobs · '+esc(p.completion)+' completion</div><div class="actions"><button class="profile-btn" data-index="'+i+'">View profile</button><button class="request-btn" data-index="'+i+'">Request</button></div></article>').join('')||'<div class="card"><h3>No providers found</h3><p class="desc">'+(ok?'No live providers match your search yet.':'The live marketplace could not be reached. Demo providers are available when no live data is returned.')+'</p></div>';
 }
+let categoryCarouselIndex=0;
+let categoryCarouselTimer=null;
 function renderCategories(){
-  $('categories').innerHTML=categories.map(c=>'<button type="button" class="category-btn" data-service="'+esc(c[3]||c[1])+'" title="'+esc(c[2])+'" aria-label="'+esc(c[1]+': '+c[2])+'"><span class="category-art"><span class="category-emoji" aria-hidden="true">'+c[0]+'</span></span><b>'+esc(c[1])+'</b></button>').join('');
+  const host=$('categories');
+  if(!host)return;
+  const pageSize=6;
+  const pages=[];
+  for(let i=0;i<categories.length;i+=pageSize)pages.push(categories.slice(i,i+pageSize));
+  categoryCarouselIndex=0;
+  host.classList.add('categories-carousel');
+  host.innerHTML=
+    '<div class="category-carousel-track" id="categoryCarouselTrack" aria-label="Quick service categories">'+
+    pages.map((page,pageIndex)=>
+      '<div class="category-carousel-page" data-page="'+pageIndex+'"><div class="category-page-grid">'+
+      page.map((c,localIndex)=>{
+        const categoryIndex=pageIndex*pageSize+localIndex;
+        return '<button type="button" class="category-btn category-tone-'+((categoryIndex%4)+1)+'" data-service="'+esc(c[3]||c[1])+'" title="'+esc(c[2])+'" aria-label="'+esc(c[1]+': '+c[2])+'"><span class="category-art"><span class="category-emoji" aria-hidden="true">'+c[0]+'</span></span><b>'+esc(c[1])+'</b></button>';
+      }).join('')+
+      '</div></div>'
+    ).join('')+
+    '</div>'+
+    '<div class="category-carousel-dots" role="tablist" aria-label="Quick category pages">'+
+    pages.map((page,index)=>'<button type="button" class="category-carousel-dot'+(index===0?' is-active':'')+'" data-category-page="'+index+'" role="tab" aria-label="Show category page '+(index+1)+'" aria-selected="'+(index===0?'true':'false')+'"></button>').join('')+
+    '</div>';
+
+  const track=$('categoryCarouselTrack');
+  const updateDots=()=>{
+    const pageWidth=track.clientWidth||1;
+    const nextIndex=Math.max(0,Math.min(pages.length-1,Math.round(track.scrollLeft/pageWidth)));
+    categoryCarouselIndex=nextIndex;
+    host.querySelectorAll('.category-carousel-dot').forEach((dot,index)=>{
+      const active=index===nextIndex;
+      dot.classList.toggle('is-active',active);
+      dot.setAttribute('aria-selected',active?'true':'false');
+    });
+  };
+  const goToPage=(index,smooth=true)=>{
+    if(!track||!pages.length)return;
+    const safeIndex=(index+pages.length)%pages.length;
+    categoryCarouselIndex=safeIndex;
+    track.scrollTo({left:safeIndex*track.clientWidth,behavior:smooth?'smooth':'auto'});
+    updateDots();
+  };
+  track.addEventListener('scroll',updateDots,{passive:true});
+  host.querySelectorAll('.category-carousel-dot').forEach(dot=>{
+    dot.addEventListener('click',()=>goToPage(Number(dot.dataset.categoryPage)));
+  });
+  track.addEventListener('touchstart',()=>{if(categoryCarouselTimer)clearInterval(categoryCarouselTimer)},{passive:true});
+  track.addEventListener('touchend',()=>{
+    if(categoryCarouselTimer)clearInterval(categoryCarouselTimer);
+    if(pages.length>1)categoryCarouselTimer=setInterval(()=>goToPage(categoryCarouselIndex+1),4500);
+  },{passive:true});
+  if(categoryCarouselTimer)clearInterval(categoryCarouselTimer);
+  if(pages.length>1)categoryCarouselTimer=setInterval(()=>goToPage(categoryCarouselIndex+1),4500);
 }
 function updateHomeGreeting(){
   const heading=$('homeGreeting');
