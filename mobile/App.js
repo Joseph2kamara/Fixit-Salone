@@ -1056,12 +1056,6 @@ export default function App() {
       ) : (
         <View style={styles.pageHeader}>
           <Text style={styles.pageHeaderTitle}>{pageTitle}</Text>
-          {user.role === 'provider' && (
-            <Pressable accessibilityRole="button" onPress={() => { setScreen('account'); clearMessages(); }}
-              style={({ pressed }) => [styles.pageHeaderAction, pressed && styles.buttonPressed]}>
-              <Text style={styles.pageHeaderActionText}>Account</Text>
-            </Pressable>
-          )}
         </View>
       )}
 
@@ -1740,8 +1734,6 @@ const styles = StyleSheet.create({
   header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   pageHeader: { minHeight: 68, backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 9 : 15, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E9ECEF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pageHeaderTitle: { color: COLORS.navy, fontSize: 23, fontWeight: '900', letterSpacing: -0.55, flex: 1 },
-  pageHeaderAction: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 11, backgroundColor: COLORS.orangeLight, borderWidth: 1, borderColor: '#F6CDAE' },
-  pageHeaderActionText: { color: COLORS.orangeDark, fontSize: 12, fontWeight: '800' },
 
   homeHeader: { backgroundColor: COLORS.white, paddingTop: Platform.OS === 'android' ? 9 : 12, paddingBottom: 15, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: COLORS.line },
   homeBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
