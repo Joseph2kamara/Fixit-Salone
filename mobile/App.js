@@ -107,6 +107,76 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
     </View>
   );
 }
+function getWorkProgress(status) {
+  const progressByStatus = { requested: 20, quoted: 40, approved: 60, in_progress: 82, completed: 100 };
+  return progressByStatus[String(status || 'requested').toLowerCase()] || 12;
+}
+
+function getWorkStage(status) {
+  const labels = {
+    requested: 'Request sent',
+    quoted: 'Quote received',
+    approved: 'Quote approved',
+    in_progress: 'Work in progress',
+    completed: 'Completed',
+    declined: 'Declined',
+    cancelled: 'Cancelled'
+  };
+  return labels[String(status || 'requested').toLowerCase()] || String(status || 'Requested').replaceAll('_', ' ');
+}
+
+function getWorkIcon(serviceName) {
+  const name = String(serviceName || '').toLowerCase();
+  if (/electric|light|fan|wiring/.test(name)) return '💡';
+  if (/plumb|pipe|sink|tap|toilet/.test(name)) return '🔧';
+  if (/roof|ceiling/.test(name)) return '🪜';
+  if (/computer|it support|software|network/.test(name)) return '💻';
+  if (/appliance|fridge|refrigerator|washing/.test(name)) return '🧊';
+  if (/paint/.test(name)) return '🖌️';
+  if (/clean/.test(name)) return '🧹';
+  return '🛠️';
+}
+
+function ActiveWorkCard({ job, role, onPress }) {
+  const progress = getWorkProgress(job.status);
+  const isCustomer = role === 'customer';
+  const partner = isCustomer
+    ? (job.business_name || job.provider_name || 'Waiting for provider')
+    : (job.customer_name || 'Customer');
+  const area = [job.area, job.district].filter(Boolean).join(', ');
+  const date = job.created_at ? new Date(job.created_at).toLocaleDateString() : '';
+
+  return (
+    <View style={styles.activeJobCard}>
+      <View style={styles.activeJobTop}>
+        <View style={styles.jobIllustration}>
+          <Text style={styles.jobIllustrationText}>{getWorkIcon(job.service_name)}</Text>
+        </View>
+        <View style={styles.activeJobSummary}>
+          <Text numberOfLines={2} style={styles.activeJobTitle}>{job.service_name || 'Service request'}</Text>
+          <Text style={styles.activeJobStatus}>Status: <Text style={styles.activeJobStatusValue}>{getWorkStage(job.status)}</Text></Text>
+          <Text numberOfLines={1} style={styles.activeJobProvider}>{isCustomer ? 'Technician: ' : 'Customer: '}{partner}</Text>
+          {!!area && <Text numberOfLines={1} style={styles.activeJobMeta}>{area}</Text>}
+        </View>
+      </View>
+      <View style={styles.activeJobProgressHeading}>
+        <Text style={styles.activeJobProgressLabel}>Job progress</Text>
+        <Text style={styles.activeJobProgressStage}>{progress >= 82 ? (progress === 100 ? 'Completed' : 'In progress') : progress >= 60 ? 'Approved' : progress >= 40 ? 'Quoted' : 'Requested'}</Text>
+      </View>
+      <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: progress }}
+        style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: progress + '%' }]} />
+      </View>
+      <View style={styles.activeJobFooter}>
+        <Text numberOfLines={1} style={styles.activeJobDate}>{date ? 'Requested ' + date : 'Service request'}</Text>
+        <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.jobDetailButton, pressed && styles.buttonPressed]}>
+          <Text style={styles.jobDetailButtonText}>View details</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function AuthRoleChoice({ active, title, subtitle, onPress }) {
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress}
@@ -1047,25 +1117,10 @@ export default function App() {
             </View>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
-              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => {
-                const progress = ({ requested: 22, quoted: 42, approved: 58, in_progress: 78 })[job.status] || 18;
-                return (
-                  <View key={String(job.id || index)} style={styles.activeJobCard}>
-                    <View style={styles.activeJobTop}>
-                      <View style={styles.jobIllustration}><Text style={styles.jobIllustrationText}>🛠️</Text></View>
-                      <View style={styles.activeJobSummary}>
-                        <Text numberOfLines={2} style={styles.activeJobTitle}>{job.service_name || 'Service request'}</Text>
-                        <Text style={styles.activeJobStatus}>Status: <Text style={styles.activeJobStatusValue}>{String(job.status || 'requested').replaceAll('_', ' ')}</Text></Text>
-                        <Text numberOfLines={1} style={styles.activeJobProvider}>{job.business_name || job.provider_name || 'Waiting for provider'}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.progressTrack}><View style={[styles.progressFill, { width: progress + '%' }]} /></View>
-                    <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} style={styles.jobDetailButton}>
-                      <Text style={styles.jobDetailButtonText}>View details</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
+              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => (
+                <ActiveWorkCard key={String(job.id || index)} job={job} role="customer"
+                  onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} />
+              ))}
             </ScrollView>
           )}
 
@@ -1144,6 +1199,28 @@ export default function App() {
 
         {screen === 'home' && user.role === 'provider' && <>
           <Text style={styles.sectionLead}>Manage your business and customer work from here.</Text>
+
+          <View style={styles.homeSectionHeader}>
+            <Text style={styles.homeSectionTitle}>Active Work</Text>
+            <Pressable onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }}>
+              <Text style={styles.seeAllText}>View all  ›</Text>
+            </Pressable>
+          </View>
+          {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).length === 0 ? (
+            <View style={styles.activeJobEmpty}>
+              <View style={styles.emptyJobIcon}><Text style={styles.emptyJobIconText}>▤</Text></View>
+              <Text style={styles.activeJobEmptyTitle}>No active work yet</Text>
+              <Text style={styles.activeJobEmptyCopy}>New requests and job progress will appear here as customers book your services.</Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
+              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => (
+                <ActiveWorkCard key={String(job.id || index)} job={job} role="provider"
+                  onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }} />
+              ))}
+            </ScrollView>
+          )}
+
           <Card>
             <Text style={styles.cardTitle}>{providerProfile?.business_name || 'Set up your provider profile'}</Text>
             <Text style={styles.cardDescription}>{providerProfile ? providerProfile.area + ', ' + providerProfile.district : 'Add your business location and main service before customers can find you.'}</Text>
@@ -1697,7 +1774,7 @@ const styles = StyleSheet.create({
   activeJobEmptyTitle: { color: COLORS.ink, fontSize: 14, fontWeight: '900' },
   activeJobEmptyCopy: { color: COLORS.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 },
   activeJobsRow: { paddingRight: 4, paddingBottom: 4 },
-  activeJobCard: { width: 282, backgroundColor: COLORS.white, borderRadius: 16, padding: 12, marginRight: 11, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
+  activeJobCard: { width: 330, backgroundColor: COLORS.white, borderRadius: 16, padding: 12, marginRight: 11, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
   activeJobTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   jobIllustration: { width: 72, height: 72, borderRadius: 11, backgroundColor: '#F1EDE5', alignItems: 'center', justifyContent: 'center' },
   jobIllustrationText: { fontSize: 29 },
@@ -1706,6 +1783,12 @@ const styles = StyleSheet.create({
   activeJobStatus: { color: COLORS.muted, fontSize: 10, fontWeight: '600', textTransform: 'capitalize' },
   activeJobStatusValue: { color: COLORS.green, fontWeight: '900', textTransform: 'capitalize' },
   activeJobProvider: { color: COLORS.ink, fontSize: 10, fontWeight: '700', marginTop: 5 },
+  activeJobMeta: { color: COLORS.muted, fontSize: 9, fontWeight: '600', marginTop: 3 },
+  activeJobProgressHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 1 },
+  activeJobProgressLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '800' },
+  activeJobProgressStage: { color: COLORS.navy, fontSize: 10, fontWeight: '900' },
+  activeJobFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 9 },
+  activeJobDate: { flex: 1, color: COLORS.muted, fontSize: 9, fontWeight: '600' },
   progressTrack: { height: 6, borderRadius: 4, backgroundColor: COLORS.card, marginTop: 12, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4, backgroundColor: COLORS.deepNavy },
   jobDetailButton: { borderWidth: 1, borderColor: '#F6CDAE', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, marginTop: 10, backgroundColor: COLORS.orangeLight },
