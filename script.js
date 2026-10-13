@@ -522,6 +522,28 @@ async function reviewCompletedJob(id){
   $('reviewBack').onclick=customerRequests;
 }
 window.reviewCompletedJob=reviewCompletedJob;
+function renderJobProgressTracker(status){
+  const key=String(status||'requested').toLowerCase();
+  if(key==='cancelled'||key==='declined'){
+    const terminal=key==='cancelled'?'This request was cancelled.':'This request was declined.';
+    return '<div class="job-progress-terminal">'+terminal+'</div>';
+  }
+  const stages=[
+    {key:'requested',label:'Requested'},
+    {key:'quoted',label:'Quoted'},
+    {key:'approved',label:'Approved'},
+    {key:'in_progress',label:'In progress'},
+    {key:'completed',label:'Completed'}
+  ];
+  const currentByStatus={requested:0,quoted:1,approved:2,in_progress:3,completed:4};
+  const current=Object.prototype.hasOwnProperty.call(currentByStatus,key)?currentByStatus[key]:0;
+  const percent=[20,40,60,82,100][current];
+  const title=stages[current].label;
+  return '<div class="job-progress-panel"><div class="job-progress-heading"><span>Job progress</span><b>'+title+'</b></div>'+
+    '<div class="job-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+percent+'"><span style="width:'+percent+'%"></span></div>'+
+    '<div class="job-progress-steps">'+stages.map((stage,index)=>'<div class="job-progress-step"><span class="job-progress-dot'+(index<=current?' is-done':'')+(index===current?' is-current':'')+'"></span><small>'+stage.label+'</small></div>').join('')+'</div></div>';
+}
+
 async function customerRequests(){
   if(!authToken()){customerLogin('login','customer');return}
   try{
@@ -535,7 +557,7 @@ async function customerRequests(){
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
       if(r.status==='completed')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="review">Rate provider ⭐</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
     openModal('<p class="eyebrow">MY REQUESTS</p><h2>Your FixIt jobs</h2><p class="quote-note">Review provider quotes here. Payment will only be requested after you approve the final quote.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="closeCustomerRequests">Done</button>');
     document.querySelectorAll('[data-customer-action]').forEach(btn=>btn.onclick=async()=>{
@@ -703,7 +725,7 @@ async function providerJobs(){
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
       if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div><p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button>'+actions.join('')+'</div></article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button>'+actions.join('')+'</div></article>';
     }).join(''):'<div class="card"><h3>No incoming requests</h3><p class="desc">New customer requests will appear here.</p></div>';
     openModal('<p class="eyebrow">INCOMING JOBS</p><h2>Manage customer requests</h2><p class="quote-note">Send a final quote before work starts. FixIt fee is 1% of the approved job value.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="backProvider">Back to dashboard</button>');
     document.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=()=>handleProviderJob(btn.dataset.job,btn.dataset.action));
