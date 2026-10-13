@@ -337,9 +337,12 @@ app.get('/api/customer/profile-photo',requireAuth,async(req,res)=>{
       available=candidate.startsWith(path.resolve(uploadDir)+path.sep)&&fs.existsSync(candidate);
     }
     const version=row.updated_at?new Date(row.updated_at).getTime():Date.now();
-    const photo_url=available?'/api/customer/profile-photo/file?v='+encodeURIComponent(String(version)):null;
+    const photo_url=!available?null:storageProvider==='r2'
+      ? await storedFileUrl('r2',storageKey,storedUrl,900)
+      : (storedUrl||('/uploads/'+String(storageKey||'')));
+    const authenticated_photo_url=available?'/api/customer/profile-photo/file?v='+encodeURIComponent(String(version)):null;
     res.setHeader('Cache-Control','private, no-store');
-    res.json({photo_url,available,storage_provider:storageProvider});
+    res.json({photo_url,authenticated_photo_url,available,storage_provider:storageProvider});
   }catch(e){console.error('Customer profile photo error:',e);res.status(500).json({error:'Unable to load profile photo.'})}
 });
 
@@ -381,9 +384,12 @@ app.post('/api/customer/profile-photo',requireAuth,upload.single('photo'),async(
     if(old.rows[0].profile_photo_storage_key){
       try{await removeStoredFile(old.rows[0].profile_photo_storage_provider,old.rows[0].profile_photo_storage_key,old.rows[0].profile_photo_file_url)}catch(e){console.warn('Old customer photo cleanup failed:',e.message)}
     }
-    const photo_url='/api/customer/profile-photo/file?v='+Date.now();
+    const photo_url=stored.storage_provider==='r2'
+      ? await storedFileUrl('r2',stored.storage_key,stored.file_url,900)
+      : stored.file_url;
+    const authenticated_photo_url='/api/customer/profile-photo/file?v='+Date.now();
     res.setHeader('Cache-Control','private, no-store');
-    res.status(201).json({photo_url,message:'Profile photo updated.',storage_persistent:objectStorageEnabled});
+    res.status(201).json({photo_url,authenticated_photo_url,message:'Profile photo updated.',storage_persistent:objectStorageEnabled});
   }catch(e){if(stored)try{await removeStoredFile(stored.storage_provider,stored.storage_key,stored.file_url)}catch{};console.error('Customer profile photo upload error:',e);res.status(500).json({error:'Unable to save profile photo.'})}
 });
 app.get('/api/auth/me',requireAuth,async(req,res)=>{
@@ -843,8 +849,8 @@ app.post('/api/providers/:id/work',requireAuth,upload.single('media'),async(req,
   try{
     const stored=await storeUpload(req.file,key);
     const {rows}=await pool.query('INSERT INTO provider_work(provider_id,media_type,file_url,storage_key,storage_provider,caption) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,media_type,file_url,storage_key,storage_provider,caption,created_at',[req.params.id,mediaType,stored.file_url,stored.storage_key,stored.storage_provider,caption]);
-    res.status(201).json(rows[0]);
-  }catch(e){try{await removeStoredFile(objectStorageEnabled?'r2':'local',key,req.file.filename?'/uploads/'+req.file.filename:null)}catch{};console.error('Portfolio upload error:',e);res.status(500).json({error:'Unable to save portfolio item'})}
+    res.status(201).json({...rows[0],storage_persistent:objectStorageEnabled});
+  }catch(e){try{await removeStoredFile(objectStorageEnabled?'r2':'local',objectStorageEnabled?key:req.file.filename||key,req.file.filename?'/uploads/'+req.file.filename:null)}catch{};console.error('Portfolio upload error:',e);res.status(500).json({error:'Unable to save portfolio item'})}
 });
 
 app.delete('/api/providers/:id/work/:workId',requireAuth,async(req,res)=>{
