@@ -181,7 +181,12 @@ function decryptKyc(ciphertext,iv,authTag){
   return Buffer.concat([decipher.update(ciphertext),decipher.final()]);
 }
 
-app.use('/uploads',express.static(uploadDir));
+app.use('/uploads',(req,res,next)=>{
+  // User-uploaded media is consumed by both the native app and the separately hosted website.
+  res.setHeader('Cross-Origin-Resource-Policy','cross-origin');
+  res.setHeader('Access-Control-Allow-Origin','*');
+  next();
+},express.static(uploadDir));
 app.get('/api/storage/status',(req,res)=>res.json({permanent_storage:objectStorageEnabled,provider:objectStorageEnabled?'r2':'local'}));
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
@@ -317,14 +322,50 @@ app.post('/api/auth/reset-password',authLimiter,async(req,res)=>{
 app.get('/api/customer/profile-photo',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   try{
-    const {rows}=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    const {rows}=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url,updated_at FROM users WHERE id=$1',[req.user.sub]);
     if(!rows[0])return res.status(404).json({error:'Customer account not found.'});
     const row=rows[0];
-    const photo_url=row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled
-      ? await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900)
-      : row.profile_photo_file_url||null;
-    res.json({photo_url});
+    const storageProvider=row.profile_photo_storage_provider||'local';
+    const storageKey=row.profile_photo_storage_key;
+    const storedUrl=row.profile_photo_file_url;
+    let available=false;
+    if(storageProvider==='r2'){
+      available=!!(objectStorageEnabled&&storageKey);
+    }else if(storageKey||storedUrl){
+      const filename=String(storageKey||storedUrl).replace(/^\/uploads\//,'');
+      const candidate=path.resolve(uploadDir,filename);
+      available=candidate.startsWith(path.resolve(uploadDir)+path.sep)&&fs.existsSync(candidate);
+    }
+    const version=row.updated_at?new Date(row.updated_at).getTime():Date.now();
+    const photo_url=available?'/api/customer/profile-photo/file?v='+encodeURIComponent(String(version)):null;
+    res.setHeader('Cache-Control','private, no-store');
+    res.json({photo_url,available,storage_provider:storageProvider});
   }catch(e){console.error('Customer profile photo error:',e);res.status(500).json({error:'Unable to load profile photo.'})}
+});
+
+app.get('/api/customer/profile-photo/file',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  try{
+    const {rows}=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
+    const row=rows[0];
+    if(!row||(!row.profile_photo_storage_key&&!row.profile_photo_file_url))return res.status(404).json({error:'Profile photo not found.'});
+    res.setHeader('Cross-Origin-Resource-Policy','cross-origin');
+    res.setHeader('Cache-Control','private, no-store');
+    if(row.profile_photo_storage_provider==='r2'){
+      if(!objectStorageEnabled||!row.profile_photo_storage_key)return res.status(404).json({error:'Profile photo storage is not configured.'});
+      const object=await objectStorage.send(new GetObjectCommand({Bucket:R2_BUCKET,Key:row.profile_photo_storage_key}));
+      if(object.ContentType)res.setHeader('Content-Type',object.ContentType);
+      if(object.ContentLength!=null)res.setHeader('Content-Length',String(object.ContentLength));
+      if(object.Body?.pipe){object.Body.pipe(res);return;}
+      const bytes=await object.Body.transformToByteArray();
+      res.end(Buffer.from(bytes));
+      return;
+    }
+    const filename=String(row.profile_photo_storage_key||row.profile_photo_file_url||'').replace(/^\/uploads\//,'');
+    const filePath=path.resolve(uploadDir,filename);
+    if(!filePath.startsWith(path.resolve(uploadDir)+path.sep)||!fs.existsSync(filePath))return res.status(404).json({error:'Profile photo file not found.'});
+    res.sendFile(filePath);
+  }catch(e){console.error('Customer profile photo file error:',e);if(!res.headersSent)res.status(500).json({error:'Unable to load profile photo.'});}
 });
 app.post('/api/customer/profile-photo',requireAuth,upload.single('photo'),async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
@@ -340,8 +381,9 @@ app.post('/api/customer/profile-photo',requireAuth,upload.single('photo'),async(
     if(old.rows[0].profile_photo_storage_key){
       try{await removeStoredFile(old.rows[0].profile_photo_storage_provider,old.rows[0].profile_photo_storage_key,old.rows[0].profile_photo_file_url)}catch(e){console.warn('Old customer photo cleanup failed:',e.message)}
     }
-    const photo_url=stored.storage_provider==='r2'?await storedFileUrl('r2',stored.storage_key,stored.file_url,900):stored.file_url;
-    res.status(201).json({photo_url,message:'Profile photo updated.'});
+    const photo_url='/api/customer/profile-photo/file?v='+Date.now();
+    res.setHeader('Cache-Control','private, no-store');
+    res.status(201).json({photo_url,message:'Profile photo updated.',storage_persistent:objectStorageEnabled});
   }catch(e){if(stored)try{await removeStoredFile(stored.storage_provider,stored.storage_key,stored.file_url)}catch{};console.error('Customer profile photo upload error:',e);res.status(500).json({error:'Unable to save profile photo.'})}
 });
 app.get('/api/auth/me',requireAuth,async(req,res)=>{
@@ -768,8 +810,8 @@ app.get('/api/providers/:id/work',async(req,res)=>{
     const {rows}=await pool.query('SELECT id,media_type,file_url,storage_key,storage_provider,caption,created_at FROM provider_work WHERE provider_id=$1 ORDER BY created_at DESC',[req.params.id]);
     const result=[];
     for(const row of rows){
-      const file_url=await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,600);
-      result.push({id:row.id,media_type:row.media_type,file_url:objectStorageEnabled&&row.storage_provider==='r2'?('/api/providers/'+encodeURIComponent(req.params.id)+'/work/'+encodeURIComponent(row.id)+'/file'):file_url,caption:row.caption,created_at:row.created_at});
+      const file_url='/api/providers/'+encodeURIComponent(req.params.id)+'/work/'+encodeURIComponent(row.id)+'/file';
+      result.push({id:row.id,media_type:row.media_type,file_url,caption:row.caption,created_at:row.created_at});
     }
     res.json(result);
   }catch(e){console.error('Portfolio load error:',e);res.status(500).json({error:'Unable to load portfolio'})}
