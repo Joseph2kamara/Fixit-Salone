@@ -56,7 +56,7 @@ function updateMobileAccountAction(){
     small.textContent=user.role==='provider'?'Open provider account':'Open your customer account';
     if(avatar)avatar.textContent='👤';
     const endpoint=user.role==='provider'?'/api/provider/profile-photo':user.role==='customer'?'/api/customer/profile-photo':null;
-    if(endpoint&&avatar)api(endpoint).then(photo=>{if(photo.photo_url&&avatar.isConnected)avatar.innerHTML='<img src="'+esc(photo.photo_url)+'" alt="">'}).catch(()=>{});
+    if(endpoint&&avatar)api(endpoint).then(photo=>{if(photo.photo_url&&avatar.isConnected)avatar.innerHTML='<img src="'+esc(mediaUrl(photo.photo_url))+'" alt="">'}).catch(()=>{});
   }else{
     strong.textContent='Customer Login';small.textContent='Sign in or manage your account';
     if(avatar)avatar.textContent='👤';
@@ -74,7 +74,7 @@ function updateCustomerAccountButton(){
     button.title='Open your customer profile and requests';
     api('/api/customer/profile-photo').then(photo=>{
       const avatar=$('customerNavAvatar');
-      if(avatar&&photo.photo_url)avatar.innerHTML='<img src="'+esc(photo.photo_url)+'" alt="">';
+      if(avatar&&photo.photo_url)avatar.innerHTML='<img src="'+esc(mediaUrl(photo.photo_url))+'" alt="">';
     }).catch(()=>{});
   }else{
     button.textContent='Customer Login';
@@ -318,7 +318,7 @@ function customerLogin(mode='login',role='customer'){
     openModal('<p class="eyebrow">'+(u.role==='provider'?'PROVIDER':'CUSTOMER')+' ACCOUNT</p><h2>Welcome back, '+esc(u.name)+'</h2><p>'+esc(u.phone)+'</p>'+(u.role==='customer'?'<div class="profile-photo-editor"><label class="form-label">Profile photo</label><div id="customerPhotoPreview" class="customer-photo-preview">👤</div><input id="customerProfilePhoto" type="file" accept="image/jpeg,image/png,image/webp" class="form-control"><small>JPG, PNG or WEBP, maximum 5 MB.</small><button class="btn" id="uploadCustomerPhoto">Upload profile photo</button><p id="customerPhotoMessage" class="form-message"></p></div>':'')+'<button class="btn" id="accountContinue">Continue</button>'+(u.role==='customer'?'<button class="btn outline" id="myRequests">My requests</button>':'<button class="btn outline" id="providerJobsBtn">Incoming jobs</button>')+'<button class="btn outline" id="accountSignOut">Sign out</button>');
     $('accountContinue').onclick=closeModal;
     if(u.role==='customer'){
-      api('/api/customer/profile-photo').then(photo=>{if(photo.photo_url&&$('customerPhotoPreview'))$('customerPhotoPreview').innerHTML='<img src="'+esc(photo.photo_url)+'" alt="Your profile photo">'}).catch(()=>{});
+      api('/api/customer/profile-photo').then(photo=>{if(photo.photo_url&&$('customerPhotoPreview'))$('customerPhotoPreview').innerHTML='<img src="'+esc(mediaUrl(photo.photo_url))+'" alt="Your profile photo">'}).catch(()=>{});
       $('uploadCustomerPhoto').onclick=async()=>{
         const file=$('customerProfilePhoto').files[0];
         if(!file){$('customerPhotoMessage').textContent='Choose a photo first.';return}
@@ -795,7 +795,7 @@ async function providerProfile(){
       const s=existing.services[0];$('providerService').value=s.service_id;$('providerPricing').value=s.pricing_type;$('providerPrice').value=s.price_sle??'';$('providerDesc').value=s.description||'';
     }
     $('saveProvider').onclick=saveProvider;
-    api('/api/provider/profile-photo').then(photo=>{if(photo.photo_url&&$('providerPhotoPreview'))$('providerPhotoPreview').innerHTML='<img src="'+esc(photo.photo_url)+'" alt="Provider profile photo">'}).catch(()=>{});
+    api('/api/provider/profile-photo').then(photo=>{if(photo.photo_url&&$('providerPhotoPreview'))$('providerPhotoPreview').innerHTML='<img src="'+esc(mediaUrl(photo.photo_url))+'" alt="Provider profile photo">'}).catch(()=>{});
     $('uploadProviderPhoto').onclick=async()=>{
       const file=$('providerProfilePhoto').files[0];
       if(!file){$('providerPhotoMessage').textContent='Choose a photo first.';return}
