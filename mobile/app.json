@@ -17,7 +17,7 @@
       }
     },
     "splash": {
-      "backgroundColor": "#0C2340"
+      "backgroundColor": "#FFF9F1"
     },
     "extra": {
       "apiBaseUrl": "https://fixit-salone-api.onrender.com"
