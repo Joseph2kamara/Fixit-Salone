@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform,
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
@@ -37,8 +37,18 @@ const HOME_CATEGORIES = [
   { label: 'Roofing', symbol: '🪜', query: 'roofing', tint: '#FEF3C7' },
   { label: 'Appliance Repair', symbol: '🧊', query: 'appliance repair', tint: '#F1F5F9' },
   { label: 'Emergency Services', symbol: '🚨', query: 'emergency', tint: '#FEE2E2' },
-  { label: 'IT & Computer', symbol: '💻', query: 'computer', tint: '#E0F2FE' }
+  { label: 'IT & Computer', symbol: '💻', query: 'computer', tint: '#E0F2FE' },
+  { label: 'Cleaning', symbol: '🧹', query: 'cleaning', tint: '#DCFCE7' },
+  { label: 'Carpentry', symbol: '🪚', query: 'carpentry', tint: '#FEF3C7' },
+  { label: 'Painting', symbol: '🖌️', query: 'painting', tint: '#FEE2E2' },
+  { label: 'Pest Control', symbol: '🪲', query: 'pest control', tint: '#E0F2FE' },
+  { label: 'Moving & Delivery', symbol: '🚚', query: 'moving delivery', tint: '#F1F5F9' }
 ];
+const CATEGORY_PAGE_SIZE = 6;
+const CATEGORY_PAGES = Array.from(
+  { length: Math.ceil(HOME_CATEGORIES.length / CATEGORY_PAGE_SIZE) },
+  (_, page) => HOME_CATEGORIES.slice(page * CATEGORY_PAGE_SIZE, (page + 1) * CATEGORY_PAGE_SIZE)
+);
 const REGIONS = ['Western Area', 'Eastern', 'Northern', 'North West', 'Southern'];
 const DISTRICTS = {
   'Western Area': ['Western Area Urban', 'Western Area Rural'],
@@ -263,6 +273,9 @@ export default function App() {
 
   const [services, setServices] = useState([]);
   const [providers, setProviders] = useState([]);
+  const categoryCarouselRef = useRef(null);
+  const [categoryCarouselWidth, setCategoryCarouselWidth] = useState(0);
+  const [categoryPageIndex, setCategoryPageIndex] = useState(0);
   const [search, setSearch] = useState('');
   const [regionFilter, setRegionFilter] = useState('All');
   const [districtFilter, setDistrictFilter] = useState('');
@@ -498,6 +511,22 @@ export default function App() {
       else { loadProviders(); loadCustomerRequests(); }
     }
   }, [token, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!token || user?.role !== 'customer' || screen !== 'home' || categoryCarouselWidth <= 0 || CATEGORY_PAGES.length < 2) return;
+    const timer = setInterval(() => {
+      const nextPage = (categoryPageIndex + 1) % CATEGORY_PAGES.length;
+      categoryCarouselRef.current?.scrollTo({ x: nextPage * categoryCarouselWidth, animated: true });
+      setCategoryPageIndex(nextPage);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [token, user?.role, screen, categoryCarouselWidth, categoryPageIndex]);
+
+  function goToCategoryPage(index) {
+    if (index < 0 || index >= CATEGORY_PAGES.length) return;
+    categoryCarouselRef.current?.scrollTo({ x: index * categoryCarouselWidth, animated: true });
+    setCategoryPageIndex(index);
+  }
 
   const filteredProviders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1062,23 +1091,56 @@ export default function App() {
           <View style={styles.homeSectionHeading}>
             <Text style={styles.homeSectionTitle}>Quick Categories</Text>
           </View>
-          <View style={styles.categoryGrid}>
-            {HOME_CATEGORIES.map((category, index) => (
-              <Pressable key={category.label} accessibilityRole="button"
-                onPress={() => {
-                  setSearch(category.query);
-                  setRegionFilter('All');
-                  setDistrictFilter('');
-                  setScreen('providers');
-                  clearMessages();
-                }}
-                style={({ pressed }) => [styles.categoryTile, index === 6 && styles.categoryTileLastCentered, pressed && styles.categoryTilePressed]}>
-                <View style={[styles.categoryArt, { backgroundColor: category.tint }]}>
-                  <Text style={styles.categorySymbol}>{category.symbol}</Text>
+          <View style={styles.categoryCarouselWrap}
+            onLayout={event => {
+              const width = event.nativeEvent.layout.width;
+              if (width > 0 && Math.abs(width - categoryCarouselWidth) > 1) setCategoryCarouselWidth(width);
+            }}>
+            <ScrollView
+              ref={categoryCarouselRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={event => {
+                if (categoryCarouselWidth > 0) {
+                  const page = Math.round(event.nativeEvent.contentOffset.x / categoryCarouselWidth);
+                  if (page !== categoryPageIndex) setCategoryPageIndex(page);
+                }
+              }}
+            >
+              {CATEGORY_PAGES.map((page, pageIndex) => (
+                <View key={'category-page-' + pageIndex} style={[styles.categoryCarouselPage, { width: categoryCarouselWidth || '100%' }]}>
+                  <View style={styles.categoryGrid}>
+                    {page.map(category => (
+                      <Pressable key={category.label} accessibilityRole="button"
+                        onPress={() => {
+                          setSearch(category.query);
+                          setRegionFilter('All');
+                          setDistrictFilter('');
+                          setScreen('providers');
+                          clearMessages();
+                        }}
+                        style={({ pressed }) => [styles.categoryTile, pressed && styles.categoryTilePressed]}>
+                        <View style={[styles.categoryArt, { backgroundColor: category.tint }]}>
+                          <Text style={styles.categorySymbol}>{category.symbol}</Text>
+                        </View>
+                        <Text style={styles.categoryLabel}>{category.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-                <Text style={styles.categoryLabel}>{category.label}</Text>
-              </Pressable>
-            ))}
+              ))}
+            </ScrollView>
+            <View style={styles.categoryDots} accessibilityRole="tablist">
+              {CATEGORY_PAGES.map((page, index) => (
+                <Pressable key={'category-dot-' + index} accessibilityRole="tab"
+                  accessibilityState={{ selected: categoryPageIndex === index }}
+                  accessibilityLabel={'Show category page ' + (index + 1)}
+                  onPress={() => goToCategoryPage(index)}
+                  style={[styles.categoryDot, categoryPageIndex === index && styles.categoryDotActive]} />
+              ))}
+            </View>
           </View>
 
           <Pressable accessibilityRole="button" onPress={() => {
@@ -1741,13 +1803,17 @@ const styles = StyleSheet.create({
   homeGreeting: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginTop: 2 },
   homeSectionHeading: { marginTop: 3, marginBottom: 10 },
   homeSectionTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 5 },
-  categoryTile: { width: '31.6%', alignItems: 'center', marginBottom: 12, borderRadius: 13, paddingBottom: 3 },
+  categoryCarouselWrap: { width: '100%', marginBottom: 7 },
+  categoryCarouselPage: { paddingHorizontal: 1 },
+  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 1 },
+  categoryTile: { width: '31.6%', alignItems: 'center', marginBottom: 10, borderRadius: 13, paddingBottom: 2 },
   categoryTilePressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  categoryTileLastCentered: { marginLeft: '34.2%' },
-  categoryArt: { width: '100%', aspectRatio: 1.06, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(12,35,64,0.04)' },
+  categoryArt: { width: '100%', aspectRatio: 1.06, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(15,23,42,0.04)' },
   categorySymbol: { fontSize: 38 },
   categoryLabel: { color: COLORS.navy, textAlign: 'center', fontWeight: '800', fontSize: 12, lineHeight: 15, marginTop: 5, minHeight: 30 },
+  categoryDots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 2, paddingBottom: 2 },
+  categoryDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#CBD5E1' },
+  categoryDotActive: { width: 13, backgroundColor: COLORS.orange },
   bookNowButton: { height: 49, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.orange, borderRadius: 12, marginTop: 1, marginBottom: 15, shadowColor: COLORS.orange, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.18, shadowRadius: 5, elevation: 3 },
   bookNowText: { color: COLORS.white, fontWeight: '900', fontSize: 15 },
   bookNowArrow: { color: COLORS.white, fontSize: 19, marginLeft: 9, marginTop: -1 },
