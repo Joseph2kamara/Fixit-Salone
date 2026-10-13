@@ -1388,7 +1388,7 @@ const styles = StyleSheet.create({
   authPasswordLabel: { marginTop: 13 },
   authEyeButton: { paddingHorizontal: 5, paddingVertical: 7, marginLeft: 4 },
   authEyeText: { color: '#68778A', fontSize: 16, fontWeight: '800' },
-  authFootnote: { color: '#6F5D43', fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 12, lineHeight: 15 }
+  authFootnote: { color: '#6F5D43', fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 12, lineHeight: 15 },
   brandMark: { alignSelf: 'center', width: 68, height: 68, borderRadius: 23, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 13, elevation: 5 },
 
   brandIcon: { color: COLORS.white, fontSize: 42, fontWeight: '700', marginTop: -5 },
