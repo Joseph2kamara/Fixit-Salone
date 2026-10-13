@@ -205,6 +205,10 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [providerProfile, setProviderProfile] = useState(null);
   const [providerServices, setProviderServices] = useState([]);
+  const [providerWorkItems, setProviderWorkItems] = useState([]);
+  const [workAsset, setWorkAsset] = useState(null);
+  const [workCaption, setWorkCaption] = useState('');
+  const [workUploadBusy, setWorkUploadBusy] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [notifications, setNotifications] = useState([]);
 
@@ -362,12 +366,27 @@ export default function App() {
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
+  async function loadProviderWork(providerId = providerProfile?.id) {
+    if (!providerId) { setProviderWorkItems([]); return []; }
+    try {
+      const rows = await api('/api/providers/' + encodeURIComponent(providerId) + '/work');
+      const items = Array.isArray(rows) ? rows : [];
+      setProviderWorkItems(items);
+      return items;
+    } catch (e) {
+      setProviderWorkItems([]);
+      reportError(e);
+      return [];
+    }
+  }
+
   async function loadProviderDashboard() {
     try {
       const profileData = await api('/api/providers/me/profile');
       setProviderProfile(profileData.profile || null);
       setProviderServices(Array.isArray(profileData.services) ? profileData.services : []);
       if (profileData.profile) {
+        await loadProviderWork(profileData.profile.id);
         setProviderForm(prev => ({
           ...prev, businessName: profileData.profile.business_name || '',
           region: profileData.profile.region || 'Western Area',
@@ -666,6 +685,95 @@ export default function App() {
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
+  async function pickProviderWorkAsset() {
+    clearMessages();
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        quality: 0.8,
+        videoMaxDuration: 90
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const asset = result.assets[0];
+      const type = String(asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg')).toLowerCase();
+      const accepted = ['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'];
+      if (!accepted.includes(type)) {
+        setError('Choose a JPG, PNG or WEBP image, or an MP4/WebM video.');
+        return;
+      }
+      if (asset.fileSize != null && asset.fileSize > 15 * 1024 * 1024) {
+        setError('Please choose a file smaller than 15 MB.');
+        return;
+      }
+      setWorkAsset({ ...asset, uploadMimeType: type });
+      setNotice('Work sample selected. Add a caption, then upload it to your portfolio.');
+    } catch (e) {
+      reportError(e);
+    }
+  }
+
+  async function uploadProviderWork() {
+    if (user?.role !== 'provider') { setError('Only service provider accounts can upload work samples.'); return; }
+    if (!providerProfile?.id) {
+      setError('Save your business profile first, then reopen this page to upload work samples.');
+      return;
+    }
+    if (!workAsset?.uri) { setError('Choose a photo or video of your work first.'); return; }
+    if (!workCaption.trim()) { setError('Add a short caption describing this work sample.'); return; }
+
+    const mimeType = workAsset.uploadMimeType || workAsset.mimeType || 'image/jpeg';
+    const extension = mimeType === 'image/png' ? 'png'
+      : mimeType === 'image/webp' ? 'webp'
+      : mimeType === 'video/webm' ? 'webm'
+      : mimeType === 'video/mp4' ? 'mp4' : 'jpg';
+
+    setWorkUploadBusy(true);
+    clearMessages();
+    try {
+      const sourceFile = new File(workAsset.uri);
+      const fileName = 'fixit-work-' + Date.now() + '.' + extension;
+      const uploadFile = new File(Paths.cache, fileName);
+      sourceFile.copy(uploadFile);
+
+      const form = new FormData();
+      form.append('media', uploadFile);
+      form.append('caption', workCaption.trim());
+      await api('/api/providers/' + encodeURIComponent(providerProfile.id) + '/work', {
+        method: 'POST',
+        body: form
+      });
+
+      setWorkAsset(null);
+      setWorkCaption('');
+      await loadProviderWork(providerProfile.id);
+      setNotice('Your work sample has been added to your portfolio.');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setWorkUploadBusy(false);
+    }
+  }
+
+  function deleteProviderWork(item) {
+    if (!providerProfile?.id || !item?.id) return;
+    Alert.alert('Remove work sample?', 'This item will be removed from your public portfolio.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        setWorkUploadBusy(true);
+        clearMessages();
+        try {
+          await api('/api/providers/' + encodeURIComponent(providerProfile.id) + '/work/' + encodeURIComponent(item.id), { method: 'DELETE' });
+          await loadProviderWork(providerProfile.id);
+          setNotice('Work sample removed.');
+        } catch (e) {
+          reportError(e);
+        } finally {
+          setWorkUploadBusy(false);
+        }
+      } }
+    ]);
+  }
+
   async function sendQuote(jobId) {
     const labour = Number(quoteForm.labour || 0);
     const materials = Number(quoteForm.materials || 0);
@@ -1325,7 +1433,52 @@ export default function App() {
           <Field label="Price in SLE (optional)" value={providerForm.price} onChangeText={v => setProviderFormValue('price', v)} keyboardType="decimal-pad" placeholder="e.g. 250" />
           <Field label="Service description" value={providerForm.description} onChangeText={v => setProviderFormValue('description', v)} placeholder="Describe the work you do" multiline />
           <Button title={busy ? 'Saving…' : 'Save business profile'} onPress={saveProviderProfile} disabled={busy} />
-          <Text style={styles.helper}>Photo uploads and multiple service entries are not included in this mobile update yet. Your existing website still has those tools.</Text>
+
+          <View style={styles.portfolioManageHeader}>
+            <Text style={styles.sectionTitle}>Portfolio / Work samples</Text>
+            <Text style={styles.helper}>Show customers photos or videos of jobs you have completed.</Text>
+          </View>
+          {!providerProfile?.id ? (
+            <Card><Text style={styles.cardDescription}>Save your business profile first. Then reopen Business profile to add work samples.</Text></Card>
+          ) : (
+            <>
+              <Card>
+                <Button title={workAsset ? 'Choose a different photo or video' : 'Choose photo or video'} secondary onPress={pickProviderWorkAsset} disabled={workUploadBusy || busy} />
+                {workAsset && (
+                  <View style={styles.workAssetPreviewWrap}>
+                    {workAsset.type === 'video' ? (
+                      <View style={styles.workVideoPreview}><Text style={styles.workVideoIcon}>▶</Text><Text style={styles.videoPreviewText}>Video selected</Text></View>
+                    ) : (
+                      <Image source={{ uri: workAsset.uri }} style={styles.workAssetPreview} resizeMode="cover" />
+                    )}
+                    <Text style={styles.helper}>{workAsset.fileName || (workAsset.type === 'video' ? 'Selected video' : 'Selected photo')}</Text>
+                  </View>
+                )}
+                <Field label="Work sample caption" value={workCaption} onChangeText={setWorkCaption} placeholder="e.g. Installed ceiling fan in a living room" />
+                <Text style={styles.helper}>Images: JPG, PNG or WEBP. Videos: MP4 or WebM. Maximum 15 MB. A caption is required.</Text>
+                <Button title={workUploadBusy ? 'Uploading…' : 'Upload to portfolio'} onPress={uploadProviderWork} disabled={workUploadBusy || busy} />
+              </Card>
+              <View style={styles.portfolioManageHeader}>
+                <Text style={styles.sectionTitle}>Your uploaded work</Text>
+                <Text style={styles.helper}>{providerWorkItems.length} {providerWorkItems.length === 1 ? 'item' : 'items'}</Text>
+              </View>
+              {providerWorkItems.length === 0 ? <Empty text="No work samples uploaded yet. Add your first photo or video above." /> :
+                providerWorkItems.map((item, index) => (
+                  <Card key={String(item.id || index)}>
+                    {String(item.media_type || '').toLowerCase().includes('video') ? (
+                      <View style={styles.workVideoPreview}><Text style={styles.workVideoIcon}>▶</Text><Text style={styles.videoPreviewText}>Video portfolio item</Text></View>
+                    ) : (
+                      <RemoteImage uri={item.file_url} style={styles.workListPhoto} fallbackText="Photo could not be loaded" />
+                    )}
+                    <Text style={styles.cardTitle}>{item.caption || 'Work sample'}</Text>
+                    <View style={styles.workItemActions}>
+                      <View style={styles.workItemActionButton}><Button title="Remove" secondary compact onPress={() => deleteProviderWork(item)} disabled={workUploadBusy} /></View>
+                    </View>
+                  </Card>
+                ))
+              }
+            </>
+          )}
         </>}
 
         {screen === 'subscription' && <>
@@ -1692,6 +1845,14 @@ const styles = StyleSheet.create({
   imagePlaceholder: { backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line, alignItems: 'center', justifyContent: 'center', padding: 5, overflow: 'hidden' },
   imagePlaceholderText: { color: COLORS.muted, fontSize: 11, fontWeight: '800', textAlign: 'center' },
   portfolioCard: { overflow: 'hidden' },
+  portfolioManageHeader: { marginTop: 18, marginBottom: 8, gap: 3 },
+  workAssetPreviewWrap: { marginTop: 8, marginBottom: 9 },
+  workAssetPreview: { width: '100%', height: 190, borderRadius: 14, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line },
+  workVideoPreview: { minHeight: 112, borderRadius: 14, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', padding: 18, marginBottom: 8 },
+  workVideoIcon: { color: COLORS.orange, fontSize: 30, fontWeight: '900' },
+  workListPhoto: { width: '100%', height: 180, borderRadius: 13, backgroundColor: COLORS.card, marginBottom: 10 },
+  workItemActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 },
+  workItemActionButton: { width: 112 },
   portfolioImage: { width: '100%', height: 220, borderRadius: 14, marginBottom: 13, backgroundColor: COLORS.card },
   jobPhotoLarge: { width: '100%', height: 245, borderRadius: 14, backgroundColor: COLORS.card, marginBottom: 10 },
   videoPreview: { height: 160, borderRadius: 14, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 13 },
