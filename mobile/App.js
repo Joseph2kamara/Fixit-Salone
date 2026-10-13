@@ -88,6 +88,15 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry = fals
     </View>
   );
 }
+function AuthRoleChoice({ active, title, subtitle, onPress }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress}
+      style={({ pressed }) => [styles.authRoleChoice, active && styles.authRoleChoiceActive, pressed && styles.authRolePressed]}>
+      <Text style={[styles.authRoleTitle, active && styles.authRoleTitleActive]}>{title}</Text>
+      <Text style={[styles.authRoleSubtitle, active && styles.authRoleSubtitleActive]}>{subtitle}</Text>
+    </Pressable>
+  );
+}
 function ActionTile({ icon, title, subtitle, onPress, disabled = false }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled}
@@ -156,6 +165,7 @@ export default function App() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -710,27 +720,56 @@ export default function App() {
 
   if (!token || !user) {
     return (
-      <View style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor={COLORS.pale} />
+      <View style={styles.authSafe}>
+        <StatusBar barStyle="light-content" backgroundColor="#07458F" />
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScreen}>
-            <View style={styles.brandMark}><Text style={styles.brandIcon}>⌂</Text></View>
-            <Text style={styles.brand}><Text style={{ color: COLORS.navy }}>FixIt</Text><Text style={{ color: COLORS.green }}> Salone</Text></Text>
-            <Text style={styles.tagline}>Trusted local services, made simpler.</Text>
-            <View style={styles.authCard}>
-              <Text style={styles.heading}>{authMode === 'login' ? 'Welcome back' : 'Create your account'}</Text>
-              <Text style={styles.subheading}>Choose how you want to use FixIt Salone.</Text>
-              <View style={styles.roleRow}>
-                <Chip title="Customer" active={role === 'customer'} onPress={() => setRole('customer')} />
-                <Chip title="Service provider" active={role === 'provider'} onPress={() => setRole('provider')} />
+            <View style={styles.authBrandHeader}>
+              <View style={styles.authBrandTop}>
+                <View style={styles.authBrandCopy}>
+                  <Text style={styles.authBrandTitle}><Text style={styles.authBrandGold}>FixIt</Text><Text style={styles.authBrandWhite}> Salone</Text></Text>
+                  <Text style={styles.authTagline}>Trusted local services, made simpler.</Text>
+                </View>
+                <View style={styles.authShield}><Text style={styles.authShieldText}>⌂</Text><Text style={styles.authShieldCheck}>✓</Text></View>
               </View>
-              {authMode === 'register' && <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Full name" />}
-              <Field label="Phone number" value={phone} onChangeText={setPhone} placeholder="e.g. +232XXXXXXXX" keyboardType="phone-pad" autoCapitalize="none" />
-              <Field label="Password" value={password} onChangeText={setPassword} placeholder="At least 8 characters" secureTextEntry autoCapitalize="none" />
+            </View>
+
+            <View style={styles.authWelcomePanel}>
+              <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Join FixIt Salone'}</Text>
+              <Text style={styles.authWelcomeCopy}>Choose how you want to use FixIt Salone.</Text>
+              <View style={styles.authRoleRow}>
+                <AuthRoleChoice active={role === 'customer'} title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
+                <AuthRoleChoice active={role === 'provider'} title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
+              </View>
+            </View>
+
+            <View style={styles.authDetailsPanel}>
+              <Text style={styles.authSecurityNote}>Locally rooted and secured.</Text>
+              <Text style={styles.authDetailsTitle}>{authMode === 'login' ? 'Enter Details' : 'Create Account'}</Text>
+              {authMode === 'register' && <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your full name" />}
+              <Text style={styles.authFieldLabel}>Phone number</Text>
+              <View style={styles.authInputRow}>
+                <Text style={styles.authCountryFlag}>🇸🇱</Text>
+                <TextInput value={phone} onChangeText={setPhone} placeholder="+232XXXXXXXXX" placeholderTextColor="#6F7B89"
+                  keyboardType="phone-pad" autoCapitalize="none" autoCorrect={false} style={styles.authInput}
+                  accessibilityLabel="Phone number" returnKeyType="next" />
+                <Text style={styles.authPhoneIcon}>☎</Text>
+              </View>
+
+              <Text style={[styles.authFieldLabel, styles.authPasswordLabel]}>Password</Text>
+              <View style={styles.authInputRow}>
+                <TextInput value={password} onChangeText={setPassword} placeholder="At least 8 characters" placeholderTextColor="#6F7B89"
+                  secureTextEntry={!showPassword} autoCapitalize="none" autoCorrect={false} style={styles.authInput}
+                  accessibilityLabel="Password" returnKeyType="done" onSubmitEditing={signInOrRegister} />
+                <Pressable accessibilityRole="button" accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                  onPress={() => setShowPassword(value => !value)} style={styles.authEyeButton}>
+                  <Text style={styles.authEyeText}>{showPassword ? 'Hide' : '◉'}</Text>
+                </Pressable>
+              </View>
               {noticePanel}
               <Button title={busy ? 'Please wait…' : authMode === 'login' ? 'Sign in' : 'Create account'} onPress={signInOrRegister} disabled={busy} />
-              <Button title={authMode === 'login' ? 'New here? Create an account' : 'Already registered? Sign in'} secondary onPress={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); clearMessages(); }} />
-              <Text style={styles.footnote}>Never share your password or verification codes with anyone.</Text>
+              <Button title={authMode === 'login' ? 'New here? Create an account' : 'Already registered? Sign in'} secondary onPress={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setShowPassword(false); clearMessages(); }} />
+              <Text style={styles.authFootnote}>We prioritize your privacy and local security.</Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -1315,14 +1354,55 @@ export default function App() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 44 : 0 },
-  authScreen: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingVertical: 24, backgroundColor: COLORS.pale },
+  authSafe: { flex: 1, backgroundColor: '#07458F', paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 12 : 0 },
+  authScreen: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 25, backgroundColor: '#07458F' },
+  authBrandHeader: { paddingHorizontal: 5, paddingTop: 4, paddingBottom: 18 },
+  authBrandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  authBrandCopy: { flex: 1, alignItems: 'center' },
+  authBrandTitle: { fontSize: 31, fontWeight: '900', letterSpacing: -0.8, textShadowColor: '#00000055', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
+  authBrandGold: { color: '#F3C76B' },
+  authBrandWhite: { color: '#F2F6FC' },
+  authTagline: { color: '#E0EAF6', fontSize: 13, lineHeight: 19, marginTop: 8, textAlign: 'center' },
+  authShield: { width: 54, height: 61, marginRight: 2, borderWidth: 2, borderColor: '#E6C985', borderRadius: 16, backgroundColor: '#14539B', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.17, shadowRadius: 5, elevation: 3 },
+  authShieldText: { color: '#FFF4D7', fontSize: 30, fontWeight: '900', lineHeight: 35 },
+  authShieldCheck: { color: '#F3C76B', fontSize: 13, fontWeight: '900', marginTop: -7 },
+  authWelcomePanel: { backgroundColor: '#202A36', borderRadius: 25, paddingHorizontal: 20, paddingTop: 21, paddingBottom: 19, borderWidth: 1, borderColor: '#4B5867', shadowColor: '#001C44', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.26, shadowRadius: 12, elevation: 6 },
+  authWelcomeTitle: { color: '#FFFFFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.55 },
+  authWelcomeCopy: { color: '#E0E5EB', fontSize: 15, lineHeight: 22, marginTop: 8, marginBottom: 17 },
+  authRoleRow: { flexDirection: 'row', gap: 9 },
+  authRoleChoice: { flex: 1, minHeight: 66, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#738091', backgroundColor: '#263342' },
+  authRoleChoiceActive: { backgroundColor: '#14794D', borderColor: '#B7D3B8', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  authRolePressed: { opacity: 0.82 },
+  authRoleTitle: { color: '#E8ECF2', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  authRoleTitleActive: { color: '#FFFFFF' },
+  authRoleSubtitle: { color: '#B8C3D0', fontSize: 9, lineHeight: 13, textAlign: 'center', marginTop: 3 },
+  authRoleSubtitleActive: { color: '#E8FFF1' },
+  authDetailsPanel: { backgroundColor: '#E6EDF4', marginTop: 14, borderRadius: 24, paddingHorizontal: 19, paddingTop: 16, paddingBottom: 16, borderWidth: 1, borderColor: '#F7FAFC', shadowColor: '#001B3F', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.17, shadowRadius: 10, elevation: 4 },
+  authSecurityNote: { color: '#756143', fontSize: 11, fontWeight: '700', textAlign: 'center', marginBottom: 5 },
+  authDetailsTitle: { color: '#101820', fontSize: 26, fontWeight: '900', letterSpacing: -0.6, marginBottom: 17 },
+  authFieldLabel: { color: '#17212D', fontSize: 13, fontWeight: '800', marginBottom: 6, marginTop: 1 },
+  authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 54, borderRadius: 14, backgroundColor: '#DDE5ED', borderWidth: 2, borderColor: '#C9B99F', paddingHorizontal: 12, shadowColor: '#334155', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 1 },
+  authCountryFlag: { fontSize: 22, marginRight: 10 },
+  authInput: { flex: 1, minWidth: 0, color: '#1B2734', fontSize: 15, paddingVertical: 11 },
+  authPhoneIcon: { color: '#647386', fontSize: 20, marginLeft: 7 },
+  authPasswordLabel: { marginTop: 13 },
+  authEyeButton: { paddingHorizontal: 5, paddingVertical: 7, marginLeft: 4 },
+  authEyeText: { color: '#68778A', fontSize: 16, fontWeight: '800' },
+  authFootnote: { color: '#6F5D43', fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 12, lineHeight: 15 }
   brandMark: { alignSelf: 'center', width: 68, height: 68, borderRadius: 23, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 13, elevation: 5 },
+
   brandIcon: { color: COLORS.white, fontSize: 42, fontWeight: '700', marginTop: -5 },
+
   brand: { fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: -1.1 },
+
   tagline: { textAlign: 'center', color: COLORS.muted, marginTop: 8, marginBottom: 25, fontSize: 15, lineHeight: 21 },
+
   authCard: { backgroundColor: COLORS.white, borderRadius: 26, padding: 21, borderWidth: 1, borderColor: '#E5ECE8', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 18, elevation: 3 },
+
   heading: { fontSize: 26, fontWeight: '900', color: COLORS.ink, letterSpacing: -0.7 },
+
   subheading: { color: COLORS.muted, lineHeight: 22, marginTop: 6, marginBottom: 18, fontSize: 14 },
+
   header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 5 },
   pageHeader: { minHeight: 68, backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 9 : 15, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E9ECEF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pageHeaderTitle: { color: COLORS.navy, fontSize: 23, fontWeight: '900', letterSpacing: -0.55, flex: 1 },
