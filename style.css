@@ -432,3 +432,25 @@ footer p a:hover{color:#FDBA74}
   .category-carousel-dots{padding-top:6px}
   .book-now-button{min-height:46px}
 }
+
+/* Shared customer/provider job progress tracker */
+.job-progress-panel{margin:12px 0 13px;padding:12px;border:1px solid var(--fixit-line,#E2E8F0);border-radius:13px;background:var(--fixit-pale,#F9FAFB)}
+.job-progress-heading,.home-job-progress-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;color:var(--fixit-muted,#64748B);font-size:11px;font-weight:750}
+.job-progress-heading b,.home-job-progress-heading b{color:var(--fixit-orange-dark,#E06A1C);text-align:right;font-size:11px;font-weight:900}
+.job-progress-track,.home-job-progress{height:7px;overflow:hidden;border-radius:99px;background:#E2E8F0;margin:0}
+.job-progress-track span,.home-job-progress span{display:block;height:100%;border-radius:99px;background:var(--fixit-deep-navy,#1E3A8A);transition:width .25s ease}
+.job-progress-steps{display:flex;align-items:flex-start;justify-content:space-between;gap:2px;margin-top:10px}
+.job-progress-step{display:flex;flex:1;min-width:0;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.job-progress-dot{display:block;width:8px;height:8px;border-radius:99px;background:#CBD5E1;border:1px solid #CBD5E1}
+.job-progress-dot.is-done{background:var(--fixit-deep-navy,#1E3A8A);border-color:var(--fixit-deep-navy,#1E3A8A)}
+.job-progress-dot.is-current{width:10px;height:10px;background:var(--fixit-orange,#E87722);border-color:var(--fixit-orange,#E87722);margin-top:-1px}
+.job-progress-step small{color:var(--fixit-muted,#64748B);font-size:9px;font-weight:700;line-height:1.2;overflow-wrap:anywhere}
+.job-progress-step:has(.is-done) small{color:var(--fixit-navy,#0F172A)}
+.job-progress-terminal{margin:10px 0;padding:10px 12px;border-radius:10px;background:#FEE2E2;color:#991B1B;font-size:12px;font-weight:800}
+.home-job-progress-heading{margin-top:13px;margin-bottom:6px;font-size:10px}
+.home-job-progress-heading b{font-size:10px}
+@media(max-width:600px){
+ .job-progress-panel{padding:10px;margin:10px 0}
+ .job-progress-step small{font-size:8px}
+ .job-progress-heading{font-size:10px}
+}
