@@ -101,7 +101,7 @@ function AuthenticatedRequestImage({ uri, token, style }) {
     );
   }
   const raw = String(uri || '');
-  const needsAuthHeader = raw.startsWith('/api/service-requests/');
+  const needsAuthHeader = raw.startsWith('/api/service-requests/') || raw.startsWith('/api/customer/profile-photo/file');
   const source = needsAuthHeader && token
     ? { uri: resolved, headers: { Authorization: 'Bearer ' + token } }
     : { uri: resolved };
@@ -192,6 +192,46 @@ function ActiveWorkCard({ job, role, onPress }) {
         <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.jobDetailButton, pressed && styles.buttonPressed]}>
           <Text style={styles.jobDetailButtonText}>View details</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function JobProgressDetails({ status }) {
+  const currentStatus = String(status || 'requested').toLowerCase();
+  const stages = [
+    { key: 'requested', label: 'Requested' },
+    { key: 'quoted', label: 'Quoted' },
+    { key: 'approved', label: 'Approved' },
+    { key: 'in_progress', label: 'In progress' },
+    { key: 'completed', label: 'Completed' }
+  ];
+  const indexByStatus = { requested: 0, quoted: 1, approved: 2, in_progress: 3, completed: 4 };
+  if (['cancelled', 'declined'].includes(currentStatus)) {
+    return (
+      <View style={styles.progressTerminal}>
+        <Text style={styles.progressTerminalLabel}>{currentStatus === 'cancelled' ? 'This request was cancelled.' : 'This request was declined.'}</Text>
+      </View>
+    );
+  }
+  const currentIndex = indexByStatus[currentStatus] ?? 0;
+  const progress = getWorkProgress(currentStatus);
+  return (
+    <View style={styles.requestProgressWrap}>
+      <View style={styles.requestProgressHeading}>
+        <Text style={styles.requestProgressTitle}>Job progress</Text>
+        <Text style={styles.requestProgressValue}>{getWorkStage(currentStatus)}</Text>
+      </View>
+      <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: progress }} style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: progress + '%' }]} />
+      </View>
+      <View style={styles.requestProgressStages}>
+        {stages.map((stage, index) => (
+          <View key={stage.key} style={styles.requestProgressStage}>
+            <View style={[styles.requestProgressDot, index <= currentIndex && styles.requestProgressDotDone, index === currentIndex && styles.requestProgressDotCurrent]} />
+            <Text numberOfLines={2} style={[styles.requestProgressStageLabel, index <= currentIndex && styles.requestProgressStageLabelDone]}>{stage.label}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -425,7 +465,8 @@ export default function App() {
       form.append('photo', uploadFile);
       setProfilePhotoBusy(true);
       const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
-      setProfilePhotoUrl(data.photo_url || '');
+      // Re-read the saved URL from the server to avoid showing a stale local upload path.
+      await loadCustomerProfilePhoto(token);
       setNotice(data.message || 'Profile picture updated successfully.');
     } catch (e) {
       reportError(e);
@@ -820,9 +861,9 @@ export default function App() {
         })
       });
       setProviderProfile(saved.profile);
-      setNotice('Your provider profile and main service have been saved.');
+      setNotice('Your provider profile and main service have been saved. You can now add work samples below.');
       await loadProviderDashboard();
-      setScreen('home');
+      // Keep this screen open so the provider can continue directly to Portfolio / Work samples.
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
@@ -879,14 +920,19 @@ export default function App() {
       const form = new FormData();
       form.append('media', uploadFile);
       form.append('caption', workCaption.trim());
-      await api('/api/providers/' + encodeURIComponent(providerProfile.id) + '/work', {
+      const savedItem = await api('/api/providers/' + encodeURIComponent(providerProfile.id) + '/work', {
         method: 'POST',
         body: form
       });
 
+      // Show the newly saved item immediately; a background refresh must not hide a successful upload.
+      const visibleItem = {
+        ...savedItem,
+        file_url: '/api/providers/' + encodeURIComponent(providerProfile.id) + '/work/' + encodeURIComponent(savedItem.id) + '/file'
+      };
+      setProviderWorkItems(items => [visibleItem, ...items.filter(item => String(item.id) !== String(visibleItem.id))]);
       setWorkAsset(null);
       setWorkCaption('');
-      await loadProviderWork(providerProfile.id);
       setNotice('Your work sample has been added to your portfolio.');
     } catch (e) {
       reportError(e);
@@ -904,7 +950,7 @@ export default function App() {
         clearMessages();
         try {
           await api('/api/providers/' + encodeURIComponent(providerProfile.id) + '/work/' + encodeURIComponent(item.id), { method: 'DELETE' });
-          await loadProviderWork(providerProfile.id);
+          setProviderWorkItems(items => items.filter(existing => String(existing.id) !== String(item.id)));
           setNotice('Work sample removed.');
         } catch (e) {
           reportError(e);
@@ -1536,6 +1582,7 @@ export default function App() {
             jobs.map((j, i) => (
               <Card key={String(j.id || i)}>
                 <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
+                <JobProgressDetails status={j.status} />
                 <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Provider'} · {j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
@@ -1571,6 +1618,7 @@ export default function App() {
             jobs.map((j, i) => (
               <Card key={String(j.id || i)}>
                 <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
+                <JobProgressDetails status={j.status} />
                 <Text style={styles.cardMeta}>Customer: {j.customer_name || 'Customer'}{j.customer_phone ? ' · ' + j.customer_phone : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
@@ -1606,7 +1654,7 @@ export default function App() {
                     onPress={pickProfilePhoto} disabled={profilePhotoBusy}
                     style={({ pressed }) => [styles.profilePicturePressable, pressed && styles.buttonPressed, profilePhotoBusy && styles.disabled]}>
                     {profilePhotoUrl
-                      ? <RemoteImage uri={profilePhotoUrl} style={styles.accountAvatarPhoto} fallbackText={(user.full_name || 'F').trim().slice(0, 1).toUpperCase()} />
+                      ? <AuthenticatedRequestImage uri={profilePhotoUrl} token={token} style={styles.accountAvatarPhoto} />
                       : <View style={styles.accountAvatar}><Text style={styles.accountAvatarText}>{(user.full_name || 'F').trim().slice(0, 1).toUpperCase()}</Text></View>}
                     <View style={styles.profilePhotoCameraBadge}><Text style={styles.profilePhotoCameraIcon}>📷</Text></View>
                   </Pressable>
@@ -1844,7 +1892,7 @@ export default function App() {
         <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}>
           <View style={[styles.profileTabAvatar, screen === 'account' && styles.profileTabAvatarActive]}>
             {user.role === 'customer' && profilePhotoUrl
-              ? <RemoteImage uri={profilePhotoUrl} style={styles.profileTabPhoto} fallbackText={(user.full_name || 'U').trim().slice(0, 1).toUpperCase()} />
+              ? <AuthenticatedRequestImage uri={profilePhotoUrl} token={token} style={styles.profileTabPhoto} />
               : <Text style={styles.profileTabAvatarText}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>}
           </View>
           <Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>Profile</Text>
@@ -1997,6 +2045,19 @@ const styles = StyleSheet.create({
   activeJobProgressHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 1 },
   activeJobProgressLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '800' },
   activeJobProgressStage: { color: COLORS.navy, fontSize: 10, fontWeight: '900' },
+  requestProgressWrap: { backgroundColor: COLORS.pale, borderRadius: 13, padding: 11, marginTop: 10, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
+  requestProgressHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5 },
+  requestProgressTitle: { color: COLORS.navy, fontSize: 11, fontWeight: '900' },
+  requestProgressValue: { flexShrink: 1, color: COLORS.orangeDark, fontSize: 10, fontWeight: '900', textAlign: 'right' },
+  requestProgressStages: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, gap: 2 },
+  requestProgressStage: { flex: 1, alignItems: 'center', gap: 4 },
+  requestProgressDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#CBD5E1', borderWidth: 1, borderColor: '#CBD5E1' },
+  requestProgressDotDone: { backgroundColor: COLORS.deepNavy, borderColor: COLORS.deepNavy },
+  requestProgressDotCurrent: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.orange, borderColor: COLORS.orange, marginTop: -1 },
+  requestProgressStageLabel: { color: COLORS.muted, fontSize: 8, fontWeight: '700', textAlign: 'center', lineHeight: 11 },
+  requestProgressStageLabelDone: { color: COLORS.navy, fontWeight: '900' },
+  progressTerminal: { marginTop: 8, marginBottom: 8, borderRadius: 10, backgroundColor: '#FEE2E2', paddingHorizontal: 11, paddingVertical: 9 },
+  progressTerminalLabel: { color: '#991B1B', fontSize: 11, fontWeight: '800' },
   activeJobFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 9 },
   activeJobDate: { flex: 1, color: COLORS.muted, fontSize: 9, fontWeight: '600' },
   progressTrack: { height: 6, borderRadius: 4, backgroundColor: COLORS.card, marginTop: 12, overflow: 'hidden' },
