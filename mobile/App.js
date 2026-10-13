@@ -167,6 +167,8 @@ export default function App() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [profilePhotoBusy, setProfilePhotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -228,6 +230,62 @@ export default function App() {
     return message;
   }
   function clearMessages() { setError(''); setNotice(''); }
+  async function loadCustomerProfilePhoto(accessToken = token) {
+    if (!accessToken) { setProfilePhotoUrl(''); return; }
+    try {
+      const response = await fetch(API_BASE + '/api/customer/profile-photo', {
+        headers: { Authorization: 'Bearer ' + accessToken }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Unable to load profile photo.');
+      setProfilePhotoUrl(data.photo_url || '');
+    } catch (e) {
+      setProfilePhotoUrl('');
+    }
+  }
+  async function pickProfilePhoto() {
+    if (user?.role !== 'customer') {
+      setError('Profile photo upload is available for customer accounts right now.');
+      return;
+    }
+    if (profilePhotoBusy) return;
+    clearMessages();
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8
+      });
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+      const asset = result.assets[0];
+      let mimeType = String(asset.mimeType || 'image/jpeg').toLowerCase();
+      if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+        setError('Please choose a JPG, PNG or WEBP photo.');
+        return;
+      }
+      if (asset.fileSize != null && asset.fileSize > 5 * 1024 * 1024) {
+        setError('Please choose a photo smaller than 5 MB.');
+        return;
+      }
+      const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      const form = new FormData();
+      form.append('photo', {
+        uri: asset.uri,
+        name: asset.fileName || 'fixit-profile-photo.' + extension,
+        type: mimeType
+      });
+      setProfilePhotoBusy(true);
+      const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
+      setProfilePhotoUrl(data.photo_url || '');
+      setNotice(data.message || 'Profile picture updated successfully.');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setProfilePhotoBusy(false);
+    }
+  }
   function setProviderFormValue(key, value) { setProviderForm(prev => ({ ...prev, [key]: value })); }
   function setRequestValue(key, value) { setRequestForm(prev => ({ ...prev, [key]: value })); }
   function setQuoteValue(key, value) { setQuoteForm(prev => ({ ...prev, [key]: value })); }
@@ -251,6 +309,8 @@ export default function App() {
       setRole(data.user.role);
       setScreen('home');
       setPassword('');
+      if (data.user.role === 'customer') await loadCustomerProfilePhoto(data.token);
+      else setProfilePhotoUrl('');
       setNotice(registering ? 'Your FixIt Salone account has been created.' : 'You are signed in.');
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
@@ -692,6 +752,7 @@ export default function App() {
   }
   function signOut() {
     setToken(''); setUser(null); setScreen('auth'); setAuthMode('login'); setPassword('');
+    setProfilePhotoUrl(''); setProfilePhotoBusy(false);
     setJobs([]); setProviders([]); setServices([]); setProviderProfile(null); setProviderServices([]);
     setSubscriptionInfo(null); setNotifications([]); clearMessages();
   }
@@ -790,7 +851,9 @@ export default function App() {
               <Text style={styles.homeGreeting}>Welcome, {(user.full_name || 'there').split(' ')[0]}!</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Open profile" onPress={() => { setScreen('account'); clearMessages(); }} style={({ pressed }) => [styles.homeProfileButton, pressed && styles.buttonPressed]}>
-              <Text style={styles.homeProfileIcon}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>
+              {user.role === 'customer' && profilePhotoUrl
+                ? <RemoteImage uri={profilePhotoUrl} style={styles.homeProfilePhoto} fallbackText={(user.full_name || 'U').trim().slice(0, 1).toUpperCase()} />
+                : <Text style={styles.homeProfileIcon}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>}
             </Pressable>
           </View>
         </View>
@@ -1165,9 +1228,21 @@ export default function App() {
         {screen === 'account' && <>
           <Card style={styles.accountSummaryCard}>
             <View style={styles.accountSummaryRow}>
-              <View style={styles.accountAvatar}>
-                <Text style={styles.accountAvatarText}>{(user.full_name || 'F').trim().slice(0, 1).toUpperCase()}</Text>
-              </View>
+              {user.role === 'customer' ? (
+                <View style={styles.profilePictureColumn}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={profilePhotoUrl ? 'Change profile picture' : 'Upload profile picture'}
+                    onPress={pickProfilePhoto} disabled={profilePhotoBusy}
+                    style={({ pressed }) => [styles.profilePicturePressable, pressed && styles.buttonPressed, profilePhotoBusy && styles.disabled]}>
+                    {profilePhotoUrl
+                      ? <RemoteImage uri={profilePhotoUrl} style={styles.accountAvatarPhoto} fallbackText={(user.full_name || 'F').trim().slice(0, 1).toUpperCase()} />
+                      : <View style={styles.accountAvatar}><Text style={styles.accountAvatarText}>{(user.full_name || 'F').trim().slice(0, 1).toUpperCase()}</Text></View>}
+                    <View style={styles.profilePhotoCameraBadge}><Text style={styles.profilePhotoCameraIcon}>📷</Text></View>
+                  </Pressable>
+                  <Text style={styles.profilePhotoActionLabel}>{profilePhotoBusy ? 'Uploading…' : profilePhotoUrl ? 'Change photo' : 'Add photo'}</Text>
+                </View>
+              ) : (
+                <View style={styles.accountAvatar}><Text style={styles.accountAvatarText}>{(user.full_name || 'F').trim().slice(0, 1).toUpperCase()}</Text></View>
+              )}
               <View style={styles.accountIdentity}>
                 <Text style={styles.bigTitle}>{user.full_name || 'FixIt account'}</Text>
                 <Text style={styles.cardMeta}>{user.phone}</Text>
@@ -1176,6 +1251,10 @@ export default function App() {
                 </View>
               </View>
             </View>
+            {user.role === 'customer' && (
+              <Button title={profilePhotoBusy ? 'Uploading photo…' : profilePhotoUrl ? 'Change profile picture' : 'Upload profile picture'}
+                secondary onPress={pickProfilePhoto} disabled={profilePhotoBusy} />
+            )}
           </Card>
 
           <View style={styles.accountSectionHeading}>
@@ -1347,7 +1426,9 @@ export default function App() {
         </Pressable>
         <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}>
           <View style={[styles.profileTabAvatar, screen === 'account' && styles.profileTabAvatarActive]}>
-            <Text style={styles.profileTabAvatarText}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>
+            {user.role === 'customer' && profilePhotoUrl
+              ? <RemoteImage uri={profilePhotoUrl} style={styles.profileTabPhoto} fallbackText={(user.full_name || 'U').trim().slice(0, 1).toUpperCase()} />
+              : <Text style={styles.profileTabAvatarText}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>}
           </View>
           <Text style={[styles.tabText, screen === 'account' && styles.tabTextActive]}>Profile</Text>
         </Pressable>
@@ -1556,6 +1637,14 @@ const styles = StyleSheet.create({
   accountSummaryCard: { paddingVertical: 17, marginBottom: 14 },
   accountSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 13 },
   accountAvatar: { width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FCE7D7', borderWidth: 1, borderColor: '#F2CEB1' },
+  profilePictureColumn: { width: 76, alignItems: 'center', flexShrink: 0 },
+  profilePicturePressable: { width: 64, height: 64, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  accountAvatarPhoto: { width: 64, height: 64, borderRadius: 24, backgroundColor: '#FCE7D7', borderWidth: 1, borderColor: '#F2CEB1' },
+  profilePhotoCameraBadge: { position: 'absolute', width: 24, height: 24, borderRadius: 12, right: -1, bottom: -1, borderWidth: 2, borderColor: COLORS.white, backgroundColor: COLORS.green, alignItems: 'center', justifyContent: 'center' },
+  profilePhotoCameraIcon: { fontSize: 11 },
+  profilePhotoActionLabel: { color: COLORS.green, fontSize: 10, fontWeight: '900', marginTop: 5, textAlign: 'center' },
+  homeProfilePhoto: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FCE7D7' },
+  profileTabPhoto: { width: 25, height: 25, borderRadius: 13, backgroundColor: '#FCE7D7' },
   accountAvatarText: { color: '#8D4A12', fontSize: 25, fontWeight: '900' },
   accountIdentity: { flex: 1, minWidth: 0 },
   accountTypeBadge: { alignSelf: 'flex-start', marginTop: 7, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 7, backgroundColor: '#E8F5EC' },
