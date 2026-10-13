@@ -72,14 +72,32 @@ function makeObjectKey(prefix,file){
 }
 async function storeUpload(file,key){
   if(objectStorageEnabled){
+    const body=file.buffer || (file.path ? fs.createReadStream(file.path) : null);
+    if(!body)throw new Error('Uploaded file content is unavailable.');
     await objectStorage.send(new PutObjectCommand({
-      Bucket:R2_BUCKET,Key:key,Body:file.buffer,ContentType:file.mimetype,Metadata:{original_name:safeObjectName(file.originalname)}
+      Bucket:R2_BUCKET,Key:key,Body:body,ContentType:file.mimetype,Metadata:{original_name:safeObjectName(file.originalname)}
     }));
     return {storage_provider:'r2',storage_key:key,file_url:'r2://'+key};
   }
-  const filename=Date.now()+'-'+crypto.randomBytes(10).toString('hex')+path.extname(file.originalname||'').toLowerCase();
-  const target=path.join(uploadDir,filename);
-  if(file.buffer)fs.writeFileSync(target,file.buffer);
+
+  // Multer uses diskStorage when R2 is not configured. In that case it has
+  // already saved the uploaded file; keep that actual filename instead of
+  // recording a second filename that points to a file that does not exist.
+  let filename;
+  let target;
+  if(file.path && fs.existsSync(file.path)){
+    target=path.resolve(file.path);
+    const resolvedUploadDir=path.resolve(uploadDir);
+    if(!target.startsWith(resolvedUploadDir+path.sep))throw new Error('Uploaded file is outside the upload directory.');
+    filename=path.basename(target);
+  }else if(file.buffer){
+    filename=Date.now()+'-'+crypto.randomBytes(10).toString('hex')+path.extname(file.originalname||'').toLowerCase();
+    target=path.join(uploadDir,filename);
+    fs.writeFileSync(target,file.buffer);
+  }else{
+    throw new Error('Uploaded file could not be found on disk.');
+  }
+
   return {storage_provider:'local',storage_key:filename,file_url:'/uploads/'+filename};
 }
 async function removeStoredFile(storageProvider,storageKey,fileUrl){
