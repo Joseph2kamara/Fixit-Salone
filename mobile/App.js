@@ -42,7 +42,17 @@ const HOME_CATEGORIES = [
   { label: 'Carpentry', symbol: '🪚', query: 'carpentry', tint: '#FEF3C7' },
   { label: 'Painting', symbol: '🖌️', query: 'painting', tint: '#FEE2E2' },
   { label: 'Pest Control', symbol: '🪲', query: 'pest control', tint: '#E0F2FE' },
-  { label: 'Moving & Delivery', symbol: '🚚', query: 'moving delivery', tint: '#F1F5F9' }
+  { label: 'Moving & Delivery', symbol: '🚚', query: 'moving', tint: '#F1F5F9' },
+  { label: 'Beauty & Grooming', symbol: '💇', query: 'beauty', tint: '#FEE2E2' },
+  { label: 'AC & Refrigerator', symbol: '❄️', query: 'refrigerator', tint: '#E0F2FE' },
+  { label: 'Generator Repair', symbol: '⚡', query: 'generator', tint: '#FEF3C7' },
+  { label: 'CCTV & Security', symbol: '📹', query: 'cctv', tint: '#F1F5F9' },
+  { label: 'Welding & Metal Work', symbol: '🧑‍🏭', query: 'welding', tint: '#FEF3C7' },
+  { label: 'Solar & Inverter', symbol: '🔋', query: 'solar', tint: '#DCFCE7' },
+  { label: 'Tiling & Masonry', symbol: '🧱', query: 'tiling', tint: '#F1F5F9' },
+  { label: 'Auto Repair', symbol: '🚗', query: 'auto repair', tint: '#E0F2FE' },
+  { label: 'Landscaping & Gardening', symbol: '🌿', query: 'landscaping', tint: '#DCFCE7' },
+  { label: 'Water Tank & Well', symbol: '🚰', query: 'water tank', tint: '#E0F2FE' }
 ];
 const CATEGORY_PAGE_SIZE = 6;
 const CATEGORY_PAGES = Array.from(
