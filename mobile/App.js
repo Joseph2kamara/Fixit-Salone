@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Modal, Platform,
+  ActivityIndicator, Alert, Animated, Image, KeyboardAvoidingView, Linking, Modal, Platform,
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
@@ -265,7 +265,25 @@ function Status({ value }) {
 }
 function Empty({ text }) { return <Text style={styles.empty}>{text}</Text>; }
 
+function SplashDot({ delay = 0 }) {
+  const opacity = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    const animation = Animated.loop(Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(opacity, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0.35, duration: 380, useNativeDriver: true }),
+      Animated.delay(280)
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [delay, opacity]);
+  const scale = opacity.interpolate({ inputRange: [0.35, 1], outputRange: [0.86, 1.12] });
+  return <Animated.View style={[styles.splashDot, { opacity, transform: [{ scale }] }]} />;
+}
+
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+  const splashProgress = useRef(new Animated.Value(0)).current;
   const [screen, setScreen] = useState('auth');
   const [authMode, setAuthMode] = useState('login');
   const [role, setRole] = useState('customer');
@@ -328,6 +346,20 @@ export default function App() {
   const [incidentDetails, setIncidentDetails] = useState('');
   const [chatMessages, setChatMessages] = useState([{ role: 'assistant', content: 'Hello! I can help with general FixIt Salone questions. Please do not share passwords or verification codes.' }]);
   const [chatInput, setChatInput] = useState('');
+
+  useEffect(() => {
+    const progressAnimation = Animated.timing(splashProgress, {
+      toValue: 1,
+      duration: 2700,
+      useNativeDriver: false
+    });
+    progressAnimation.start();
+    const timer = setTimeout(() => setShowSplash(false), 3200);
+    return () => {
+      progressAnimation.stop();
+      clearTimeout(timer);
+    };
+  }, [splashProgress]);
 
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
@@ -1014,6 +1046,82 @@ export default function App() {
       <Pressable onPress={clearMessages}><Text style={styles.messageClose}>×</Text></Pressable>
     </View>
   ) : null;
+
+  if (showSplash) {
+    return (
+      <View style={styles.splashRoot}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFE0C2" />
+        <View pointerEvents="none" style={styles.splashTopGlow} />
+        <View pointerEvents="none" style={styles.splashBottomGlow} />
+        <View style={styles.splashContent}>
+          <View style={styles.splashBrandArea}>
+            <View style={styles.splashToolMark}>
+              <Text style={styles.splashWrench}>🔧</Text>
+              <Text style={styles.splashHammer}>🔨</Text>
+            </View>
+            <Text style={styles.splashWordmark}>
+              <Text style={styles.splashWordmarkNavy}>FixIt</Text>
+              <Text style={styles.splashWordmarkOrange}> Salone</Text>
+            </Text>
+          </View>
+
+          <View style={styles.splashIllustrationArea}>
+            <View pointerEvents="none" style={styles.splashHalo} />
+            <View style={styles.splashIllustrationRow}>
+              <View style={[styles.splashIconTile, styles.splashToolboxTile]}><Text style={styles.splashIconLarge}>🧰</Text></View>
+              <View style={[styles.splashIconTile, styles.splashTechTile]}><Text style={styles.splashIconLarge}>🖥️</Text></View>
+              <View style={[styles.splashIconTile, styles.splashLightTile]}><Text style={styles.splashIconLarge}>💡</Text></View>
+            </View>
+            <View style={[styles.splashIllustrationRow, styles.splashIllustrationRowMiddle]}>
+              <View style={[styles.splashIconTile, styles.splashToolTile]}><Text style={styles.splashIconLarge}>🔧</Text></View>
+              <View style={styles.splashHomeTile}>
+                <Text style={styles.splashHouseIcon}>🏠</Text>
+                <View style={styles.splashHomeWindow}>
+                  <View style={styles.splashHomeWindowPane} />
+                  <View style={styles.splashHomeWindowPane} />
+                  <View style={styles.splashHomeWindowPane} />
+                  <View style={styles.splashHomeWindowPane} />
+                </View>
+              </View>
+              <View style={[styles.splashIconTile, styles.splashCleanTile]}><Text style={styles.splashIconLarge}>🧹</Text></View>
+            </View>
+            <View style={styles.splashIllustrationRow}>
+              <View style={[styles.splashIconTile, styles.splashToolTile]}><Text style={styles.splashIconLarge}>🪛</Text></View>
+              <View style={[styles.splashIconTile, styles.splashPaintTile]}><Text style={styles.splashIconLarge}>🖌️</Text></View>
+              <View style={[styles.splashIconTile, styles.splashSolarTile]}>
+                <Text style={styles.splashIconLarge}>☀️</Text>
+                <Text style={styles.splashMiniIcon}>▰ ▰</Text>
+              </View>
+            </View>
+            <View style={styles.splashOrbitToolOne}><Text style={styles.splashOrbitIcon}>⚒</Text></View>
+            <View style={styles.splashOrbitToolTwo}><Text style={styles.splashOrbitIcon}>🔧</Text></View>
+          </View>
+
+          <Text style={styles.splashTagline}>Your Trusted Home &amp; Repair{'\n'}Services in Sierra Leone</Text>
+
+          <View style={styles.splashLoadingArea}>
+            <View style={styles.splashDotsRow}>
+              <SplashDot delay={0} />
+              <SplashDot delay={160} />
+              <SplashDot delay={320} />
+              <SplashDot delay={480} />
+              <SplashDot delay={640} />
+            </View>
+            <View style={styles.splashProgressTrack}>
+              <Animated.View style={[styles.splashProgressFill, {
+                width: splashProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+              }]} />
+            </View>
+          </View>
+
+          <View style={styles.splashFooter}>
+            <Text style={styles.splashFooterPowered}>Powered by</Text>
+            <Text style={styles.splashFooterCompany}>A Service of Sierra Services Ltd.</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   if (!token || !user) {
     return (
@@ -1747,6 +1855,47 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  splashRoot: { flex: 1, overflow: 'hidden', backgroundColor: '#FFF9F1' },
+  splashTopGlow: { position: 'absolute', top: -115, alignSelf: 'center', width: '135%', height: 340, borderRadius: 230, backgroundColor: '#FFD0A8' },
+  splashBottomGlow: { position: 'absolute', bottom: -130, alignSelf: 'center', width: '150%', height: 350, borderRadius: 240, backgroundColor: '#FFC18D' },
+  splashContent: { flex: 1, paddingHorizontal: 22, paddingTop: Platform.OS === 'android' ? 10 : 20, paddingBottom: Platform.OS === 'android' ? 10 : 18, justifyContent: 'space-between', alignItems: 'center' },
+  splashBrandArea: { width: '100%', alignItems: 'center', paddingTop: 7 },
+  splashToolMark: { width: 112, height: 92, alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
+  splashWrench: { position: 'absolute', fontSize: 67, transform: [{ rotate: '-39deg' }], left: 5, top: 5 },
+  splashHammer: { position: 'absolute', fontSize: 66, transform: [{ rotate: '41deg' }], right: 1, top: 9 },
+  splashWordmark: { fontSize: 38, fontWeight: '900', letterSpacing: -1.25, textAlign: 'center' },
+  splashWordmarkNavy: { color: '#0F172A' },
+  splashWordmarkOrange: { color: '#E87722' },
+  splashIllustrationArea: { width: '100%', maxWidth: 390, flex: 1, maxHeight: 410, minHeight: 250, alignItems: 'center', justifyContent: 'center', marginVertical: 7 },
+  splashHalo: { position: 'absolute', width: '88%', height: '83%', borderRadius: 220, backgroundColor: '#DCFCE7', opacity: 0.63 },
+  splashIllustrationRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', gap: 8, marginVertical: 4 },
+  splashIllustrationRowMiddle: { marginVertical: 1 },
+  splashIconTile: { width: '26%', aspectRatio: 0.98, borderRadius: 20, borderWidth: 1.4, borderColor: '#0F172A12', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 7, elevation: 2 },
+  splashIconLarge: { fontSize: 42, textAlign: 'center' },
+  splashToolboxTile: { backgroundColor: '#FED7AA' },
+  splashTechTile: { backgroundColor: '#E0F2FE' },
+  splashLightTile: { backgroundColor: '#FEF3C7' },
+  splashToolTile: { backgroundColor: '#F1F5F9' },
+  splashCleanTile: { backgroundColor: '#FEE2E2' },
+  splashPaintTile: { backgroundColor: '#FEF3C7' },
+  splashSolarTile: { backgroundColor: '#DCFCE7' },
+  splashHomeTile: { width: '31%', aspectRatio: 0.98, borderRadius: 24, backgroundColor: '#FFF7ED', borderWidth: 2, borderColor: '#E87722', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F172A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 3 },
+  splashHouseIcon: { fontSize: 67, lineHeight: 79, textAlign: 'center' },
+  splashHomeWindow: { position: 'absolute', right: 12, bottom: 14, width: 22, height: 22, flexDirection: 'row', flexWrap: 'wrap', gap: 2, padding: 2, backgroundColor: '#1E3A8A', borderRadius: 2 },
+  splashHomeWindowPane: { width: 7, height: 7, backgroundColor: '#BAE6FD', borderRadius: 1 },
+  splashMiniIcon: { position: 'absolute', bottom: 9, fontSize: 10, letterSpacing: 1, color: '#1E3A8A', fontWeight: '900' },
+  splashOrbitToolOne: { position: 'absolute', top: '22%', left: 0, width: 33, height: 33, borderRadius: 17, backgroundColor: '#FFFFFF88', alignItems: 'center', justifyContent: 'center' },
+  splashOrbitToolTwo: { position: 'absolute', bottom: '20%', right: -1, width: 35, height: 35, borderRadius: 18, backgroundColor: '#FFFFFF88', alignItems: 'center', justifyContent: 'center' },
+  splashOrbitIcon: { color: '#1E3A8A', fontSize: 23 },
+  splashTagline: { color: '#0F172A', fontSize: 21, lineHeight: 29, fontWeight: '500', textAlign: 'center', paddingHorizontal: 3, marginTop: 5 },
+  splashLoadingArea: { width: '100%', alignItems: 'center', paddingTop: 12, paddingBottom: 9 },
+  splashDotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 26, marginBottom: 16 },
+  splashDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#E87722' },
+  splashProgressTrack: { width: '72%', height: 7, borderRadius: 5, backgroundColor: '#E8D4C0', overflow: 'hidden' },
+  splashProgressFill: { height: '100%', borderRadius: 5, backgroundColor: '#E87722' },
+  splashFooter: { width: '100%', alignItems: 'center', paddingBottom: 1 },
+  splashFooterPowered: { color: '#0F172A', fontSize: 12, textAlign: 'center' },
+  splashFooterCompany: { color: '#0F172A', fontSize: 12, textAlign: 'center', marginTop: 1 },
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 44 : 0 },
   authSafe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 12 : 0 },
