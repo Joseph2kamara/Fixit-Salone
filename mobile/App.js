@@ -914,11 +914,15 @@ export default function App() {
           <Button title="← Back to home" secondary onPress={() => { setScreen('home'); clearMessages(); }} />
           <Text style={styles.sectionLead}>Browse available professionals and choose a service.</Text>
           <Field value={search} onChangeText={setSearch} placeholder="⌕  Search repairs or technicians..." autoCapitalize="none" />
-          <Text style={styles.fieldLabel}>Filter by region</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalChips}>
-            <Chip title="All regions" active={regionFilter === 'All'} onPress={() => setRegionFilter('All')} />
-            {REGIONS.map(r => <Chip key={r} title={r} active={regionFilter === r} onPress={() => setRegionFilter(r)} />)}
-          </ScrollView>
+          <OptionPicker
+            label="Filter by region"
+            value={regionFilter === 'All' ? 'All regions' : regionFilter}
+            options={['All regions', ...REGIONS]}
+            onChange={value => {
+              setRegionFilter(value === 'All regions' ? 'All' : value);
+              setDistrictFilter('');
+            }}
+          />
           <Field value={districtFilter} onChangeText={setDistrictFilter} placeholder="District filter (optional)" />
           <View style={styles.homeSectionHeader}>
             <Text style={styles.homeSectionTitle}>Service providers ({filteredProviders.length})</Text>
