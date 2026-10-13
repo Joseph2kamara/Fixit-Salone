@@ -96,7 +96,8 @@ const categories=[
   ['🏠','General Home','Home maintenance & repairs','home'],
   ['🪜','Roofing','Roof & gutter repairs','roof'],
   ['🧊','Appliance Repair','Appliances & devices','appliance'],
-  ['🚨','Emergency Services','Urgent repair help','emergency']
+  ['🚨','Emergency Services','Urgent repair help','emergency'],
+  ['💻','IT & Computer','Computer repair, software & tech support','computer']
 ];
 const districts={'Western Area':['Western Area Urban','Western Area Rural'],'Eastern':['Kailahun','Kenema','Kono'],'Northern':['Bombali','Falaba','Koinadugu','Tonkolili'],'North West':['Kambia','Karene','Port Loko'],'Southern':['Bo','Bonthe','Moyamba','Pujehun']};
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
