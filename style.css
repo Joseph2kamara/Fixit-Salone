@@ -480,3 +480,10 @@ footer p a:hover{color:#FDBA74}
 .admin-tabs{flex-wrap:wrap}
 @media(max-width:900px){.admin-image-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.admin-image-grid{grid-template-columns:1fr;padding:0 14px 18px}.admin-image-card-copy p{min-height:0}.admin-managed-hero-image{aspect-ratio:16/9}.admin-storage-note,.admin-storage-ok{margin-left:14px;margin-right:14px}.admin-section-head{gap:10px;padding:18px 14px}.admin-tabs{overflow-x:auto;flex-wrap:nowrap}.admin-tab{white-space:nowrap}}
+
+/* Homepage multi-image carousel */
+.homepage-hero-dots{display:flex;align-items:center;justify-content:center;gap:14px;width:100%;max-width:790px;padding:18px 0 8px}
+.homepage-hero-dot{width:23px;height:23px;min-width:23px;border:1px solid #9ca3af;border-radius:50%;background:#fff;padding:0;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
+.homepage-hero-dot.is-active{background:var(--fixit-orange,#f97316);border-color:var(--fixit-orange,#f97316)}
+.homepage-hero-dot:focus-visible{outline:2px solid var(--fixit-orange,#f97316);outline-offset:3px}
+@media(max-width:600px){.homepage-hero-dots{gap:10px;padding:14px 0 6px}.homepage-hero-dot{width:18px;height:18px;min-width:18px}}
