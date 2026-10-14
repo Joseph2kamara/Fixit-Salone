@@ -2,6 +2,19 @@
 'use strict';
 const API_BASE=(localStorage.getItem('fixit_api_base')||'https://fixit-salone-api.onrender.com').replace(/\/$/,'');
 function mediaUrl(url){const value=String(url||'').trim();return /^https?:\/\//i.test(value)?value:API_BASE+(value.startsWith('/')?value:'/'+value);}
+let siteImages={};
+function siteImageKey(label){return 'service-'+String(label||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+async function loadPublicSiteImages(){
+ try{const data=await api('/api/site-images');siteImages=Object.fromEntries((data.images||[]).map(item=>[item.image_key,item]))}
+ catch(e){siteImages={}}
+ applyHomepageHeroImage();
+}
+function applyHomepageHeroImage(){
+ const image=$('homepageHeroImage');if(!image)return;
+ const item=siteImages['homepage-hero'];
+ if(item&&item.image_url){image.src=mediaUrl(item.image_url);image.hidden=false}
+ else{image.removeAttribute('src');image.hidden=true}
+}
 const AUTH_TOKEN_KEY='fixit_access_token';
 function authToken(){return sessionStorage.getItem(AUTH_TOKEN_KEY)||'';}
 async function api(path,options={}){
@@ -184,7 +197,9 @@ function renderCategories(){
       '<div class="category-carousel-page" data-page="'+pageIndex+'"><div class="category-page-grid">'+
       page.map((c,localIndex)=>{
         const categoryIndex=pageIndex*pageSize+localIndex;
-        return '<button type="button" class="category-btn category-tone-'+((categoryIndex%4)+1)+'" data-service="'+esc(c[3]||c[1])+'" title="'+esc(c[2])+'" aria-label="'+esc(c[1]+': '+c[2])+'"><span class="category-art"><span class="category-emoji" aria-hidden="true">'+c[0]+'</span></span><b>'+esc(c[1])+'</b></button>';
+        const item=siteImages[siteImageKey(c[1])];
+        const art=item&&item.image_url?'<img class="category-image" src="'+esc(mediaUrl(item.image_url))+'" alt="" loading="lazy">':'<span class="category-emoji" aria-hidden="true">'+c[0]+'</span>';
+        return '<button type="button" class="category-btn category-tone-'+((categoryIndex%4)+1)+'" data-service="'+esc(c[3]||c[1])+'" title="'+esc(c[2])+'" aria-label="'+esc(c[1]+': '+c[2])+'"><span class="category-art">'+art+'</span><b>'+esc(c[1])+'</b></button>';
       }).join('')+
       '</div></div>'
     ).join('')+
@@ -911,7 +926,7 @@ window.reportProvider=reportProvider;
 function featuredListing(){openModal('<p class="eyebrow">FEATURED LISTING</p><h2>Get more visibility</h2><p>Featured providers appear prominently in relevant searches.</p><div class="plan-grid"><div><b>7 days</b><strong>SLE 25</strong><small>Featured placement</small></div><div><b>30 days</b><strong>SLE 75</strong><small>Featured placement</small></div></div><p class="quote-note">This is a beta pricing model; no payment is collected yet.</p><button class="btn" onclick="closeModal()">Got it</button>')}
 function joinProvider(){providerPortal()}window.providerPortal=providerPortal;window.joinProvider=joinProvider;window.featuredListing=featuredListing;window.render=render;
 document.addEventListener('click',e=>{const p=e.target.closest('.profile-btn'),r=e.target.closest('.request-btn'),cat=e.target.closest('.category-btn');if(p){showProfile(+p.dataset.index);return}if(r){showRequest(+r.dataset.index);return}if(cat){$('search').value=cat.dataset.service;render();$('providers').scrollIntoView({behavior:'smooth'})}});
-$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();updateMobileAccountAction();updateHomeGreeting();render();loadCustomerHomeJobs();
+$('search').addEventListener('input',render);$('region').addEventListener('change',updateDistricts);$('district').addEventListener('change',render);modal.addEventListener('click',e=>{if(e.target===modal)closeModal()});renderCategories();updateDistricts();updateCustomerAccountButton();updateMobileAccountAction();updateHomeGreeting();render();loadCustomerHomeJobs();loadPublicSiteImages().then(()=>renderCategories());
 $('mobileMenuToggle')?.addEventListener('click',()=>{if($('mobileMenuToggle').getAttribute('aria-expanded')==='true')closeMobileNav();else openMobileNav()});
 $('mobileMenuClose')?.addEventListener('click',closeMobileNav);
 $('mobileNavBackdrop')?.addEventListener('click',closeMobileNav);
