@@ -454,3 +454,29 @@ footer p a:hover{color:#FDBA74}
  .job-progress-step small{font-size:8px}
  .job-progress-heading{font-size:10px}
 }
+
+/* Administrator-managed marketplace images */
+#homepageHeroImage[hidden]{display:none!important}
+.admin-managed-hero-image{display:block;width:100%;max-width:790px;max-height:280px;aspect-ratio:16/6;object-fit:cover;border:1px solid var(--fixit-line);border-radius:16px;margin-top:16px;background:var(--fixit-card)}
+#services.home-services .category-art{overflow:hidden}
+#services.home-services .category-art .category-image{display:block;width:100%;height:100%;object-fit:cover}
+.admin-image-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:0 22px 24px}
+.admin-image-card{min-width:0;overflow:hidden;border:1px solid #E2E8F0;border-radius:14px;background:#fff}
+.admin-image-preview{display:grid;place-items:center;width:100%;aspect-ratio:16/9;overflow:hidden;background:#F1F5F9;color:#64748B}
+.admin-image-preview-img{display:block;width:100%;height:100%;object-fit:cover}
+.admin-image-placeholder{padding:12px;text-align:center;font-size:12px;font-weight:700}
+.admin-image-placeholder[hidden]{display:none}
+.admin-image-card-copy{padding:14px}
+.admin-image-card-copy h3{margin:0 0 6px;font-size:15px;color:#0F172A}
+.admin-image-card-copy p{min-height:32px;margin:0 0 12px;color:#64748B;font-size:12px;line-height:1.4}
+.admin-image-card-copy form{display:grid;gap:10px}
+.admin-image-card-copy label{display:grid;gap:6px;font-size:12px;font-weight:750;color:#334155}
+.admin-image-card-copy input[type=file]{width:100%;min-width:0;font-size:11px;color:#64748B}
+.admin-image-card-copy .btn{width:100%;min-height:38px;font-size:12px}
+.admin-image-card-copy small{display:block;margin-top:10px;color:#64748B;font-size:10px;line-height:1.45}
+.admin-storage-note,.admin-storage-ok{margin:0 22px 18px;padding:13px 15px;border-radius:10px;font-size:12px;line-height:1.5}
+.admin-storage-note{border:1px solid #F6CDAE;background:#FFF1E7;color:#9A3412}
+.admin-storage-ok{border:1px solid #BBF7D0;background:#F0FDF4;color:#166534}
+.admin-tabs{flex-wrap:wrap}
+@media(max-width:900px){.admin-image-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.admin-image-grid{grid-template-columns:1fr;padding:0 14px 18px}.admin-image-card-copy p{min-height:0}.admin-managed-hero-image{aspect-ratio:16/9}.admin-storage-note,.admin-storage-ok{margin-left:14px;margin-right:14px}.admin-section-head{gap:10px;padding:18px 14px}.admin-tabs{overflow-x:auto;flex-wrap:nowrap}.admin-tab{white-space:nowrap}}
