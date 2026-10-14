@@ -70,6 +70,15 @@ const SERVICE_CATALOGUE = [
   ['Landscaping & Gardening','Garden design, lawn care and landscaping'],
   ['Water Tank & Well Services','Water tank, well, borehole and water pump services']
 ];
+const SITE_IMAGE_CATEGORY_LABELS = ["Plumbing","Electrical","General Home","Roofing","Appliance Repair","Emergency Services","IT & Computer","Cleaning","Carpentry","Painting","Pest Control","Moving & Delivery","Beauty & Grooming","AC & Refrigerator","Generator Service & Repair","CCTV & Security Systems","Welding & Metal Work","Solar & Inverter Systems","Tiling & Masonry","Auto Repair & Mechanic","Landscaping & Gardening","Water Tank & Well Services"];
+const SITE_IMAGE_SLOTS = [
+  {image_key:'homepage-hero',label:'Homepage hero image'},
+  ...SITE_IMAGE_CATEGORY_LABELS.map(label=>({
+    image_key:'service-'+label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),
+    label
+  }))
+];
+function siteImageSlot(imageKey){return SITE_IMAGE_SLOTS.find(slot=>slot.image_key===imageKey)||null;}
 
 async function ensureServiceCatalogue(){
   for(const [name,description] of SERVICE_CATALOGUE){
@@ -99,6 +108,11 @@ const upload=multer({
   storage:objectStorageEnabled?memoryStorage:diskStorage,
   limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||15)*1024*1024},
   fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.mimetype))
+});
+const siteImageUpload=multer({
+  storage:objectStorageEnabled?memoryStorage:diskStorage,
+  limits:{fileSize:8*1024*1024},
+  fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp'].includes(file.mimetype))
 });
 function safeObjectName(name){return String(name||'file').replace(/[^a-zA-Z0-9._-]/g,'_').slice(-180)}
 function makeObjectKey(prefix,file){
@@ -149,6 +163,15 @@ async function storedFileUrl(storageProvider,storageKey,fileUrl,expires=600){
   }
   return fileUrl||null;
 }
+  
+async function presentSiteImage(row,expires=1800){
+  return {
+    image_key:row.image_key,
+    label:row.label,
+    image_url:await storedFileUrl(row.storage_provider,row.storage_key,row.file_url,expires),
+    updated_at:row.updated_at
+  };
+}
 
 const kycUpload=multer({
   storage:multer.memoryStorage(),
@@ -188,6 +211,18 @@ app.use('/uploads',(req,res,next)=>{
   next();
 },express.static(uploadDir));
 app.get('/api/storage/status',(req,res)=>res.json({permanent_storage:objectStorageEnabled,provider:objectStorageEnabled?'r2':'local'}));
+
+app.get('/api/site-images',async(req,res)=>{
+  try{
+    const {rows}=await pool.query('SELECT image_key,label,storage_provider,storage_key,file_url,updated_at FROM site_images ORDER BY image_key');
+    const images=await Promise.all(rows.map(row=>presentSiteImage(row,1800)));
+    res.setHeader('Cache-Control','no-store');
+    res.json({images,permanent_storage:objectStorageEnabled});
+  }catch(e){
+    console.error('Site images error:',e);
+    res.status(500).json({error:'Unable to load site images.'});
+  }
+});
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
 const adminLimiter=rateLimit({windowMs:60*1000,max:60,standardHeaders:true,legacyHeaders:false,message:{error:'Too many admin requests. Try again shortly.'}});
@@ -1041,6 +1076,63 @@ Additional operating rules:
 
 
 app.use('/api/admin',requireAuth,requireAdmin,adminLimiter);
+
+app.get('/api/admin/site-images',async(req,res)=>{
+  try{
+    const {rows}=await pool.query('SELECT image_key,label,storage_provider,storage_key,file_url,updated_at FROM site_images ORDER BY image_key');
+    const images=await Promise.all(rows.map(row=>presentSiteImage(row,1800)));
+    res.json({images,permanent_storage:objectStorageEnabled});
+  }catch(e){
+    console.error('Admin site images error:',e);
+    res.status(500).json({error:'Unable to load site images.'});
+  }
+});
+
+app.post('/api/admin/site-images',siteImageUpload.single('image'),async(req,res)=>{
+  const imageKey=String(req.body&&req.body.image_key||'').trim();
+  const slot=siteImageSlot(imageKey);
+  if(!slot){
+    if(req.file&&req.file.path){try{fs.unlinkSync(req.file.path)}catch{}}
+    return res.status(400).json({error:'Choose a valid homepage or service-category image slot.'});
+  }
+  if(!req.file)return res.status(400).json({error:'Choose a JPG, PNG or WEBP image up to 8 MB.'});
+  if(!['image/jpeg','image/png','image/webp'].includes(req.file.mimetype)){
+    if(req.file.path){try{fs.unlinkSync(req.file.path)}catch{}}
+    return res.status(400).json({error:'Image must be JPG, PNG or WEBP.'});
+  }
+
+  let stored=null, savedRow=null, oldRow=null;
+  try{
+    const existing=await pool.query('SELECT storage_provider,storage_key,file_url FROM site_images WHERE image_key=$1',[imageKey]);
+    oldRow=existing.rows[0]||null;
+    stored=await storeUpload(req.file,'site-images/'+imageKey);
+    const saved=await pool.query(
+      'INSERT INTO site_images(image_key,label,storage_provider,storage_key,file_url,content_type,updated_by,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,NOW()) ON CONFLICT(image_key) DO UPDATE SET label=EXCLUDED.label,storage_provider=EXCLUDED.storage_provider,storage_key=EXCLUDED.storage_key,file_url=EXCLUDED.file_url,content_type=EXCLUDED.content_type,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING image_key,label,storage_provider,storage_key,file_url,updated_at',
+      [imageKey,slot.label,stored.storage_provider,stored.storage_key,stored.file_url,req.file.mimetype,req.user.sub]
+    );
+    savedRow=saved.rows[0];
+  }catch(e){
+    if(stored){
+      try{await removeStoredFile(stored.storage_provider,stored.storage_key,stored.file_url)}catch{}
+    }else if(req.file&&req.file.path){try{fs.unlinkSync(req.file.path)}catch{}}
+    console.error('Admin site image upload error:',e);
+    return res.status(500).json({error:'Unable to save this image. Please try again.'});
+  }
+
+  if(oldRow){
+    try{await removeStoredFile(oldRow.storage_provider,oldRow.storage_key,oldRow.file_url)}
+    catch(e){console.error('Old site image cleanup failed:',e)}
+  }
+  try{await audit(req.user.sub,null,'admin.site_image_upload','site_image',imageKey,{label:slot.label,storage_provider:stored.storage_provider})}
+  catch(e){console.error('Site image audit logging failed:',e)}
+  let imageUrl=null;
+  try{imageUrl=await storedFileUrl(savedRow.storage_provider,savedRow.storage_key,savedRow.file_url,1800)}
+  catch(e){console.error('Site image URL signing failed:',e)}
+  res.status(201).json({
+    image:{image_key:savedRow.image_key,label:savedRow.label,image_url:imageUrl,updated_at:savedRow.updated_at},
+    permanent_storage:objectStorageEnabled
+  });
+});
 app.get('/api/admin/incidents',async(req,res)=>{
   try{
     const {rows}=await pool.query('SELECT i.id,i.reason,i.details,i.status,i.priority,i.created_at,i.reported_user_id,u.full_name AS reported_name FROM incidents i LEFT JOIN users u ON u.id=i.reported_user_id ORDER BY i.created_at DESC LIMIT 200');
@@ -1195,10 +1287,15 @@ app.get('/api/admin/audit',async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load audit history.'})}
 });
 
+async function ensureSiteImagesTable(){
+  await pool.query('CREATE TABLE IF NOT EXISTS site_images (image_key VARCHAR(100) PRIMARY KEY, label VARCHAR(160) NOT NULL, storage_provider VARCHAR(30) NOT NULL, storage_key TEXT NOT NULL, file_url TEXT, content_type VARCHAR(80) NOT NULL, updated_by UUID REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+  console.log('Site image table checked.');
+}
+
 async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_key TEXT');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_provider VARCHAR(30)');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
