@@ -1,12 +1,12 @@
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const tokenKey='fixit_admin_token',apiKey='fixit_api_base';
-let API=(localStorage.getItem(apiKey)||'https://fixit-salone-api.onrender.com').replace(/\\/$/,'');
+let API=(localStorage.getItem(apiKey)||'https://fixit-salone-api.onrender.com').replace(/\/$/,'');
 const token=()=>sessionStorage.getItem(tokenKey);
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function msg(t){$('loginMessage').textContent=t}
 async function api(path,opts){
- const o=opts||{};o.headers=Object.assign({'Content-Type':'application/json'},o.headers||{});
+ const o=opts||{};const isFormData=typeof FormData!=='undefined'&&o.body instanceof FormData;o.headers=Object.assign(isFormData?{}:{'Content-Type':'application/json'},o.headers||{});
  if(token())o.headers.Authorization='Bearer '+token();
  const r=await fetch(API+path,o);let d={};try{d=await r.json()}catch{}
  if(!r.ok)throw new Error(d.error||'Request failed');
@@ -32,9 +32,49 @@ async function loadStats(){
  $('pendingSubscriptions').textContent=subpay.filter(x=>x.status==='pending'||x.status==='processing').length;
  $('paymentRecords').textContent=payments.length;
 }
+
+async function renderSiteImages(content){
+ const data=await api('/api/admin/site-images');
+ const uploaded=Object.fromEntries((data.images||[]).map(item=>[item.image_key,item]));
+ const labels=["Plumbing","Electrical","General Home","Roofing","Appliance Repair","Emergency Services","IT & Computer","Cleaning","Carpentry","Painting","Pest Control","Moving & Delivery","Beauty & Grooming","AC & Refrigerator","Generator Service & Repair","CCTV & Security Systems","Welding & Metal Work","Solar & Inverter Systems","Tiling & Masonry","Auto Repair & Mechanic","Landscaping & Gardening","Water Tank & Well Services"];
+ const slots=[{key:'homepage-hero',label:'Homepage hero image',description:'A wide picture displayed in the homepage introduction.'},...labels.map(label=>({key:'service-'+label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),label,description:'Displayed on the matching service tile.'}))];
+ content.innerHTML=
+  '<div class="admin-section-head"><div><h2>Site image manager</h2><p>Upload or replace the public homepage and category pictures. JPG, PNG or WEBP, up to 8 MB each.</p></div><span>'+slots.length+' image slots</span></div>'+
+  (!data.permanent_storage?'<div class="admin-storage-note"><b>Permanent storage is not enabled.</b> Images currently use Render local storage and may disappear after a restart or redeploy. Configure Cloudflare R2 in Render before relying on uploads long-term.</div>':'<div class="admin-storage-ok">Permanent cloud storage is enabled.</div>')+
+  '<div class="admin-image-grid">'+slots.map(slot=>{
+    const item=uploaded[slot.key];
+    return '<article class="admin-image-card"><div class="admin-image-preview">'+
+      '<img class="admin-image-preview-img" data-preview="'+esc(slot.key)+'" src="'+esc(item&&item.image_url||'')+'" alt="'+esc(slot.label)+' preview" '+(item&&item.image_url?'':'hidden')+'>'+
+      '<div class="admin-image-placeholder" data-placeholder="'+esc(slot.key)+'" '+(item&&item.image_url?'hidden':'')+'>No image uploaded yet</div></div>'+
+      '<div class="admin-image-card-copy"><h3>'+esc(slot.label)+'</h3><p>'+esc(slot.description)+'</p>'+
+      '<form data-image-form="'+esc(slot.key)+'"><label>Choose image<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required></label>'+
+      '<button class="btn primary" type="submit">'+(item&&item.image_url?'Replace image':'Upload image')+'</button></form>'+
+      '<small>'+(item&&item.updated_at?'Last updated '+esc(new Date(item.updated_at).toLocaleString()):'Not uploaded')+'</small></div></article>';
+  }).join('')+'</div>';
+ content.querySelectorAll('form[data-image-form]').forEach(form=>{
+  const imageKey=form.dataset.imageForm,file=form.querySelector('input[type="file"]'),preview=content.querySelector('[data-preview="'+imageKey+'"]'),placeholder=content.querySelector('[data-placeholder="'+imageKey+'"]'),button=form.querySelector('button');
+  file.onchange=()=>{
+   const chosen=file.files&&file.files[0];if(!chosen)return;
+   if(preview.dataset.previewUrl)URL.revokeObjectURL(preview.dataset.previewUrl);
+   const url=URL.createObjectURL(chosen);preview.dataset.previewUrl=url;preview.src=url;preview.hidden=false;placeholder.hidden=true;
+  };
+  form.onsubmit=async event=>{
+   event.preventDefault();
+   if(!file.files||!file.files[0]){alert('Choose an image first.');return}
+   const body=new FormData();body.append('image_key',imageKey);body.append('image',file.files[0]);
+   button.disabled=true;button.textContent='Uploading…';
+   try{
+    const result=await api('/api/admin/site-images',{method:'POST',body});
+    alert(result.permanent_storage?'Image saved successfully. It is now available on the website.':'Image uploaded, but permanent storage is not configured. It may disappear after a Render restart.');
+    await renderSiteImages(content);
+   }catch(error){alert(error.message);button.disabled=false;button.textContent='Try again'}
+  };
+ });
+}
 async function render(tab){
  const content=$('adminContent');content.innerHTML='<p>Loading…</p>';
  try{
+  if(tab==='site-images'){await renderSiteImages(content);return}
   let rows=await api('/api/admin/'+(tab==='verification'?'verifications':tab));
   let head='',body='';
   if(tab==='incidents'){
@@ -84,7 +124,7 @@ async function render(tab){
   });
  }catch(e){content.innerHTML='<p class="form-message">'+esc(e.message)+'</p>'}
 }
-$('adminLoginForm').onsubmit=async e=>{e.preventDefault();API=($('apiBase').value.trim()||window.location.origin).replace(/\\/$/,'');localStorage.setItem(apiKey,API);msg('Signing in…');try{const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({phone:$('loginPhone').value.trim(),password:$('loginPassword').value})});if(d.user.role!=='admin')throw new Error('Login succeeded, but this account is not an admin.');sessionStorage.setItem(tokenKey,d.token);$('loginPassword').value='';msg('');boot()}catch(e){msg(e.message)}};
+$('adminLoginForm').onsubmit=async e=>{e.preventDefault();API=($('apiBase').value.trim()||window.location.origin).replace(/\/$/,'');localStorage.setItem(apiKey,API);msg('Signing in…');try{const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({phone:$('loginPhone').value.trim(),password:$('loginPassword').value})});if(d.user.role!=='admin')throw new Error('Login succeeded, but this account is not an admin.');sessionStorage.setItem(tokenKey,d.token);$('loginPassword').value='';msg('');boot()}catch(e){msg(e.message)}};
 $('logoutBtn').onclick=()=>{sessionStorage.removeItem(tokenKey);boot()};
 document.querySelectorAll('.admin-tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.admin-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');render(b.dataset.tab)});
 boot();
