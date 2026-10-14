@@ -341,6 +341,8 @@ export default function App() {
 
   const [services, setServices] = useState([]);
   const [providers, setProviders] = useState([]);
+  const [homepageSlides, setHomepageSlides] = useState([]);
+  const [homepageSlideIndex, setHomepageSlideIndex] = useState(0);
   const categoryCarouselRef = useRef(null);
   const [categoryCarouselWidth, setCategoryCarouselWidth] = useState(0);
   const [categoryPageIndex, setCategoryPageIndex] = useState(0);
@@ -600,6 +602,36 @@ export default function App() {
       else { loadProviders(); loadCustomerRequests(); }
     }
   }, [token, user?.id, user?.role]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHomepageSlides() {
+      try {
+        const response = await expoFetch(API_BASE + '/api/site-images');
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+        const rows = Array.isArray(data.images) ? data.images : [];
+        const keyed = new Map(rows.map(item => [item.image_key, item]));
+        const slides = [1, 2, 3, 4, 5, 6]
+          .map(number => keyed.get('homepage-slide-' + number))
+          .filter(item => item?.image_url)
+          .map(item => ({ key: item.image_key, uri: mediaUri(item.image_url) }));
+        if (!slides.length) {
+          const hero = keyed.get('homepage-hero');
+          if (hero?.image_url) slides.push({ key: hero.image_key, uri: mediaUri(hero.image_url) });
+        }
+        if (!cancelled) { setHomepageSlides(slides); setHomepageSlideIndex(0); }
+      } catch (_) { if (!cancelled) setHomepageSlides([]); }
+    }
+    loadHomepageSlides();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (screen !== 'home' || homepageSlides.length < 2) return;
+    const timer = setInterval(() => setHomepageSlideIndex(index => (index + 1) % homepageSlides.length), 5000);
+    return () => clearInterval(timer);
+  }, [screen, homepageSlides.length]);
 
   useEffect(() => {
     if (!token || user?.role !== 'customer' || screen !== 'home' || categoryCarouselWidth <= 0 || CATEGORY_PAGES.length < 2) return;
@@ -1258,6 +1290,12 @@ export default function App() {
       {noticePanel}
       <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainContent} keyboardShouldPersistTaps="handled">
         {screen === 'home' && user.role === 'customer' && <>
+          {homepageSlides.length > 0 && <View style={styles.homepageSlidesWrap}>
+            <Image source={{ uri: homepageSlides[Math.min(homepageSlideIndex, homepageSlides.length - 1)]?.uri }} style={styles.homepageSlideImage} resizeMode="cover" />
+            {homepageSlides.length > 1 && <View style={styles.homepageSlideDots}>
+              {homepageSlides.map((slide, index) => <Pressable key={slide.key} accessibilityRole="button" accessibilityLabel={'Show homepage slide ' + (index + 1)} onPress={() => setHomepageSlideIndex(index)} style={[styles.homepageSlideDot, index === homepageSlideIndex && styles.homepageSlideDotActive]} />)}
+            </View>}
+          </View>}
           <Field value={search} onChangeText={setSearch} placeholder="⌕  Search repairs or technicians..." autoCapitalize="none" />
 
           <View style={styles.homeSectionHeading}>
@@ -2018,6 +2056,11 @@ const styles = StyleSheet.create({
   homeGreeting: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginTop: 2 },
   homeSectionHeading: { marginTop: 3, marginBottom: 10 },
   homeSectionTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
+  homepageSlidesWrap: { width: '100%', marginBottom: 15, borderRadius: 18, overflow: 'hidden', backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line },
+  homepageSlideImage: { width: '100%', height: 165, backgroundColor: COLORS.card },
+  homepageSlideDots: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(15,23,42,0.35)' },
+  homepageSlideDot: { width: 7, height: 7, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.7)' },
+  homepageSlideDotActive: { width: 19, backgroundColor: COLORS.orange },
   categoryCarouselWrap: { width: '100%', marginBottom: 7 },
   categoryCarouselPage: { paddingHorizontal: 1 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 1 },
