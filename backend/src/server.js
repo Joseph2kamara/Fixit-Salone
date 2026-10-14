@@ -1105,7 +1105,7 @@ app.post('/api/admin/site-images',siteImageUpload.single('image'),async(req,res)
   try{
     const existing=await pool.query('SELECT storage_provider,storage_key,file_url FROM site_images WHERE image_key=$1',[imageKey]);
     oldRow=existing.rows[0]||null;
-    stored=await storeUpload(req.file,'site-images/'+imageKey);
+    stored=await storeUpload(req.file,makeObjectKey('site-images/'+imageKey,req.file));
     const saved=await pool.query(
       'INSERT INTO site_images(image_key,label,storage_provider,storage_key,file_url,content_type,updated_by,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,NOW()) ON CONFLICT(image_key) DO UPDATE SET label=EXCLUDED.label,storage_provider=EXCLUDED.storage_provider,storage_key=EXCLUDED.storage_key,file_url=EXCLUDED.file_url,content_type=EXCLUDED.content_type,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING image_key,label,storage_provider,storage_key,file_url,updated_at',
       [imageKey,slot.label,stored.storage_provider,stored.storage_key,stored.file_url,req.file.mimetype,req.user.sub]
