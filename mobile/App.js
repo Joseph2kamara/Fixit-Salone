@@ -507,6 +507,17 @@ export default function App() {
           ? { full_name: fullName.trim(), phone: phone.trim(), password, role }
           : { phone: phone.trim(), password })
       });
+      if (data.verificationRequired) {
+        setToken(data.verificationToken);
+        setUser(data.user);
+        setRole(data.user.role);
+        setScreen('verify-phone');
+        setPassword('');
+        setVerificationId('');
+        setOtp('');
+        setNotice(data.message || 'Verify your phone number to continue.');
+        return;
+      }
       setToken(data.token);
       setUser(data.user);
       setRole(data.user.role);
@@ -1071,12 +1082,22 @@ export default function App() {
     if (!verificationId || !otp.trim()) { setError('Request a code and enter it first.'); return; }
     setBusy(true); clearMessages();
     try {
-      await api('/api/phone-verification/verify', {
+      const result = await api('/api/phone-verification/verify', {
         method: 'POST', body: JSON.stringify({ verification_id: verificationId, otp: otp.trim() })
       });
       setNotice('Phone number verified successfully.');
       setVerificationId(''); setOtp('');
-      await loadVerification();
+      if (result.token && result.user) {
+        setToken(result.token);
+        setUser(result.user);
+        setRole(result.user.role);
+        setScreen('home');
+        if (result.user.role === 'customer') await loadCustomerProfilePhoto(result.token);
+        else setProfilePhotoUrl('');
+        setNotice('Phone verified. Welcome to FixIt Salone.');
+      } else {
+        await loadVerification();
+      }
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
@@ -1212,6 +1233,32 @@ export default function App() {
             <Text style={styles.splashFooterCompany}>A Service of Sierra Services Ltd.</Text>
           </View>
         </View>
+      </View>
+    );
+  }
+
+  if (screen === 'verify-phone' && token && user) {
+    return (
+      <View style={styles.authSafe}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.pale} />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScreen}>
+            <View style={styles.authWelcomePanel}>
+              <Text style={styles.authWelcomeTitle}>Verify your phone</Text>
+              <Text style={styles.authWelcomeCopy}>We need to confirm that {user.phone} belongs to you before you can use FixIt Salone.</Text>
+            </View>
+            <View style={styles.authDetailsPanel}>
+              {noticePanel}
+              <Button title={busy ? 'Sending…' : 'Send verification code by SMS'} onPress={requestOtp} disabled={busy} />
+              {!!verificationId && <>
+                <Field label="SMS verification code" value={otp} onChangeText={setOtp} placeholder="Enter the code you received" keyboardType="number-pad" autoCapitalize="none" />
+                <Button title={busy ? 'Verifying…' : 'Verify phone and continue'} onPress={verifyOtp} disabled={busy} />
+              </>}
+              <Button title="Back to sign in" secondary onPress={() => { setToken(''); setUser(null); setScreen('auth'); setAuthMode('login'); setPassword(''); setVerificationId(''); setOtp(''); clearMessages(); }} />
+              <Text style={styles.helper}>Verification codes expire. Never share your code with anyone.</Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     );
   }
