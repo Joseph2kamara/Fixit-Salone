@@ -253,11 +253,29 @@ async function d7VerifyRequest(pathname,body){
 }
 
 function signToken(user){return jwt.sign({sub:user.id,role:user.role},JWT_SECRET,{expiresIn:'8h'});}
-function requireAuth(req,res,next){
+function signPhoneVerificationToken(user){return jwt.sign({sub:user.id,role:user.role,purpose:'phone_verification'},JWT_SECRET,{expiresIn:'15m'});}
+function readBearerToken(req){
   const header=req.headers.authorization||'';
-  const token=header.startsWith('Bearer ')?header.slice(7):null;
+  return header.startsWith('Bearer ')?header.slice(7):null;
+}
+function requireAuth(req,res,next){
+  const token=readBearerToken(req);
   if(!token||!JWT_SECRET)return res.status(401).json({error:'Authentication required.'});
-  try{req.user=jwt.verify(token,JWT_SECRET);next()}catch(e){return res.status(401).json({error:'Invalid or expired session.'})}
+  try{
+    const claims=jwt.verify(token,JWT_SECRET);
+    if(claims.purpose==='phone_verification')return res.status(403).json({error:'Phone verification is required before accessing FixIt Salone.'});
+    req.user=claims;next();
+  }catch(e){return res.status(401).json({error:'Invalid or expired session.'})}
+}
+function requirePhoneVerificationAuth(req,res,next){
+  const token=readBearerToken(req);
+  if(!token||!JWT_SECRET)return res.status(401).json({error:'Verification session required.'});
+  try{
+    const claims=jwt.verify(token,JWT_SECRET);
+    if(!claims.sub)return res.status(401).json({error:'Invalid verification session.'});
+    if(claims.purpose!=='phone_verification' && !claims.role)return res.status(403).json({error:'This session cannot verify a phone number.'});
+    req.user=claims;next();
+  }catch(e){return res.status(401).json({error:'Invalid or expired verification session.'})}
 }
 function requireAdmin(req,res,next){if(req.user&&req.user.role==='admin')return next();return res.status(403).json({error:'Admin access required.'});}
 async function audit(actor,target,action,type,id,metadata){
@@ -278,7 +296,7 @@ app.post('/api/auth/register',authLimiter,async(req,res)=>{
     const {rows}=await pool.query('INSERT INTO users(full_name,phone,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,full_name,phone,role,status,created_at',[String(full_name).trim(),phone,hash,safeRole]);
     const user=rows[0];
     await audit(user.id,user.id,'auth.register','user',user.id,{role:safeRole});
-    res.status(201).json({user,token:signToken(user)});
+    res.status(201).json({user,verificationRequired:true,verificationToken:signPhoneVerificationToken(user),message:'Account created. Verify your phone number to finish registration.'});
   }catch(e){
     if(e.code==='23505')return res.status(409).json({error:'An account with that phone number already exists.'});
     console.error('Register error:',e);
@@ -303,10 +321,16 @@ app.post('/api/auth/login',authLimiter,async(req,res)=>{
       await pool.query('UPDATE users SET failed_login_count=$1'+lockSql+',updated_at=NOW() WHERE id=$2',[nextFailed,user.id]);
       return res.status(nextFailed>=5?429:401).json({error:nextFailed>=5?'Too many failed attempts. Please try again in 15 minutes.':'Invalid phone number or password.'});
     }
-    await pool.query('UPDATE users SET last_login_at=NOW(),failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$1',[user.id]);
+    const verification=await pool.query("SELECT status FROM phone_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[user.id]);
+    const phoneVerified=verification.rows[0]?.status==='verified';
     delete user.password_hash;
     delete user.failed_login_count;
     delete user.locked_until;
+    if(!phoneVerified){
+      await audit(user.id,user.id,'auth.login_phone_verification_required','user',user.id,{role:user.role});
+      return res.json({user,verificationRequired:true,verificationToken:signPhoneVerificationToken(user),message:'Please verify your phone number before signing in.'});
+    }
+    await pool.query('UPDATE users SET last_login_at=NOW(),failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$1',[user.id]);
     await audit(user.id,user.id,'auth.login','user',user.id,{role:user.role});
     res.json({user,token:signToken(user)});
   }catch(e){console.error('Login error:',e);res.status(500).json({error:'Unable to sign in.'})}
@@ -912,7 +936,7 @@ app.post('/api/incidents',requireAuth,async(req,res)=>{
   }catch(e){console.error('Incident error:',e);res.status(500).json({error:'Unable to create incident'})}
 });
 
-app.post('/api/phone-verification/request',requireAuth,authLimiter,async(req,res)=>{
+app.post('/api/phone-verification/request',requirePhoneVerificationAuth,authLimiter,async(req,res)=>{
   try{
     const user=await pool.query('SELECT phone,status FROM users WHERE id=$1',[req.user.sub]);
     if(!user.rows[0])return res.status(404).json({error:'Account not found.'});
@@ -946,7 +970,7 @@ app.post('/api/phone-verification/request',requireAuth,authLimiter,async(req,res
     res.status(status).json({error:message});
   }
 });
-app.post('/api/phone-verification/verify',requireAuth,authLimiter,async(req,res)=>{
+app.post('/api/phone-verification/verify',requirePhoneVerificationAuth,authLimiter,async(req,res)=>{
   const verificationId=String(req.body&&req.body.verification_id||'').trim();
   const otp=String(req.body&&req.body.otp||'').trim();
   if(!verificationId||!/^\d{4,8}$/.test(otp))return res.status(400).json({error:'Verification ID and a valid OTP are required.'});
@@ -964,7 +988,14 @@ app.post('/api/phone-verification/verify',requireAuth,authLimiter,async(req,res)
     }
     const {rows}=await pool.query("UPDATE phone_verifications SET status='verified',verified_at=NOW() WHERE id=$1 RETURNING id,status,verified_at",[row.id]);
     await audit(req.user.sub,req.user.sub,'phone_verification.completed','phone_verification',row.id,{provider:'d7'});
-    res.json({ok:true,verified:true,verification:rows[0],message:'Phone number verified successfully.'});
+    const account=await pool.query('SELECT id,full_name,phone,role,status FROM users WHERE id=$1 LIMIT 1',[req.user.sub]);
+    const response={ok:true,verified:true,verification:rows[0],message:'Phone number verified successfully.'};
+    if(req.user.purpose==='phone_verification' && account.rows[0]){
+      await pool.query('UPDATE users SET last_login_at=NOW(),failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$1',[req.user.sub]);
+      response.user=account.rows[0];
+      response.token=signToken(account.rows[0]);
+    }
+    res.json(response);
   }catch(e){
     console.error('Phone verification verify error:',e);
     res.status(502).json({error:e.message||'Unable to verify the code.'});
