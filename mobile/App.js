@@ -463,14 +463,14 @@ export default function App() {
       }
       const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
       const uploadName = 'fixit-profile-photo-' + Date.now() + '.' + extension;
+      // Expo SDK 57 expects a File object in multipart FormData, not the legacy
+      // React Native { uri, name, type } object. Use the picked file directly
+      // rather than copying it to a temporary path that may not exist on Android.
+      const uploadFile = new File(asset.uri);
       const form = new FormData();
-      // ImagePicker already gives a device-local URI. Upload that URI directly;
-      // copying it with the new File API can fail on Android content/cache paths.
-      form.append('photo', { uri: asset.uri, name: uploadName, type: mimeType });
+      form.append('photo', uploadFile, uploadName);
       setProfilePhotoBusy(true);
-      // React Native's native fetch supports ImagePicker URI FormData parts.
-      // expo/fetch rejects this React Native-specific { uri, name, type } part.
-      const uploadResponse = await fetch(API_BASE + '/api/customer/profile-photo', {
+      const uploadResponse = await expoFetch(API_BASE + '/api/customer/profile-photo', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token },
         body: form
