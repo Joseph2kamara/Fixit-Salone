@@ -468,7 +468,15 @@ export default function App() {
       // copying it with the new File API can fail on Android content/cache paths.
       form.append('photo', { uri: asset.uri, name: uploadName, type: mimeType });
       setProfilePhotoBusy(true);
-      const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
+      // React Native's native fetch supports ImagePicker URI FormData parts.
+      // expo/fetch rejects this React Native-specific { uri, name, type } part.
+      const uploadResponse = await fetch(API_BASE + '/api/customer/profile-photo', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: form
+      });
+      const data = await uploadResponse.json().catch(() => ({}));
+      if (!uploadResponse.ok) throw new Error(data.error || 'Unable to upload profile photo.');
       // Re-read the saved URL from the server to avoid showing a stale local upload path.
       const visiblePhotoUrl = await loadCustomerProfilePhoto(token);
       if (!visiblePhotoUrl) throw new Error('The upload finished, but the server could not return the saved photo. Please retry after the backend is redeployed.');
