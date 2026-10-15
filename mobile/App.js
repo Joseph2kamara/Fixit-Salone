@@ -614,12 +614,12 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (token && user?.id) {
+    if (token && user?.id && screen !== 'verify-phone') {
       loadServices();
       if (user.role === 'provider') loadProviderDashboard();
       else { loadProviders(); loadCustomerRequests(); }
     }
-  }, [token, user?.id, user?.role]);
+  }, [token, user?.id, user?.role, screen]);
 
   useEffect(() => {
     let cancelled = false;
