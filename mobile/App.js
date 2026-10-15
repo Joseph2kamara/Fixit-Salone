@@ -462,12 +462,11 @@ export default function App() {
         return;
       }
       const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-      const sourceFile = new File(asset.uri);
       const uploadName = 'fixit-profile-photo-' + Date.now() + '.' + extension;
-      const uploadFile = new File(Paths.cache, uploadName);
-      sourceFile.copy(uploadFile);
       const form = new FormData();
-      form.append('photo', uploadFile);
+      // ImagePicker already gives a device-local URI. Upload that URI directly;
+      // copying it with the new File API can fail on Android content/cache paths.
+      form.append('photo', { uri: asset.uri, name: uploadName, type: mimeType });
       setProfilePhotoBusy(true);
       const data = await api('/api/customer/profile-photo', { method: 'POST', body: form });
       // Re-read the saved URL from the server to avoid showing a stale local upload path.
