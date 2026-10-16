@@ -296,7 +296,7 @@ app.post('/api/auth/register',authLimiter,async(req,res)=>{
     const {rows}=await pool.query('INSERT INTO users(full_name,phone,password_hash,role) VALUES($1,$2,$3,$4) RETURNING id,full_name,phone,role,status,created_at',[String(full_name).trim(),phone,hash,safeRole]);
     const user=rows[0];
     await audit(user.id,user.id,'auth.register','user',user.id,{role:safeRole});
-    res.status(201).json({user,verificationRequired:true,verificationToken:signPhoneVerificationToken(user),message:'Account created. Verify your phone number to finish registration.'});
+    res.status(201).json({user,token:signToken(user),message:'Account created successfully.'});
   }catch(e){
     if(e.code==='23505')return res.status(409).json({error:'An account with that phone number already exists.'});
     console.error('Register error:',e);
@@ -321,15 +321,9 @@ app.post('/api/auth/login',authLimiter,async(req,res)=>{
       await pool.query('UPDATE users SET failed_login_count=$1'+lockSql+',updated_at=NOW() WHERE id=$2',[nextFailed,user.id]);
       return res.status(nextFailed>=5?429:401).json({error:nextFailed>=5?'Too many failed attempts. Please try again in 15 minutes.':'Invalid phone number or password.'});
     }
-    const verification=await pool.query("SELECT status FROM phone_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[user.id]);
-    const phoneVerified=verification.rows[0]?.status==='verified';
     delete user.password_hash;
     delete user.failed_login_count;
     delete user.locked_until;
-    if(!phoneVerified){
-      await audit(user.id,user.id,'auth.login_phone_verification_required','user',user.id,{role:user.role});
-      return res.json({user,verificationRequired:true,verificationToken:signPhoneVerificationToken(user),message:'Please verify your phone number before signing in.'});
-    }
     await pool.query('UPDATE users SET last_login_at=NOW(),failed_login_count=0,locked_until=NULL,updated_at=NOW() WHERE id=$1',[user.id]);
     await audit(user.id,user.id,'auth.login','user',user.id,{role:user.role});
     res.json({user,token:signToken(user)});
