@@ -9,11 +9,24 @@ async function loadPublicSiteImages(){
  catch(e){siteImages={}}
  applyHomepageHeroImage();
 }
+let homepageHeroIndex=0;
+let homepageHeroTimer=null;
 function applyHomepageHeroImage(){
- const image=$('homepageHeroImage');if(!image)return;
- const item=siteImages['homepage-hero'];
- if(item&&item.image_url){image.src=mediaUrl(item.image_url);image.hidden=false}
- else{image.removeAttribute('src');image.hidden=true}
+ const host=$('homepageHeroCarousel');if(!host)return;
+ const items=['homepage-hero','homepage-hero-2','homepage-hero-3','homepage-hero-4']
+  .map(key=>siteImages[key]).filter(item=>item&&item.image_url);
+ if(homepageHeroTimer){clearInterval(homepageHeroTimer);homepageHeroTimer=null}
+ if(!items.length){host.hidden=true;host.innerHTML='';return}
+ homepageHeroIndex=Math.min(homepageHeroIndex,items.length-1);
+ host.hidden=false;
+ host.innerHTML='<div class="homepage-hero-slides" aria-live="polite">'+items.map((item,i)=>
+  '<img class="homepage-hero-slide'+(i===homepageHeroIndex?' is-active':'')+'" src="'+esc(mediaUrl(item.image_url))+'" alt="FixIt Salone service showcase" '+(i===homepageHeroIndex?'':'loading="lazy"')+' '+(i===homepageHeroIndex?'':'hidden')+'>'
+ ).join('')+'</div>'+(items.length>1?'<div class="homepage-hero-controls" aria-label="Homepage picture controls"><button type="button" class="homepage-hero-arrow" data-hero-step="-1" aria-label="Previous picture">‹</button><div class="homepage-hero-dots">'+items.map((item,i)=>'<button type="button" class="homepage-hero-dot'+(i===homepageHeroIndex?' is-active':'')+'" data-hero-index="'+i+'" aria-label="Show picture '+(i+1)+'" aria-current="'+(i===homepageHeroIndex?'true':'false')+'"></button>').join('')+'</div><button type="button" class="homepage-hero-arrow" data-hero-step="1" aria-label="Next picture">›</button></div>':'');
+ const show=(index)=>{homepageHeroIndex=(index+items.length)%items.length;host.querySelectorAll('.homepage-hero-slide').forEach((img,i)=>{img.hidden=i!==homepageHeroIndex;img.classList.toggle('is-active',i===homepageHeroIndex)});host.querySelectorAll('.homepage-hero-dot').forEach((dot,i)=>{dot.classList.toggle('is-active',i===homepageHeroIndex);dot.setAttribute('aria-current',i===homepageHeroIndex?'true':'false')})};
+ host.querySelectorAll('[data-hero-index]').forEach(button=>button.addEventListener('click',()=>{show(Number(button.dataset.heroIndex));restart()}));
+ host.querySelectorAll('[data-hero-step]').forEach(button=>button.addEventListener('click',()=>{show(homepageHeroIndex+Number(button.dataset.heroStep));restart()}));
+ const restart=()=>{if(homepageHeroTimer)clearInterval(homepageHeroTimer);if(items.length>1)homepageHeroTimer=setInterval(()=>show(homepageHeroIndex+1),5000)};
+ if(items.length>1)restart();
 }
 const AUTH_TOKEN_KEY='fixit_access_token';
 function authToken(){return sessionStorage.getItem(AUTH_TOKEN_KEY)||'';}
