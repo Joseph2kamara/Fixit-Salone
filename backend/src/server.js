@@ -72,7 +72,10 @@ const SERVICE_CATALOGUE = [
 ];
 const SITE_IMAGE_CATEGORY_LABELS = ["Plumbing","Electrical","General Home","Roofing","Appliance Repair","Emergency Services","IT & Computer","Cleaning","Carpentry","Painting","Pest Control","Moving & Delivery","Beauty & Grooming","AC & Refrigerator","Generator Service & Repair","CCTV & Security Systems","Welding & Metal Work","Solar & Inverter Systems","Tiling & Masonry","Auto Repair & Mechanic","Landscaping & Gardening","Water Tank & Well Services"];
 const SITE_IMAGE_SLOTS = [
-  {image_key:'homepage-hero',label:'Homepage hero image'},
+  {image_key:'homepage-hero',label:'Homepage picture 1'},
+  {image_key:'homepage-hero-2',label:'Homepage picture 2'},
+  {image_key:'homepage-hero-3',label:'Homepage picture 3'},
+  {image_key:'homepage-hero-4',label:'Homepage picture 4'},
   ...SITE_IMAGE_CATEGORY_LABELS.map(label=>({
     image_key:'service-'+label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),
     label
