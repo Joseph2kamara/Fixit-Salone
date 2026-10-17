@@ -226,7 +226,7 @@ app.get('/api/site-images',async(req,res)=>{
 
 const authLimiter=rateLimit({windowMs:15*60*1000,max:10,standardHeaders:true,legacyHeaders:false,message:{error:'Too many authentication attempts. Try again later.'}});
 const adminLimiter=rateLimit({windowMs:60*1000,max:60,standardHeaders:true,legacyHeaders:false,message:{error:'Too many admin requests. Try again shortly.'}});
-function normalizePhone(value){return String(value||'').trim().replace(/[\s()-]/g,'');}
+function normalizePhone(value){const raw=String(value||'').trim().replace(/[\s()-]/g,'');if(/^\d{8}$/.test(raw))return '+232'+raw;if(/^0\d{8}$/.test(raw))return '+232'+raw.slice(1);if(/^232\d{8}$/.test(raw))return '+'+raw;return raw;}
 function normalizeSierraLeonePhone(value){
   const raw=normalizePhone(value);
   if(/^\+232\d{8}$/.test(raw))return raw;
