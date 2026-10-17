@@ -501,11 +501,13 @@ export default function App() {
     setBusy(true);
     try {
       const registering = authMode === 'register';
+      const rawPhone = phone.trim().replace(/[\\s()-]/g, '');
+      const normalizedPhone = /^\\+?232\\d{8}$/.test(rawPhone) ? (rawPhone.startsWith('+') ? rawPhone : '+' + rawPhone) : /^0\\d{8}$/.test(rawPhone) ? '+232' + rawPhone.slice(1) : /^\\d{8}$/.test(rawPhone) ? '+232' + rawPhone : rawPhone;
       const data = await api(registering ? '/api/auth/register' : '/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(registering
-          ? { full_name: fullName.trim(), phone: phone.trim(), password, role }
-          : { phone: phone.trim(), password })
+          ? { full_name: fullName.trim(), phone: normalizedPhone, password, role }
+          : { phone: normalizedPhone, password })
       });
       if (data.verificationRequired) {
         setToken(data.verificationToken);
@@ -1295,7 +1297,8 @@ export default function App() {
               <Text style={styles.authFieldLabel}>Phone number</Text>
               <View style={styles.authInputRow}>
                 <Text style={styles.authCountryFlag}>🇸🇱</Text>
-                <TextInput value={phone} onChangeText={setPhone} placeholder="+232XXXXXXXXX" placeholderTextColor="#6F7B89"
+                <Text style={styles.authCountryCode}>+232</Text>
+                <TextInput value={phone} onChangeText={setPhone} placeholder="76 123 456" placeholderTextColor="#6F7B89"
                   keyboardType="phone-pad" autoCapitalize="none" autoCorrect={false} style={styles.authInput}
                   accessibilityLabel="Phone number" returnKeyType="next" />
                 <Text style={styles.authPhoneIcon}>☎</Text>
@@ -2074,7 +2077,8 @@ const styles = StyleSheet.create({
   authDetailsTitle: { color: COLORS.navy, fontSize: 26, fontWeight: '900', letterSpacing: -0.6, marginBottom: 17 },
   authFieldLabel: { color: COLORS.navy, fontSize: 13, fontWeight: '800', marginBottom: 6, marginTop: 1 },
   authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 54, borderRadius: 14, backgroundColor: COLORS.pale, borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 12 },
-  authCountryFlag: { fontSize: 22, marginRight: 10 },
+  authCountryFlag: { fontSize: 22, marginRight: 8 },
+  authCountryCode: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginRight: 8 },
   authInput: { flex: 1, minWidth: 0, color: COLORS.ink, fontSize: 15, paddingVertical: 11 },
   authPhoneIcon: { color: COLORS.muted, fontSize: 20, marginLeft: 7 },
   authPasswordLabel: { marginTop: 13 },
