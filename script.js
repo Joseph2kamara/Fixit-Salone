@@ -358,7 +358,7 @@ function customerLogin(mode='login',role='customer'){
   const action=mode==='register'?'Create account':'Sign in';
   openModal('<p class="eyebrow">'+title.toUpperCase()+' ACCOUNT</p><h2>'+action+'</h2>'+
     (mode==='register'?'<label class="form-label">Full name</label><input id="authName" class="form-control" placeholder="Your full name">':'')+
-    '<label class="form-label">Phone number</label><input id="authPhone" class="form-control" placeholder="+232 76 000 000" autocomplete="tel">'+
+    '<label class="form-label">Phone number</label><div class="phone-entry"><span>🇸🇱 +232</span><input id="authPhone" class="form-control" placeholder="76 123 456" autocomplete="tel" inputmode="tel"></div><small class="quote-note">Enter the 8 digits after +232, or type your full number.</small>'+
     '<label class="form-label">Password</label><input id="authPassword" type="password" class="form-control" placeholder="At least 8 characters" autocomplete="'+(mode==='register'?'new-password':'current-password')+'">'+
     '<button class="btn" id="authSubmit">'+action+'</button>'+
     (mode==='login'?'<button class="btn outline" id="forgotPassword">Forgot password?</button>':'')+
@@ -366,7 +366,7 @@ function customerLogin(mode='login',role='customer'){
     '<p id="authMessage" class="form-message"></p>'+
     '<p class="quote-note">Your password is securely stored on the FixIt backend and is never saved in your browser.</p>');
   $('authSubmit').onclick=async()=>{
-    const phone=$('authPhone').value.trim(),password=$('authPassword').value;
+    const rawPhone=$('authPhone').value.trim(),phoneDigits=rawPhone.replace(/[\s()-]/g,''),phone=/^\+?232/.test(phoneDigits)?(phoneDigits.startsWith('+')?phoneDigits:'+'+phoneDigits):(/^0\d{8}$/.test(phoneDigits)?'+232'+phoneDigits.slice(1):/^\d{8}$/.test(phoneDigits)?'+232'+phoneDigits:phoneDigits),password=$('authPassword').value;
     const name=mode==='register'?$('authName').value.trim():'';
     if(!phone||!password||(mode==='register'&&!name)){ $('authMessage').textContent='Please complete all fields.';return; }
     $('authSubmit').disabled=true;$('authMessage').textContent=mode==='register'?'Creating account…':'Signing in…';
