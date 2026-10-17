@@ -542,3 +542,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   :root{scroll-behavior:auto}
   *,*::before,*::after{transition:none!important;animation:none!important}
 }
+
+
+/* Rotating homepage picture carousel */
+.homepage-hero-carousel{position:relative;width:100%;max-width:790px;margin-top:18px;overflow:hidden;border:1px solid var(--fixit-line);border-radius:17px;background:#eef4f0;box-shadow:0 12px 30px #10271d12}
+.homepage-hero-carousel[hidden]{display:none!important}
+.homepage-hero-slides{width:100%;aspect-ratio:16/6;position:relative}
+.homepage-hero-slide{width:100%;height:100%;object-fit:cover;display:block}
+.homepage-hero-slide[hidden]{display:none!important}
+.homepage-hero-controls{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;padding:12px;background:linear-gradient(transparent,#07140f9c)}
+.homepage-hero-arrow{display:grid;place-items:center;width:34px;height:34px;border:1px solid #ffffff8a;border-radius:50%;background:#ffffffeb;color:#17261e;font-size:24px;line-height:1;cursor:pointer}
+.homepage-hero-dots{display:flex;align-items:center;justify-content:center;gap:7px}
+.homepage-hero-dot{width:8px;height:8px;padding:0;border:0;border-radius:50%;background:#ffffffa8;cursor:pointer}
+.homepage-hero-dot.is-active{width:21px;border-radius:8px;background:#fff}
+@media(max-width:850px){.homepage-hero-slides{aspect-ratio:16/8}}
+@media(max-width:520px){.homepage-hero-carousel{margin-top:15px;border-radius:14px}.homepage-hero-slides{aspect-ratio:4/3}.homepage-hero-controls{padding:9px}.homepage-hero-arrow{width:32px;height:32px}}
