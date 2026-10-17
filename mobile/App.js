@@ -501,8 +501,8 @@ export default function App() {
     setBusy(true);
     try {
       const registering = authMode === 'register';
-      const rawPhone = phone.trim().replace(/[\\s()-]/g, '');
-      const normalizedPhone = /^\\+?232\\d{8}$/.test(rawPhone) ? (rawPhone.startsWith('+') ? rawPhone : '+' + rawPhone) : /^0\\d{8}$/.test(rawPhone) ? '+232' + rawPhone.slice(1) : /^\\d{8}$/.test(rawPhone) ? '+232' + rawPhone : rawPhone;
+      const rawPhone = phone.trim().replace(/[\s()-]/g, '');
+      const normalizedPhone = /^\+?232\d{8}$/.test(rawPhone) ? (rawPhone.startsWith('+') ? rawPhone : '+' + rawPhone) : /^0\d{8}$/.test(rawPhone) ? '+232' + rawPhone.slice(1) : /^\d{8}$/.test(rawPhone) ? '+232' + rawPhone : rawPhone;
       const data = await api(registering ? '/api/auth/register' : '/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(registering
