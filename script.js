@@ -577,6 +577,37 @@ function renderJobProgressTracker(status){
     '<div class="job-progress-steps">'+stages.map((stage,index)=>'<div class="job-progress-step"><span class="job-progress-dot'+(index<=current?' is-done':'')+(index===current?' is-current':'')+'"></span><small>'+stage.label+'</small></div>').join('')+'</div></div>';
 }
 
+async function openServiceConversation(requestId,returnTo){
+  const id=String(requestId||'');
+  const returnFn=typeof returnTo==='function'?returnTo:customerRequests;
+  async function renderConversation(){
+    try{
+      const data=await api('/api/service-requests/'+encodeURIComponent(id)+'/messages');
+      const messages=data.messages||[];
+      openModal('<p class="eyebrow">FIXIT MESSAGES</p><h2>Service conversation</h2><p class="quote-note">Discuss this service request here. Never share passwords, PINs, or OTPs.</p><div class="message-thread" id="serviceMessageThread">'+
+        (messages.length?messages.map(m=>'<article class="message-bubble '+(m.sender_user_id===currentUserId?'message-mine':'message-theirs')+'"><div class="message-meta"><b>'+esc(m.sender_name||'Participant')+'</b><small>'+esc(new Date(m.created_at).toLocaleString())+'</small></div><p>'+esc(m.message_text)+'</p></article>').join(''):'<p class="quote-note message-empty">No messages yet. Send the first message below.</p>')+
+        '</div><form id="serviceMessageForm" class="message-compose"><label for="serviceMessageInput" class="form-label">Your message</label><textarea id="serviceMessageInput" class="form-control" rows="3" maxlength="2000" placeholder="Write a message..." required></textarea><div class="message-compose-actions"><small class="quote-note">Maximum 2,000 characters</small><button class="btn" type="submit">Send message</button></div><p id="serviceMessageError" class="form-message" aria-live="polite"></p></form><div class="message-footer-actions"><button class="btn outline" id="refreshServiceMessages" type="button">Refresh messages</button><button class="btn outline" id="backServiceMessages" type="button">Back</button></div>');
+      const thread=$('serviceMessageThread');
+      if(thread)thread.scrollTop=thread.scrollHeight;
+      $('backServiceMessages').onclick=returnFn;
+      $('refreshServiceMessages').onclick=renderConversation;
+      $('serviceMessageForm').onsubmit=async ev=>{
+        ev.preventDefault();
+        const input=$('serviceMessageInput'), submit=ev.submitter||$('serviceMessageForm').querySelector('button[type="submit"]'), error=$('serviceMessageError');
+        const message=input.value.trim();if(!message){input.focus();return}
+        submit.disabled=true;error.textContent='';
+        try{await api('/api/service-requests/'+encodeURIComponent(id)+'/messages',{method:'POST',body:JSON.stringify({message})});await renderConversation();}
+        catch(e){error.textContent=e.message;submit.disabled=false;}
+      };
+    }catch(e){
+      openModal('<p class="eyebrow">FIXIT MESSAGES</p><h2>Conversation unavailable</h2><p class="quote-note">'+esc(e.message||'Unable to load this conversation.')+'</p><button class="btn outline" id="backServiceMessages">Back</button>');
+      $('backServiceMessages').onclick=returnFn;
+    }
+  }
+  let currentUserId='';
+  try{const me=await api('/api/auth/me');currentUserId=me.user.id;await renderConversation();}
+  catch(e){alert(e.message)}
+}
 async function customerRequests(){
   if(!authToken()){customerLogin('login','customer');return}
   try{
@@ -590,7 +621,7 @@ async function customerRequests(){
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
       if(r.status==='completed')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="review">Rate provider ⭐</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+(r.provider_name||r.business_name?'<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="message">Message provider</button>':'')+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
     openModal('<p class="eyebrow">MY REQUESTS</p><h2>Your FixIt jobs</h2><p class="quote-note">Review provider quotes here. Payment will only be requested after you approve the final quote.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="closeCustomerRequests">Done</button>');
     document.querySelectorAll('[data-customer-action]').forEach(btn=>btn.onclick=async()=>{
@@ -614,7 +645,7 @@ async function customerRequests(){
           }
           return;
         }
-        if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
+        if(btn.dataset.customerAction==='message'){openServiceConversation(btn.dataset.customerJob,customerRequests);return;}if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
         if(btn.dataset.customerAction==='decline'){if(!confirm('Decline this quote? The provider will be notified that you do not wish to proceed.'))return;await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/status',{method:'PATCH',body:JSON.stringify({status:'declined'})});customerRequests();return;}
         if(btn.dataset.customerAction==='pay'){
           const result=await api('/api/payments/intent',{method:'POST',body:JSON.stringify({service_request_id:btn.dataset.customerJob})});
@@ -787,7 +818,7 @@ async function providerJobs(){
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
       if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
-      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Customer:</b> '+esc(r.customer_name||'Customer')+'</p>'+(r.customer_phone?'<p><b>Customer contact:</b> '+esc(r.customer_phone)+'</p>':'')+'<p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button>'+actions.join('')+'</div></article>';
+      return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div>'+renderJobProgressTracker(r.status)+'<p><b>Customer:</b> '+esc(r.customer_name||'Customer')+'</p>'+(r.customer_phone?'<p><b>Customer contact:</b> '+esc(r.customer_phone)+'</p>':'')+'<p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button><button class="btn" data-job="'+esc(r.id)+'" data-action="message">Message customer</button>'+actions.join('')+'</div></article>';
     }).join(''):'<div class="card"><h3>No incoming requests</h3><p class="desc">New customer requests will appear here.</p></div>';
     openModal('<p class="eyebrow">INCOMING JOBS</p><h2>Manage customer requests</h2><p class="quote-note">Send a final quote before work starts. FixIt fee is 1% of the approved job value.</p><div class="job-list">'+cards+'</div><button class="btn outline" id="backProvider">Back to dashboard</button>');
     document.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=()=>handleProviderJob(btn.dataset.job,btn.dataset.action));
@@ -795,6 +826,7 @@ async function providerJobs(){
   }catch(e){alert(e.message)}
 }
 async function handleProviderJob(id,action){
+  if(action==='message'){openServiceConversation(id,providerJobs);return;}
   try{
     if(action==='photos'){
       const photos=await api('/api/service-requests/'+encodeURIComponent(id)+'/photos');
