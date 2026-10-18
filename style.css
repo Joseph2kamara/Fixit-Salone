@@ -557,3 +557,18 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .homepage-hero-dot.is-active{width:21px;border-radius:8px;background:#fff}
 @media(max-width:850px){.homepage-hero-slides{aspect-ratio:16/8}}
 @media(max-width:520px){.homepage-hero-carousel{margin-top:15px;border-radius:14px}.homepage-hero-slides{aspect-ratio:4/3}.homepage-hero-controls{padding:9px}.homepage-hero-arrow{width:32px;height:32px}}
+
+
+/* Mobile homepage: keep the carousel compact and bring search into view sooner */
+@media(max-width:520px){
+  .home-hero{padding-top:24px;padding-bottom:20px}
+  .homepage-hero-carousel{margin-top:12px}
+  .homepage-hero-slides{aspect-ratio:16/10}
+  .homepage-hero-controls{padding:8px}
+  .homepage-hero-arrow{width:32px;height:32px}
+  .home-search{margin-top:14px;padding:6px}
+  .home-search-main{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px}
+  .home-search input{width:100%;min-width:0;box-sizing:border-box;font-size:16px;padding:11px 9px}
+  .home-search-button{min-height:44px;padding:10px 12px;white-space:nowrap}
+  .home-location-filters summary{padding:6px 4px}
+}
