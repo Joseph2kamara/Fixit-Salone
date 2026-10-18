@@ -596,3 +596,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   #services.home-services .category-emoji{font-size:clamp(25px,7vw,34px)}
   #services.home-services .categories.categories-carousel .category-page-grid .category-btn b{font-size:12px;line-height:1.25;min-height:26px;margin-top:5px}
 }
+
+
+/* Refine mobile spacing around quick categories and provider discovery */
+@media(max-width:520px){
+  #services.home-services{padding-top:8px;padding-bottom:10px}
+  #services.home-services .home-section-top{margin-bottom:6px}
+  #services.home-services .book-now-wrap{margin-top:10px}
+  #services.home-services .book-now-button{min-height:46px}
+  #providers.section{padding-top:24px}
+  #providers .section-head{margin-bottom:12px}
+}
