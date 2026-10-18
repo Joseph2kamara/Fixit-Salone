@@ -589,7 +589,9 @@ async function providerReferralCount(providerId){
 
 app.post('/api/service-requests',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
-  const {provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details}=req.body||{};
+  const {provider_id,service_id,region,district,area,service_address,directions,contact_phone,pricing_type,job_details}=req.body||{};
+  const contactPhone=String(contact_phone||'').replace(/\\D/g,'').replace(/^232/,'');
+  if(contactPhone.length!==8)return res.status(400).json({error:'Enter a valid Sierra Leone contact phone number with 8 digits after +232.'});
   if(!provider_id||!service_id||!region||!district||!area||!service_address||!pricing_type||!job_details)return res.status(400).json({error:'Provider, service, location, pricing type and job details are required.'});
   if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
   let client;
@@ -600,9 +602,9 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
     if(!provider.rows[0]||!service.rows[0]||!offered.rows[0])return res.status(400).json({error:'That provider does not currently offer the selected service.'});
     client=await pool.connect();
     await client.query('BEGIN');
-    const {rows}=await client.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,pricing_type,job_details)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,status,created_at`,
-      [req.user.sub,provider_id,service_id,String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,pricing_type,String(job_details).trim()]);
+    const {rows}=await client.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,contact_phone,pricing_type,job_details)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,status,created_at`,
+      [req.user.sub,provider_id,service_id,String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,contactPhone,pricing_type,String(job_details).trim()]);
     const countResult=await client.query('SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1',[provider_id]);
     const referralCount=Number(countResult.rows[0]?.count||0);
     const subscriptionResult=await client.query("SELECT id FROM provider_subscriptions WHERE provider_id=$1 AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1",[provider_id]);
@@ -740,7 +742,7 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
     const subscription=await providerSubscriptionState(providerId);
     const referralCount=await providerReferralCount(providerId);
     const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
-      u.full_name AS customer_name,u.phone AS customer_phone,s.name AS service_name
+      u.full_name AS customer_name,COALESCE(sr.contact_phone,u.phone) AS customer_phone,s.name AS service_name
       FROM service_requests sr
       LEFT JOIN users u ON u.id=sr.customer_user_id
       LEFT JOIN services s ON s.id=sr.service_id
@@ -1321,10 +1323,15 @@ async function ensureSiteImagesTable(){
   console.log('Site image table checked.');
 }
 
+async function ensureServiceRequestContactPhoneColumn(){
+  await pool.query('ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(20)');
+  console.log('Service request contact phone column checked.');
+}
+
 async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_key TEXT');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_provider VARCHAR(30)');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureServiceRequestContactPhoneColumn()).then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
