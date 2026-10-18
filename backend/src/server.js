@@ -502,7 +502,9 @@ app.get('/api/providers',async(req,res)=>{
     if(region){values.push(String(region));where.push('pp.region=$'+values.length)}
     if(district){values.push(String(district));where.push('pp.district=$'+values.length)}
     const sql=`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,
-      u.full_name,u.profile_photo_storage_key,u.profile_photo_storage_provider,u.profile_photo_file_url,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description
+      u.full_name,u.profile_photo_storage_key,u.profile_photo_storage_provider,u.profile_photo_file_url,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description,
+      COALESCE((SELECT ROUND(AVG(pr.rating)::numeric,1) FROM provider_reviews pr WHERE pr.provider_id=pp.id),0) AS rating,
+      (SELECT COUNT(*)::int FROM provider_reviews pr WHERE pr.provider_id=pp.id) AS review_count
       FROM provider_profiles pp
       JOIN users u ON u.id=pp.user_id AND u.status='active'
       JOIN provider_services ps ON ps.provider_id=pp.id
@@ -868,6 +870,15 @@ app.post('/api/service-requests/:id/review',requireAuth,async(req,res)=>{
     await audit(req.user.sub,null,'provider.review_created','provider_review',rows[0].id,{provider_id:r.provider_id,service_request_id:r.id,rating});
     res.status(201).json(rows[0]);
   }catch(e){console.error('Review error:',e);res.status(500).json({error:'Unable to submit review.'})}
+});
+
+app.get('/api/providers/:id/reviews',async(req,res)=>{
+  try{
+    const {rows}=await pool.query(`SELECT pr.id,pr.rating,pr.review_text,pr.created_at,u.full_name AS customer_name
+      FROM provider_reviews pr JOIN users u ON u.id=pr.customer_user_id
+      WHERE pr.provider_id=$1 ORDER BY pr.created_at DESC LIMIT 50`,[req.params.id]);
+    res.json(rows);
+  }catch(e){console.error('Provider reviews error:',e);res.status(500).json({error:'Unable to load provider reviews.'})}
 });
 
 app.get('/api/providers/:id/work',async(req,res)=>{
