@@ -590,7 +590,7 @@ async function providerReferralCount(providerId){
 app.post('/api/service-requests',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   const {provider_id,service_id,region,district,area,service_address,directions,contact_phone,pricing_type,job_details}=req.body||{};
-  const contactPhone=String(contact_phone||'').replace(/\\D/g,'').replace(/^232/,'');
+  const contactPhone=String(contact_phone||'').replace(/\D/g,'').replace(/^232/,'');
   if(contactPhone.length!==8)return res.status(400).json({error:'Enter a valid Sierra Leone contact phone number with 8 digits after +232.'});
   if(!provider_id||!service_id||!region||!district||!area||!service_address||!pricing_type||!job_details)return res.status(400).json({error:'Provider, service, location, pricing type and job details are required.'});
   if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
