@@ -881,6 +881,10 @@ app.post('/api/service-requests/:id/messages',requireAuth,async(req,res)=>{
     const request=await getMessagingRequestAccess(req,res);if(!request)return;
     const {rows}=await pool.query(`INSERT INTO service_request_messages(service_request_id,sender_user_id,message_text)
       VALUES($1,$2,$3) RETURNING id,service_request_id,sender_user_id,message_text,created_at`,[request.id,req.user.sub,message]);
+    if(req.user.role==='customer' && request.provider_id){
+      await pool.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',
+        [request.provider_id,'new_message','New customer message','A customer sent you a message about a service request.',request.id]);
+    }
     await audit(req.user.sub,req.user.role==='customer'?request.provider_user_id:request.customer_user_id,'service_request.message_sent','service_request_message',rows[0].id,{service_request_id:request.id});
     res.status(201).json(rows[0]);
   }catch(e){console.error('Send message error:',e);res.status(500).json({error:'Unable to send your message.'})}
