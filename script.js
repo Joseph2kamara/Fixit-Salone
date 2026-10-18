@@ -470,7 +470,7 @@ async function showRequest(i){
 async function submitRequest(provider,serviceId){
   const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),contactPhone=$('requestPhone').value.trim(),files=[...$('jobPhotos').files,...$('jobCamera').files];
   if(!r||!d||!a||!addr||!details||!contactPhone){alert('Please complete your contact phone number, region, district, area, address and job details.');return}
-  const phoneDigits=contactPhone.replace(/\\D/g,'').replace(/^232/,'');
+  const phoneDigits=contactPhone.replace(/\D/g,'').replace(/^232/,'');
   if(phoneDigits.length!==8){alert('Please enter a valid Sierra Leone phone number with 8 digits after +232.');return}
   if(files.length>5){alert('Maximum 5 photos.');return}
   for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
