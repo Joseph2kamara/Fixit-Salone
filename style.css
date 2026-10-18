@@ -712,3 +712,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   html{scroll-behavior:auto}
   .category-art,.btn,.home-search-button,.book-now-button,#providerGrid .card{transition:none}
 }
+
+
+/* Desktop header: keep navigation labels on one line and avoid squeezed links */
+@media(min-width:851px){
+  header .nav{gap:clamp(12px,1.4vw,24px)}
+  header .nav nav{display:flex;flex:1;justify-content:center;align-items:center;gap:clamp(12px,1.7vw,28px);min-width:0;white-space:nowrap;font-size:clamp(12px,.9vw,14px)}
+  header .nav nav a{white-space:nowrap}
+  header .nav-actions{flex:0 1 auto;gap:7px;min-width:0}
+  header .nav-actions .btn{white-space:normal;text-align:center;padding:10px clamp(10px,.9vw,16px);line-height:1.25}
+  header .brand{flex:0 0 auto;white-space:nowrap}
+}
