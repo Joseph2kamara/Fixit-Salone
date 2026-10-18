@@ -732,3 +732,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .home-location-filters summary{display:flex;align-items:center;gap:6px}
   .home-location-filters summary:after{float:none;margin-left:auto;flex:0 0 auto;line-height:1}
 }
+
+
+/* Customer review cards inside provider profiles */
+.review-summary{display:flex;align-items:center;gap:8px;margin:10px 0 14px;padding:12px 14px;border:1px solid var(--border,#e5e7eb);border-radius:12px;background:var(--surface,#fff)}
+.review-summary strong{font-size:1.2rem;color:#d97706}
+.provider-review{padding:13px 0;border-bottom:1px solid var(--border,#e5e7eb)}
+.provider-review:last-child{border-bottom:0}
+.provider-review-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.provider-review-top span{color:#d97706;letter-spacing:1px;white-space:nowrap}
+.provider-review p{margin:7px 0;overflow-wrap:anywhere}
+.provider-review small{font-size:.8rem}
