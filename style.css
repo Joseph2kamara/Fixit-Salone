@@ -584,3 +584,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .home-location-filters summary{min-height:42px}
   .mobile-bottom-nav{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 }
+
+
+/* Compact mobile quick-category tiles without changing category navigation */
+@media(max-width:520px){
+  #services.home-services{padding-top:10px;padding-bottom:18px}
+  #services.home-services .home-section-top{margin-bottom:8px}
+  #services.home-services .categories.categories-carousel .category-page-grid{gap:9px}
+  #services.home-services .categories.categories-carousel .category-page-grid .category-btn{padding-bottom:2px}
+  #services.home-services .category-art{aspect-ratio:1.18;border-radius:11px}
+  #services.home-services .category-emoji{font-size:clamp(25px,7vw,34px)}
+  #services.home-services .categories.categories-carousel .category-page-grid .category-btn b{font-size:12px;line-height:1.25;min-height:26px;margin-top:5px}
+}
