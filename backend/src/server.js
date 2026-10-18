@@ -840,6 +840,52 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to update request status.'})}
 });
 
+
+// Customer-provider messaging: only the customer and assigned provider can access a request conversation.
+async function getMessagingRequestAccess(req,res){
+  const result=await pool.query(`SELECT sr.id,sr.customer_user_id,sr.provider_id,sr.status,
+    pp.user_id AS provider_user_id
+    FROM service_requests sr
+    LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id
+    WHERE sr.id=$1`,[req.params.id]);
+  const request=result.rows[0];
+  if(!request){res.status(404).json({error:'Service request not found.'});return null;}
+  if(req.user.role==='customer' && request.customer_user_id===req.user.sub)return request;
+  if(req.user.role==='provider' && request.provider_user_id===req.user.sub){
+    const subscription=await providerSubscriptionState(request.provider_id);
+    if(!subscription){
+      const prior=await pool.query('SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1 AND created_at < (SELECT created_at FROM service_requests WHERE id=$2)',[request.provider_id,request.id]);
+      if(Number(prior.rows[0]?.count||0)>=3){res.status(403).json({error:'Subscribe to a provider plan to message customers about this request.'});return null;}
+    }
+    return request;
+  }
+  res.status(403).json({error:'You do not have access to this conversation.'});
+  return null;
+}
+app.get('/api/service-requests/:id/messages',requireAuth,async(req,res)=>{
+  if(!['customer','provider'].includes(req.user.role))return res.status(403).json({error:'Customer or provider account required.'});
+  try{
+    const request=await getMessagingRequestAccess(req,res);if(!request)return;
+    const {rows}=await pool.query(`SELECT m.id,m.service_request_id,m.sender_user_id,m.message_text,m.created_at,u.full_name AS sender_name,u.role AS sender_role
+      FROM service_request_messages m JOIN users u ON u.id=m.sender_user_id
+      WHERE m.service_request_id=$1 ORDER BY m.created_at ASC LIMIT 300`,[request.id]);
+    res.json({messages:rows,request_id:request.id,request_status:request.status});
+  }catch(e){console.error('Load messages error:',e);res.status(500).json({error:'Unable to load this conversation.'})}
+});
+app.post('/api/service-requests/:id/messages',requireAuth,async(req,res)=>{
+  if(!['customer','provider'].includes(req.user.role))return res.status(403).json({error:'Customer or provider account required.'});
+  const message=String(req.body&&req.body.message||'').trim();
+  if(!message)return res.status(400).json({error:'Write a message before sending.'});
+  if(message.length>2000)return res.status(400).json({error:'Messages must be 2,000 characters or fewer.'});
+  try{
+    const request=await getMessagingRequestAccess(req,res);if(!request)return;
+    const {rows}=await pool.query(`INSERT INTO service_request_messages(service_request_id,sender_user_id,message_text)
+      VALUES($1,$2,$3) RETURNING id,service_request_id,sender_user_id,message_text,created_at`,[request.id,req.user.sub,message]);
+    await audit(req.user.sub,req.user.role==='customer'?request.provider_user_id:request.customer_user_id,'service_request.message_sent','service_request_message',rows[0].id,{service_request_id:request.id});
+    res.status(201).json(rows[0]);
+  }catch(e){console.error('Send message error:',e);res.status(500).json({error:'Unable to send your message.'})}
+});
+
 app.get('/api/providers/:id/reviews',async(req,res)=>{
   try{
     const {rows}=await pool.query(`SELECT pr.id,pr.rating,pr.review_text,pr.created_at,u.full_name AS customer_name
@@ -1329,6 +1375,18 @@ app.get('/api/admin/audit',async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load audit history.'})}
 });
 
+async function ensureMessagingTable(){
+  await pool.query(`CREATE TABLE IF NOT EXISTS service_request_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    service_request_id UUID NOT NULL REFERENCES service_requests(id) ON DELETE CASCADE,
+    sender_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    message_text TEXT NOT NULL CHECK (char_length(message_text) BETWEEN 1 AND 2000),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_service_request_messages_request_created ON service_request_messages(service_request_id,created_at)');
+  console.log('Service request messaging table checked.');
+}
+
 async function ensureSiteImagesTable(){
   await pool.query('CREATE TABLE IF NOT EXISTS site_images (image_key VARCHAR(100) PRIMARY KEY, label VARCHAR(160) NOT NULL, storage_provider VARCHAR(30) NOT NULL, storage_key TEXT NOT NULL, file_url TEXT, content_type VARCHAR(80) NOT NULL, updated_by UUID REFERENCES users(id) ON DELETE SET NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
   console.log('Site image table checked.');
@@ -1345,4 +1403,4 @@ async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureServiceRequestContactPhoneColumn()).then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureServiceRequestContactPhoneColumn()).then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureMessagingTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
