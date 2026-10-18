@@ -742,7 +742,7 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
     const subscription=await providerSubscriptionState(providerId);
     const referralCount=await providerReferralCount(providerId);
     const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
-      u.full_name AS customer_name,COALESCE(sr.contact_phone,u.phone) AS customer_phone,s.name AS service_name
+      u.full_name AS customer_name,s.name AS service_name
       FROM service_requests sr
       LEFT JOIN users u ON u.id=sr.customer_user_id
       LEFT JOIN services s ON s.id=sr.service_id
