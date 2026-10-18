@@ -747,7 +747,8 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
       WHERE sr.provider_id=$1
       ORDER BY sr.created_at DESC LIMIT 100`;
     const result=await pool.query(base,[providerId]);
-    const requests=subscription?result.rows:result.rows.filter((r,idx)=>idx<3);
+    const freeRequestIds=new Set([...result.rows].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(0,3).map(r=>r.id));
+    const requests=subscription?result.rows:result.rows.filter(r=>freeRequestIds.has(r.id));
     res.json({requests,subscription:subscription||null,referral_count:referralCount,free_referrals:3,locked_requests:subscription?0:Math.max(0,referralCount-3),can_receive_requests:!!subscription||referralCount<3});
   }catch(e){console.error('Provider requests error:',e);res.status(500).json({error:'Unable to load provider requests.'})}
 });
