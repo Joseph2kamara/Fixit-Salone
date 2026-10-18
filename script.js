@@ -458,6 +458,7 @@ async function showRequest(i){
     const match=services.find(s=>s.name.toLowerCase()===p.service.toLowerCase());
     if(!match){alert('This service is not yet available in the live marketplace.');return}
     openModal('<p class="eyebrow">SERVICE REQUEST</p><h2>Request '+esc(p.service)+'</h2><p>Provider: <b>'+esc(p.name)+'</b></p>'+locationFields('request')+
+      '<label class="form-label">Contact phone number</label><div class="phone-entry"><span>🇸🇱 +232</span><input id="requestPhone" class="form-control" type="tel" inputmode="tel" autocomplete="tel" placeholder="76 123 456" required></div><small class="quote-note">Enter the number the provider should call. Use the 8 digits after +232.</small>'+
       '<label class="form-label">Pricing type</label><select id="quoteType" class="form-control"><option value="starting_price">Starting price</option><option value="fixed_price">Fixed price</option><option value="quote_required">Quote required</option></select>'+
       '<label class="form-label">Job details</label><textarea id="jobDetails" class="form-control" placeholder="Describe the work you need..."></textarea>'+
       '<label class="form-label">Photos (optional, up to 5)</label><div class="upload-choice"><label class="btn outline" for="jobPhotos">📁 Choose photo</label><label class="btn outline" for="jobCamera">📷 Take photo</label></div><input id="jobPhotos" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden><input id="jobCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="quote-note">Choose an existing photo or take a new photo with your camera.</p>'+
@@ -467,8 +468,10 @@ async function showRequest(i){
   }catch(e){alert(e.message)}
 }
 async function submitRequest(provider,serviceId){
-  const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),files=[...$('jobPhotos').files,...$('jobCamera').files];
-  if(!r||!d||!a||!addr||!details){alert('Please complete your region, district, area, address and job details.');return}
+  const r=$('requestRegion').value,d=$('requestDistrict').value,a=$('requestArea').value.trim(),addr=$('requestAddress').value.trim(),directions=$('requestDirections').value.trim(),details=$('jobDetails').value.trim(),contactPhone=$('requestPhone').value.trim(),files=[...$('jobPhotos').files,...$('jobCamera').files];
+  if(!r||!d||!a||!addr||!details||!contactPhone){alert('Please complete your contact phone number, region, district, area, address and job details.');return}
+  const phoneDigits=contactPhone.replace(/\\D/g,'').replace(/^232/,'');
+  if(phoneDigits.length!==8){alert('Please enter a valid Sierra Leone phone number with 8 digits after +232.');return}
   if(files.length>5){alert('Maximum 5 photos.');return}
   for(const f of files)if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>3*1024*1024){alert('Each photo must be JPG, PNG or WEBP and 3 MB or less.');return}
   $('submitRequest').disabled=true;
@@ -484,7 +487,7 @@ async function submitRequest(provider,serviceId){
     const live=profile.find(x=>x.business_name===provider.name);
     const providerId=live?live.id:null;
     if(!providerId)throw new Error('This provider is not yet connected to the live marketplace.');
-    const created=await api('/api/service-requests',{method:'POST',body:JSON.stringify({provider_id:providerId,service_id:serviceId,region:r,district:d,area:a,service_address:addr,directions,pricing_type:$('quoteType').value,job_details:details})});
+    const created=await api('/api/service-requests',{method:'POST',body:JSON.stringify({provider_id:providerId,service_id:serviceId,region:r,district:d,area:a,service_address:addr,directions,contact_phone:phoneDigits,pricing_type:$('quoteType').value,job_details:details})});
     if(files.length){
       const form=new FormData();
       for(const file of files)form.append('photos',file);
