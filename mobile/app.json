@@ -20,7 +20,10 @@
       "backgroundColor": "#FFF9F1"
     },
     "extra": {
-      "apiBaseUrl": "https://fixit-salone-api.onrender.com"
+      "apiBaseUrl": "https://fixit-salone-api.onrender.com",
+      "eas": {
+        "projectId": "2e5642d7-5836-4783-8052-3f76f62f1259"
+      }
     }
   }
 }
