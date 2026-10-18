@@ -503,7 +503,7 @@ app.get('/api/providers',async(req,res)=>{
     if(district){values.push(String(district));where.push('pp.district=$'+values.length)}
     const sql=`SELECT pp.id,pp.user_id,pp.business_name,pp.region,pp.district,pp.area,pp.service_address,pp.verification_status,
       u.full_name,u.profile_photo_storage_key,u.profile_photo_storage_provider,u.profile_photo_file_url,ps.service_id,s.name AS service_name,ps.pricing_type,ps.price_sle,ps.description AS service_description,
-      COALESCE((SELECT ROUND(AVG(pr.rating)::numeric,1) FROM provider_reviews pr WHERE pr.provider_id=pp.id),0) AS rating,
+      (SELECT ROUND(AVG(pr.rating)::numeric,1) FROM provider_reviews pr WHERE pr.provider_id=pp.id) AS rating,
       (SELECT COUNT(*)::int FROM provider_reviews pr WHERE pr.provider_id=pp.id) AS review_count
       FROM provider_profiles pp
       JOIN users u ON u.id=pp.user_id AND u.status='active'
