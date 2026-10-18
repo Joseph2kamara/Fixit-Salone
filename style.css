@@ -572,3 +572,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .home-search-button{min-height:44px;padding:10px 12px;white-space:nowrap}
   .home-location-filters summary{padding:6px 4px}
 }
+
+
+/* Keep floating chat clear of search controls and fixed mobile navigation */
+@media(max-width:520px){
+  .fixit-chat-button{right:14px!important;bottom:calc(112px + env(safe-area-inset-bottom))!important}
+  .fixit-chat-window{right:12px!important;bottom:calc(166px + env(safe-area-inset-bottom))!important;max-height:calc(100dvh - 190px - env(safe-area-inset-bottom))!important}
+  .home-hero{padding-bottom:32px}
+  .home-search{margin-bottom:18px}
+  .home-location-filters{padding-bottom:12px}
+  .home-location-filters summary{min-height:42px}
+  .mobile-bottom-nav{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+}
