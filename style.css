@@ -723,3 +723,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   header .nav-actions .btn{white-space:normal;text-align:center;padding:10px clamp(10px,.9vw,16px);line-height:1.25}
   header .brand{flex:0 0 auto;white-space:nowrap}
 }
+
+
+/* Final mobile polish: keep chat away from Book Now and align the location chevron */
+@media(max-width:600px){
+  .fixit-chat-button{right:14px!important;bottom:calc(200px + env(safe-area-inset-bottom))!important}
+  .fixit-chat-window{right:12px!important;bottom:calc(254px + env(safe-area-inset-bottom))!important;max-height:calc(100dvh - 278px - env(safe-area-inset-bottom))!important}
+  .home-location-filters summary{display:flex;align-items:center;gap:6px}
+  .home-location-filters summary:after{float:none;margin-left:auto;flex:0 0 auto;line-height:1}
+}
