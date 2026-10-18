@@ -852,11 +852,8 @@ async function getMessagingRequestAccess(req,res){
   if(!request){res.status(404).json({error:'Service request not found.'});return null;}
   if(req.user.role==='customer' && request.customer_user_id===req.user.sub)return request;
   if(req.user.role==='provider' && request.provider_user_id===req.user.sub){
-    const subscription=await providerSubscriptionState(request.provider_id);
-    if(!subscription){
-      const prior=await pool.query('SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1 AND created_at < (SELECT created_at FROM service_requests WHERE id=$2)',[request.provider_id,request.id]);
-      if(Number(prior.rows[0]?.count||0)>=3){res.status(403).json({error:'Subscribe to a provider plan to message customers about this request.'});return null;}
-    }
+    // Existing assigned conversations remain available even when a provider has
+    // reached the free-referral limit. The subscription gate stays on new requests.
     return request;
   }
   res.status(403).json({error:'You do not have access to this conversation.'});
