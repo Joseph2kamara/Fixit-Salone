@@ -607,3 +607,21 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   #providers.section{padding-top:24px}
   #providers .section-head{margin-bottom:12px}
 }
+
+
+/* Provider profile polish: clear portfolio cards and accessible action buttons */
+#profileWork{margin:12px 0 20px}
+#profileWork .photo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;align-items:start}
+#profileWork .work-card{min-width:0;margin:0;padding:10px;border:1px solid #dfe8e2;border-radius:15px;background:#fff;box-shadow:0 4px 14px #163b2508;overflow:hidden}
+#profileWork .work-card img,#profileWork .work-card video{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#f1f5f2}
+#profileWork .work-card figcaption{padding:10px 2px 2px;color:#334155;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.profile-safety{gap:12px;margin-top:20px}
+.profile-safety .btn{min-height:48px;border-radius:12px;font-weight:800}
+.address-box{line-height:1.55}
+@media(max-width:600px){
+ #profileWork .photo-grid{grid-template-columns:1fr}
+ #profileWork .work-card{padding:8px}
+ #profileWork .work-card img,#profileWork .work-card video{max-height:320px}
+ .profile-safety{gap:8px}
+ .profile-safety .btn{min-height:46px}
+}
