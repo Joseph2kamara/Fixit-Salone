@@ -625,3 +625,90 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
  .profile-safety{gap:8px}
  .profile-safety .btn{min-height:46px}
 }
+
+
+/* Premium marketplace visual refresh: refined cards, contrast, and responsive touch targets */
+:root{
+  --fixit-navy:#10243b;
+  --fixit-green:#147a50;
+  --fixit-orange:#e5791b;
+  --fixit-ink:#172433;
+  --fixit-muted:#687789;
+  --fixit-line:#e3e9e5;
+  --fixit-pale:#f5f8f6;
+}
+html{scroll-behavior:smooth;scroll-padding-top:18px}
+body{color:var(--fixit-ink);-webkit-font-smoothing:antialiased}
+header{position:relative;z-index:20;background:rgba(255,255,255,.97);border-bottom:1px solid #e9eeeb}
+.brand{letter-spacing:-.45px}
+.brand span{box-shadow:0 4px 10px #147a5026}
+.btn,.home-search-button,.book-now-button{transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.btn:hover,.home-search-button:hover,.book-now-button:hover{transform:translateY(-1px);box-shadow:0 6px 16px #10243b18}
+.home-hero{background:radial-gradient(ellipse at 88% 0%,#fff2e4 0,transparent 38%),linear-gradient(180deg,#fbfcfb 0%,#fff 100%);padding:34px 0 24px}
+.home-hero-inner{max-width:1000px}
+.home-hero .eyebrow{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #dcece3;border-radius:999px;background:#f2faf5;color:#147a50;font-size:10px;letter-spacing:1px}
+.home-hero h1{font-size:clamp(34px,4.5vw,50px);line-height:1.04;letter-spacing:-1.9px;max-width:780px}
+.home-hero h1 em{color:var(--fixit-orange)}
+.home-hero .lead{font-size:15px;max-width:620px;line-height:1.65}
+.home-search{max-width:820px;margin-top:23px;border-color:#dce5df;border-radius:17px;padding:7px;box-shadow:0 12px 32px #10243b0c}
+.home-search input{font-size:15px}
+.home-search-button{border-radius:12px;min-height:46px;padding-inline:22px}
+.home-location-filters{color:#627166}
+.homepage-hero-carousel{max-width:820px;border-radius:20px;box-shadow:0 16px 38px #10243b12}
+#services.home-services{padding:25px 0 28px}
+#services.home-services .home-section-top{margin-bottom:15px}
+.home-section-top h2,.home-section-header h2{font-size:23px;letter-spacing:-.6px}
+#services.home-services .categories{gap:15px;max-width:820px}
+#services.home-services .categories button{border-radius:16px!important}
+.category-art{border-radius:17px;border-color:#e8eeea;box-shadow:0 4px 12px #10243b06;transition:transform .18s ease,box-shadow .18s ease}
+#services.home-services .categories button:hover .category-art{transform:translateY(-3px);box-shadow:0 10px 22px #10243b12}
+#services.home-services .categories button b{font-size:13px;line-height:1.35;color:#233244}
+#providers.section{background:#f6f8f7}
+#providers .section-head{margin-bottom:20px}
+#providers .section-head h2{font-size:28px;letter-spacing:-.7px}
+#providerGrid .card{border:1px solid #e3eae5;border-radius:18px;padding:20px;box-shadow:0 5px 18px #10243b06;transition:transform .18s ease,box-shadow .18s ease}
+#providerGrid .card:hover{transform:translateY(-3px);box-shadow:0 12px 28px #10243b10}
+#providerGrid .avatar{border-radius:15px}
+#providerGrid .actions button{min-height:44px;border-radius:11px}
+.section h2{letter-spacing:-.7px}
+.safety-card,.support-card{border-radius:17px}
+.cta{background:linear-gradient(115deg,#126a48,#147a50 65%,#1d8b5b)}
+footer{background:#10243b}
+.mobile-bottom-nav{box-shadow:0 -7px 25px #10243b0b;border-top:1px solid #e5ebe7}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #f3a45e;outline-offset:3px}
+@media(max-width:850px){
+  .home-hero{padding:27px 0 18px}
+  #services.home-services{padding:20px 0 23px}
+  #providers .section-head h2{font-size:24px}
+  #providerGrid .card{padding:16px}
+}
+@media(max-width:600px){
+  .home-hero{padding:21px 0 15px;background:radial-gradient(ellipse at 100% 0%,#fff0df 0,transparent 45%),#fff}
+  .home-hero .eyebrow{font-size:9px;padding:6px 8px;margin-bottom:10px}
+  .home-hero h1{font-size:clamp(29px,8.1vw,36px);line-height:1.08;letter-spacing:-1.15px}
+  .home-hero .lead{font-size:13px;line-height:1.55}
+  .home-search{margin-top:16px;border-radius:15px;box-shadow:0 8px 22px #10243b0b}
+  .home-search input{font-size:16px}
+  .home-search-button{min-height:44px;padding:10px 14px}
+  .homepage-hero-carousel{border-radius:15px}
+  #services.home-services{padding:15px 0 18px}
+  #services.home-services .home-section-top h2{font-size:21px}
+  #services.home-services .categories{gap:10px}
+  .category-art{border-radius:13px}
+  #services.home-services .categories button b{font-size:12px}
+  #providers.section{padding-top:22px}
+  #providers .section-head h2{font-size:23px}
+  #providerGrid .card{border-radius:16px;padding:15px}
+  #providerGrid .actions{gap:8px}
+  #providerGrid .actions button{min-height:46px}
+  .section h2{font-size:27px}
+  .cta{padding:38px 0}
+  .cta-inner{align-items:flex-start;flex-direction:column;gap:16px}
+  .cta h2{font-size:29px;line-height:1.12}
+  footer .wrap{align-items:flex-start;flex-direction:column;gap:8px}
+  footer p{line-height:1.6}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .category-art,.btn,.home-search-button,.book-now-button,#providerGrid .card{transition:none}
+}
