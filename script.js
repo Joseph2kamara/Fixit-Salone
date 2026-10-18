@@ -596,7 +596,22 @@ async function customerRequests(){
       try{
         if(btn.dataset.customerAction==='photos'){
           const photos=await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/photos');
-          openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
+          if(!photos.length){openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2><p>No photos attached to this request.</p><button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;}
+          openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2><p class="quote-note">Loading your uploaded photos…</p><div class="photo-grid" id="customerJobPhotoGrid"></div><button class="btn outline" id="closePhotos">Done</button>');
+          $('closePhotos').onclick=()=>customerRequests();
+          const grid=$('customerJobPhotoGrid');
+          for(const photo of photos){
+            const imageUrl=mediaUrl(photo.file_url);
+            let displayUrl=imageUrl;
+            if(String(photo.file_url||'').includes('/api/service-requests/')){
+              const response=await fetch(imageUrl,{headers:{Authorization:'Bearer '+authToken()}});
+              if(!response.ok)throw new Error('Unable to load an uploaded photo. Please try again.');
+              displayUrl=URL.createObjectURL(await response.blob());
+            }
+            const link=document.createElement('a');link.href=displayUrl;link.target='_blank';link.rel='noopener';
+            const img=document.createElement('img');img.src=displayUrl;img.alt='Uploaded job photo';link.appendChild(img);grid.appendChild(link);
+          }
+          return;
         }
         if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
         if(btn.dataset.customerAction==='decline'){if(!confirm('Decline this quote? The provider will be notified that you do not wish to proceed.'))return;await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/status',{method:'PATCH',body:JSON.stringify({status:'declined'})});customerRequests();return;}
