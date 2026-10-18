@@ -331,9 +331,10 @@ async function showProfile(i){
       const data=await api('/api/providers/'+encodeURIComponent(p.id));
       const profile=data.profile;
       const services=data.services||[];
-      openModal('<p class="eyebrow">'+esc(services[0]?.name||p.service)+'</p><h2>'+esc(profile.business_name)+'</h2><p>'+(profile.verification_status==='verified'?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'Verification pending')+'</p><p>'+esc(services[0]?.description||'Local FixIt Salone provider.')+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(profile.service_address)+'<br><small>'+esc(profile.region)+' · '+esc(profile.district)+' · '+esc(profile.area)+'</small></div><p><b>Services:</b> '+services.map(s=>esc(s.name)).join(', ')+'</p><p><b>Pricing:</b> '+services.map(s=>esc(s.pricing_type.replaceAll('_',' '))+(s.price_sle!=null?' — SLE '+Number(s.price_sle).toLocaleString():'')).join('<br>')+'</p><h3>My Work</h3><div id="profileWork"><p class="quote-note">Loading portfolio…</p></div><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
+      openModal('<p class="eyebrow">'+esc(services[0]?.name||p.service)+'</p><h2>'+esc(profile.business_name)+'</h2><p>'+(profile.verification_status==='verified'?'<span class="verified-badge"><span class="verified-check">✓</span> Verified provider</span>':'Verification pending')+'</p><p>'+esc(services[0]?.description||'Local FixIt Salone provider.')+'</p><div class="address-box"><b>📍 Service location</b><br>'+esc(profile.service_address)+'<br><small>'+esc(profile.region)+' · '+esc(profile.district)+' · '+esc(profile.area)+'</small></div><p><b>Services:</b> '+services.map(s=>esc(s.name)).join(', ')+'</p><p><b>Pricing:</b> '+services.map(s=>esc(s.pricing_type.replaceAll('_',' '))+(s.price_sle!=null?' — SLE '+Number(s.price_sle).toLocaleString():'')).join('<br>')+'</p><h3>Customer ratings & reviews</h3><div id="profileReviews"><p class="quote-note">Loading reviews…</p></div><h3>My Work</h3><div id="profileWork"><p class="quote-note">Loading portfolio…</p></div><div class="profile-safety"><button class="btn" id="modalRequest">Request this provider</button><button class="btn outline" id="modalReport">⚠️ Report</button></div>');
       $('modalRequest').onclick=()=>showRequest(i);$('modalReport').onclick=()=>reportProvider(i);
       loadProviderWork(p.id);
+      loadProviderReviews(p.id);
       return;
     }catch(e){alert(e.message);return}
   }
@@ -628,6 +629,20 @@ async function customerRequests(){
     });
     $('closeCustomerRequests').onclick=closeModal;
   }catch(e){alert(e.message)}
+}
+async function loadProviderReviews(providerId){
+  const box=$('profileReviews');
+  if(!box)return;
+  try{
+    const reviews=await api('/api/providers/'+encodeURIComponent(providerId)+'/reviews');
+    if(!reviews.length){
+      box.innerHTML='<p class="quote-note">No customer reviews yet. Reviews appear here after a completed job is rated.</p>';
+      return;
+    }
+    const avg=(reviews.reduce((sum,r)=>sum+Number(r.rating||0),0)/reviews.length).toFixed(1);
+    box.innerHTML='<div class="review-summary"><strong>★ '+avg+'</strong> <span class="quote-note">('+reviews.length+' review'+(reviews.length===1?'':'s')+')</span></div>'+
+      reviews.map(r=>'<article class="provider-review"><div class="provider-review-top"><b>'+esc(r.customer_name||'Customer')+'</b><span aria-label="'+Number(r.rating)+' out of 5 stars">'+('★'.repeat(Math.max(0,Math.min(5,Number(r.rating)||0))))+('☆'.repeat(5-Math.max(0,Math.min(5,Number(r.rating)||0))))+'</span></div>'+(r.review_text?'<p>'+esc(r.review_text)+'</p>':'<p class="quote-note">No written comment.</p>')+'<small class="quote-note">'+esc(r.created_at?new Date(r.created_at).toLocaleDateString():'')+'</small></article>').join('');
+  }catch(e){box.innerHTML='<p class="quote-note">Customer reviews could not be loaded right now.</p>'}
 }
 async function loadProviderWork(providerId){
   const box=$('profileWork'); if(!box)return;
