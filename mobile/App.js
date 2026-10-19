@@ -4,6 +4,7 @@ import {
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 import { File, Paths } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as ImagePicker from 'expo-image-picker';
@@ -328,6 +329,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState('login');
   const [role, setRole] = useState('customer');
   const [token, setToken] = useState('');
+  const [restoringSession, setRestoringSession] = useState(true);
   const [user, setUser] = useState(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -402,6 +404,36 @@ export default function App() {
       clearTimeout(timer);
     };
   }, [splashProgress]);
+
+  useEffect(() => {
+    let active = true;
+    async function restoreSavedSession() {
+      try {
+        const savedToken = await SecureStore.getItemAsync('fixit-salone-session-token');
+        if (!savedToken) return;
+        const response = await expoFetch(API_BASE + '/api/auth/me', {
+          headers: { Authorization: 'Bearer ' + savedToken }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.user) {
+          await SecureStore.deleteItemAsync('fixit-salone-session-token').catch(() => {});
+          return;
+        }
+        if (!active) return;
+        setToken(savedToken);
+        setUser(data.user);
+        setRole(data.user.role);
+        setScreen('home');
+        if (data.user.role === 'customer') await loadCustomerProfilePhoto(savedToken);
+      } catch (e) {
+        // Keep the sign-in screen available if the device is offline or the saved session cannot be checked.
+      } finally {
+        if (active) setRestoringSession(false);
+      }
+    }
+    restoreSavedSession();
+    return () => { active = false; };
+  }, []);
 
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
@@ -520,6 +552,7 @@ export default function App() {
         setNotice(data.message || 'Verify your phone number to continue.');
         return;
       }
+      await SecureStore.setItemAsync('fixit-salone-session-token', data.token);
       setToken(data.token);
       setUser(data.user);
       setRole(data.user.role);
@@ -1134,6 +1167,7 @@ export default function App() {
     } finally { setBusy(false); }
   }
   function signOut() {
+    SecureStore.deleteItemAsync('fixit-salone-session-token').catch(() => {});
     setToken(''); setUser(null); setScreen('auth'); setAuthMode('login'); setPassword('');
     setProfilePhotoUrl(''); setProfilePhotoBusy(false);
     setJobs([]); setProviders([]); setServices([]); setProviderProfile(null); setProviderServices([]);
