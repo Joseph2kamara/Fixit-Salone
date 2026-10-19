@@ -1197,7 +1197,7 @@ export default function App() {
     </View>
   ) : null;
 
-  if (showSplash) {
+  if (showSplash || restoringSession) {
     return (
       <View style={styles.splashRoot}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFE0C2" />
