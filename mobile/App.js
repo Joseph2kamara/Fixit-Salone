@@ -1796,7 +1796,7 @@ export default function App() {
                   <View style={styles.buttonRowItem}><Button title="Approve quote" onPress={() => setJobStatus(j.id, 'approved')} /></View>
                   <View style={styles.buttonRowItem}><Button title="Decline" secondary onPress={() => setJobStatus(j.id, 'declined')} /></View>
                 </View>}
-                {j.status === 'approved' && <Button title="Prepare payment" onPress={() => preparePayment(j.id)} disabled={busy} />}
+                {j.status === 'approved' && <Card><Text style={styles.cardTitle}>Job payments coming later</Text><Text style={styles.cardDescription}>Online payments for service jobs are not enabled yet. Do not send money through this app. Payment options will be announced when available.</Text></Card>}
                 {j.status === 'completed' && <Button title={reviewJobId === String(j.id) ? 'Review open below' : 'Rate provider'} secondary onPress={() => { setReviewJobId(reviewJobId === String(j.id) ? '' : String(j.id)); setReviewRating(5); setReviewText(''); }} />}
                 {reviewJobId === String(j.id) && <View style={styles.reviewBox}>
                   <Text style={styles.fieldLabel}>Your rating</Text>
@@ -1987,7 +1987,7 @@ export default function App() {
             <Text style={styles.cardDescription}>{p.description}</Text>
             <Button title={'Request ' + p.name + ' plan'} onPress={() => requestSubscription(p.name)} disabled={busy || !!(subscriptionInfo?.payments || []).some(x => ['pending', 'processing'].includes(x.status))} />
           </Card>)}
-          <Text style={styles.helper}>Important: online payment is not connected yet. The backend can record a subscription request, but selecting a plan does not charge you or activate the subscription.</Text>
+          <Card><Text style={styles.cardTitle}>How subscriptions work for now</Text><Text style={styles.cardDescription}>Choose a plan to submit a request. No money is collected in the app and your plan will not activate immediately. Follow the official FixIt Salone support instructions for payment, then an admin must verify the payment before activating your subscription.</Text><Text style={styles.helper}>Never send money to an unofficial number or share your PIN, password, or OTP.</Text></Card>
           {subscriptionInfo && <>
             <Text style={styles.sectionTitle}>Current status</Text>
             <Card><Text style={styles.cardTitle}>{subscriptionInfo.subscription ? 'Subscription active' : 'No active paid subscription'}</Text><Text style={styles.cardMeta}>Referrals used: {subscriptionInfo.referral_count || 0} · Free referrals: {subscriptionInfo.free_referrals || 3}</Text></Card>
