@@ -366,6 +366,10 @@ export default function App() {
   const [workUploadBusy, setWorkUploadBusy] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [conversationRequestId, setConversationRequestId] = useState('');
+  const [conversationMessages, setConversationMessages] = useState([]);
+  const [conversationDraft, setConversationDraft] = useState('');
+  const [conversationBusy, setConversationBusy] = useState(false);
 
   const [requestForm, setRequestForm] = useState({
     region: 'Western Area', district: 'Western Area Urban', area: '', address: '', directions: '', details: '', pricingType: 'quote_required'
@@ -592,6 +596,43 @@ export default function App() {
       setJobPhotos(Array.isArray(rows) ? rows : []);
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
+  }
+  async function openConversation(jobId) {
+    setConversationRequestId(String(jobId));
+    setConversationMessages([]);
+    setConversationDraft('');
+    setScreen('conversation');
+    clearMessages();
+    setConversationBusy(true);
+    try {
+      const data = await api('/api/service-requests/' + encodeURIComponent(jobId) + '/messages');
+      setConversationMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (e) { reportError(e); }
+    finally { setConversationBusy(false); }
+  }
+  async function refreshConversation() {
+    if (!conversationRequestId) return;
+    setConversationBusy(true);
+    try {
+      const data = await api('/api/service-requests/' + encodeURIComponent(conversationRequestId) + '/messages');
+      setConversationMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (e) { reportError(e); }
+    finally { setConversationBusy(false); }
+  }
+  async function sendConversationMessage() {
+    const message = conversationDraft.trim();
+    if (!message || !conversationRequestId || conversationBusy) return;
+    setConversationBusy(true);
+    clearMessages();
+    try {
+      await api('/api/service-requests/' + encodeURIComponent(conversationRequestId) + '/messages', {
+        method: 'POST', body: JSON.stringify({ message })
+      });
+      setConversationDraft('');
+      const data = await api('/api/service-requests/' + encodeURIComponent(conversationRequestId) + '/messages');
+      setConversationMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (e) { reportError(e); }
+    finally { setConversationBusy(false); }
   }
   async function loadProviderWork(providerId = providerProfile?.id) {
     if (!providerId) { setProviderWorkItems([]); return []; }
@@ -1702,14 +1743,33 @@ export default function App() {
         </>}
 
         {screen === 'inbox' && user.role === 'customer' && <>
-          <Text style={styles.sectionLead}>Updates about your service requests will appear in My Jobs. Direct customer-to-provider chat is not enabled in this mobile version yet.</Text>
-          <Card>
-            <View style={styles.inboxIllustration}><Text style={styles.inboxIllustrationText}>✉</Text></View>
-            <Text style={styles.cardTitle}>Your message inbox</Text>
-            <Text style={styles.cardDescription}>Once provider messaging is enabled, this is where you will chat with professionals about your jobs.</Text>
-            <Button title="Check my jobs" onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} />
-            <Button title="Chat with FixIt Support" secondary onPress={() => { setScreen('support'); clearMessages(); }} />
-          </Card>
+          <Text style={styles.sectionLead}>Choose a service request to message its assigned provider. Your conversation history is saved with the request.</Text>
+          {jobs.length === 0 ? <Card><Text style={styles.cardTitle}>Your message inbox</Text><Text style={styles.cardDescription}>When you request a service, you can message the assigned provider here or from My Jobs.</Text><Button title="Refresh my jobs" onPress={loadCustomerRequests} secondary /></Card> :
+            jobs.filter(j => j.provider_id || j.provider_name || j.business_name).map((j, i) => <Card key={String(j.id || i)}>
+              <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
+              <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Assigned provider'}</Text>
+              <Button title="Open conversation" onPress={() => openConversation(j.id)} />
+            </Card>)}
+          <Button title="Chat with FixIt Support" secondary onPress={() => { setScreen('support'); clearMessages(); }} />
+        </>}
+
+        {screen === 'conversation' && <>
+          <Button title={user.role === 'provider' ? '← Back to customer jobs' : '← Back to inbox'} secondary onPress={() => setScreen(user.role === 'provider' ? 'requests' : 'inbox')} />
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Request conversation</Text><Button title="Refresh" secondary compact onPress={refreshConversation} disabled={conversationBusy} /></View>
+          <Text style={styles.helper}>Service request #{conversationRequestId}. Keep payments and arrangements within trusted FixIt channels. Never share passwords or verification codes.</Text>
+          {conversationBusy && conversationMessages.length === 0 ? <ActivityIndicator size="large" color={COLORS.green} style={styles.spinner} /> :
+            conversationMessages.length === 0 ? <Empty text="No messages yet. Send a message to start the conversation." /> :
+            conversationMessages.map((m, i) => {
+              const mine = String(m.sender_user_id) === String(user.id);
+              return <View key={String(m.id || i)} style={[styles.messageBubble, mine ? styles.messageBubbleMine : styles.messageBubbleOther]}>
+                <Text style={styles.messageSender}>{mine ? 'You' : (m.sender_name || (m.sender_role === 'provider' ? 'Provider' : 'Customer'))}</Text>
+                <Text style={styles.messageBody}>{m.message_text}</Text>
+                <Text style={styles.messageTime}>{m.created_at ? new Date(m.created_at).toLocaleString() : ''}</Text>
+              </View>;
+            })}
+          <TextInput value={conversationDraft} onChangeText={setConversationDraft} placeholder="Write a message…" multiline maxLength={2000}
+            style={styles.messageComposer} editable={!conversationBusy} />
+          <Button title={conversationBusy ? 'Sending…' : 'Send message'} onPress={sendConversationMessage} disabled={conversationBusy || !conversationDraft.trim()} />
         </>}
 
         {screen === 'requests' && user.role === 'customer' && <>
@@ -1724,6 +1784,7 @@ export default function App() {
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
                 <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
+                <Button title="Message provider" secondary compact onPress={() => openConversation(j.id)} />
                 {j.quoted_amount != null && <Card>
                   <Text style={styles.cardTitle}>Quotation · SLE {Number(j.quoted_amount).toLocaleString()}</Text>
                   <Text style={styles.cardMeta}>Labour: SLE {Number(j.labour_amount || 0).toLocaleString()}</Text>
@@ -1760,6 +1821,7 @@ export default function App() {
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
                 <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
+                <Button title="Message customer" secondary compact onPress={() => openConversation(j.id)} />
                 {j.quoted_amount != null && <Text style={styles.priceText}>Quote: SLE {Number(j.quoted_amount).toLocaleString()}</Text>}
                 {j.status === 'requested' && <>
                   <Button title="Send itemized quote" onPress={() => { setQuoteJobId(String(j.id)); setQuoteForm({ labour: '', materials: '', transport: '' }); }} />
@@ -2224,6 +2286,13 @@ const styles = StyleSheet.create({
   profileTabAvatarText: { color: COLORS.orangeDark, fontSize: 10, fontWeight: '900' },
   inboxIllustration: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.orangeLight, marginBottom: 11 },
   inboxIllustrationText: { fontSize: 25, color: COLORS.orange },
+  messageBubble: { maxWidth: '92%', borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
+  messageBubbleMine: { alignSelf: 'flex-end', backgroundColor: COLORS.lightGreen },
+  messageBubbleOther: { alignSelf: 'flex-start', backgroundColor: COLORS.white },
+  messageSender: { fontSize: 12, fontWeight: '700', color: COLORS.muted, marginBottom: 4 },
+  messageBody: { fontSize: 15, lineHeight: 21, color: COLORS.ink },
+  messageTime: { fontSize: 10, color: COLORS.muted, marginTop: 6, textAlign: 'right' },
+  messageComposer: { minHeight: 82, maxHeight: 150, borderWidth: 1, borderColor: COLORS.line, borderRadius: 12, padding: 12, fontSize: 15, color: COLORS.ink, backgroundColor: COLORS.white, textAlignVertical: 'top', marginBottom: 10 },
   headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerIdentity: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerLogo: { width: 43, height: 43, borderRadius: 15, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', alignItems: 'center', justifyContent: 'center' },
