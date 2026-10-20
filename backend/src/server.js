@@ -255,7 +255,7 @@ async function d7VerifyRequest(pathname,body){
   return data;
 }
 
-function signToken(user){return jwt.sign({sub:user.id,role:user.role},JWT_SECRET,{expiresIn:'8h'});}
+function signToken(user){return jwt.sign({sub:user.id,role:user.role},JWT_SECRET,{expiresIn:'30d'});}
 function signPhoneVerificationToken(user){return jwt.sign({sub:user.id,role:user.role,purpose:'phone_verification'},JWT_SECRET,{expiresIn:'15m'});}
 function readBearerToken(req){
   const header=req.headers.authorization||'';
