@@ -372,7 +372,7 @@ export default function App() {
   const [conversationBusy, setConversationBusy] = useState(false);
 
   const [requestForm, setRequestForm] = useState({
-    region: 'Western Area', district: 'Western Area Urban', area: '', address: '', directions: '', details: '', pricingType: 'quote_required'
+    contactPhone: '', region: 'Western Area', district: 'Western Area Urban', area: '', address: '', directions: '', details: '', pricingType: 'quote_required'
   });
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [pendingPhotoRequestId, setPendingPhotoRequestId] = useState('');
@@ -780,7 +780,11 @@ export default function App() {
     setSelectedPhotos([]);
     setPendingPhotoRequestId('');
     setSelectedServiceId(String(service.service_id || service.id || provider.service_id || ''));
+    const savedPhoneDigits = String(user?.phone || '').replace(/\D/g, '');
+    const defaultContactPhone = savedPhoneDigits.startsWith('232') ? savedPhoneDigits.slice(3)
+      : savedPhoneDigits.startsWith('0') && savedPhoneDigits.length === 9 ? savedPhoneDigits.slice(1) : savedPhoneDigits;
     setRequestForm({
+      contactPhone: defaultContactPhone,
       region: provider.region || 'Western Area', district: provider.district || 'Western Area Urban',
       area: provider.area || '', address: provider.service_address || '', directions: '', details: '',
       pricingType: service.pricing_type || provider.pricing_type || 'quote_required'
@@ -878,6 +882,10 @@ export default function App() {
     }
 
     if (!selectedProvider || !selectedServiceId) { setError('Please choose a provider service first.'); return; }
+    const rawContactPhone = String(requestForm.contactPhone || '').replace(/\D/g, '');
+    const contactDigits = rawContactPhone.startsWith('232') ? rawContactPhone.slice(3)
+      : rawContactPhone.startsWith('0') && rawContactPhone.length === 9 ? rawContactPhone.slice(1) : rawContactPhone;
+    if (!/^\d{8}$/.test(contactDigits)) { setError('Enter a valid Sierra Leone contact phone number with 8 digits after +232.'); return; }
     if (!requestForm.region.trim() || !requestForm.district.trim() || !requestForm.area.trim() || !requestForm.address.trim() || !requestForm.details.trim()) {
       setError('Complete the region, district, area, address and job details.'); return;
     }
@@ -889,8 +897,8 @@ export default function App() {
           provider_id: selectedProvider.id, service_id: selectedServiceId,
           region: requestForm.region.trim(), district: requestForm.district.trim(),
           area: requestForm.area.trim(), service_address: requestForm.address.trim(),
-          directions: requestForm.directions.trim(), pricing_type: requestForm.pricingType,
-          job_details: requestForm.details.trim()
+          directions: requestForm.directions.trim(), contact_phone: '+232' + contactDigits,
+          pricing_type: requestForm.pricingType, job_details: requestForm.details.trim()
         })
       });
 
@@ -1688,6 +1696,8 @@ export default function App() {
         {screen === 'request-form' && <>
           <Button title="← Back" secondary onPress={() => setScreen('provider-detail')} />
           <Text style={styles.sectionLead}>Send a request to {selectedProvider?.business_name || selectedProvider?.full_name || 'this provider'}.</Text>
+          <Field label="Contact phone (+232)" value={requestForm.contactPhone} onChangeText={v => setRequestValue('contactPhone', v)} placeholder="76 123 456" keyboardType="phone-pad" />
+          <Text style={styles.helper}>Enter 8 digits after +232 so the provider can contact you.</Text>
           <OptionPicker label="Region" value={requestForm.region} options={REGIONS}
             onChange={r => {
               setRequestValue('region', r);
