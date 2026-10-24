@@ -770,7 +770,7 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
     const subscription=await providerSubscriptionState(providerId);
     const referralCount=await providerReferralCount(providerId);
     const base=`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
-      u.full_name AS customer_name,CASE WHEN sr.status IN ('quoted','approved','in_progress','completed') THEN COALESCE(sr.contact_phone,u.phone) ELSE NULL END AS customer_phone,s.name AS service_name
+      u.id AS customer_user_id,u.full_name AS customer_name,CASE WHEN sr.status IN ('quoted','approved','in_progress','completed') THEN COALESCE(sr.contact_phone,u.phone) ELSE NULL END AS customer_phone,s.name AS service_name
       FROM service_requests sr
       LEFT JOIN users u ON u.id=sr.customer_user_id
       LEFT JOIN services s ON s.id=sr.service_id
@@ -1014,8 +1014,27 @@ app.post('/api/incidents',requireAuth,async(req,res)=>{
   if(!reason||!details)return res.status(400).json({error:'reason and details are required'});
   if(String(details).trim().length>5000)return res.status(400).json({error:'Report details are too long.'});
   try{
-    const {rows}=await pool.query('INSERT INTO incidents(reporter_user_id,reported_user_id,job_id,reason,details) VALUES($1,$2,$3,$4,$5) RETURNING id,status,priority,created_at',[req.user.sub,reported_user_id||null,job_id||null,String(reason).trim(),String(details).trim()]);
-    await audit(req.user.sub,reported_user_id||null,'incident.created','incident',rows[0].id,{reason:String(reason).trim()});
+    let targetUserId=reported_user_id||null;
+    const targetJobId=job_id||null;
+    if(targetJobId){
+      const {rows:jobRows}=await pool.query(
+        'SELECT sr.id,sr.customer_user_id,sr.provider_id,pp.user_id AS provider_user_id FROM service_requests sr JOIN provider_profiles pp ON pp.id=sr.provider_id WHERE sr.id=$1 LIMIT 1',
+        [targetJobId]
+      );
+      const job=jobRows[0];
+      if(!job)return res.status(404).json({error:'Service request not found.'});
+      if(req.user.role==='provider'){
+        if(String(job.provider_user_id)!==String(req.user.sub))return res.status(403).json({error:'You can only report a request sent to your provider account.'});
+        if(targetUserId&&String(targetUserId)!==String(job.customer_user_id))return res.status(400).json({error:'The reported account does not match this request.'});
+        targetUserId=job.customer_user_id;
+      }else if(req.user.role==='customer'){
+        if(String(job.customer_user_id)!==String(req.user.sub))return res.status(403).json({error:'You can only report a request from your own account.'});
+        if(targetUserId&&String(targetUserId)!==String(job.provider_user_id))return res.status(400).json({error:'The reported account does not match this request.'});
+        targetUserId=job.provider_user_id;
+      }
+    }
+    const {rows}=await pool.query('INSERT INTO incidents(reporter_user_id,reported_user_id,job_id,reason,details) VALUES($1,$2,$3,$4,$5) RETURNING id,status,priority,created_at',[req.user.sub,targetUserId,targetJobId,String(reason).trim(),String(details).trim()]);
+    await audit(req.user.sub,targetUserId,'incident.created','incident',rows[0].id,{reason:String(reason).trim(),job_id:targetJobId});
     res.status(201).json(rows[0]);
   }catch(e){console.error('Incident error:',e);res.status(500).json({error:'Unable to create incident'})}
 });
