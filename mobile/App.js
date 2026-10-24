@@ -394,6 +394,8 @@ export default function App() {
   const [otp, setOtp] = useState('');
   const [incidentReason, setIncidentReason] = useState('Fraud or scam');
   const [incidentDetails, setIncidentDetails] = useState('');
+  const [incidentReportedUserId, setIncidentReportedUserId] = useState('');
+  const [incidentJobId, setIncidentJobId] = useState('');
   const [chatMessages, setChatMessages] = useState([{ role: 'assistant', content: 'Hello! I can help with general FixIt Salone questions. Please do not share passwords or verification codes.' }]);
   const [chatInput, setChatInput] = useState('');
 
@@ -1293,11 +1295,14 @@ export default function App() {
       await api('/api/incidents', {
         method: 'POST',
         body: JSON.stringify({
-          reported_user_id: selectedProvider?.user_id || null,
+          reported_user_id: incidentReportedUserId || selectedProvider?.user_id || null,
+          job_id: incidentJobId || null,
           reason: incidentReason, details: incidentDetails.trim()
         })
       });
       setIncidentDetails('');
+      setIncidentReportedUserId('');
+      setIncidentJobId('');
       setNotice('Your safety report has been recorded for review.');
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
@@ -1933,6 +1938,14 @@ export default function App() {
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
                 <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
                 <Button title="Message customer" secondary compact onPress={() => openConversation(j.id)} />
+                <Button title="Report suspicious customer" secondary compact onPress={() => {
+                  setIncidentReportedUserId(String(j.customer_user_id || ''));
+                  setIncidentJobId(String(j.id || ''));
+                  setIncidentReason('Fraud or scam');
+                  setIncidentDetails('');
+                  setScreen('safety');
+                  clearMessages();
+                }} />
                 {j.quoted_amount != null && <Text style={styles.priceText}>Quote: SLE {Number(j.quoted_amount).toLocaleString()}</Text>}
                 {j.status === 'requested' && <>
                   <Button title="Send itemized quote" onPress={() => { setQuoteJobId(String(j.id)); setQuoteForm({ labour: '', materials: '', transport: '' }); }} />
@@ -2177,7 +2190,7 @@ export default function App() {
         {screen === 'safety' && <>
           <Button title="← Back to account" secondary onPress={() => setScreen('account')} />
           <Text style={styles.sectionLead}>Report fraud, threats, harassment, damage, or another safety concern. Your report is sent to FixIt Trust & Safety.</Text>
-          {!!selectedProvider && <Text style={styles.helper}>This report will be linked to: {selectedProvider.business_name || selectedProvider.full_name || 'selected provider'}.</Text>}
+          {incidentJobId ? <Text style={styles.helper}>This report will be linked to request #{incidentJobId} and the customer for that job.</Text> : selectedProvider ? <Text style={styles.helper}>This report will be linked to: {selectedProvider.business_name || selectedProvider.full_name || 'selected provider'}.</Text> : null}
           <Text style={styles.fieldLabel}>Reason for report</Text>
           <View style={styles.wrapChips}>
             {['Fraud or scam', 'Threatening behaviour', 'Harassment', 'Fake identity', 'Property damage', 'Payment dispute', 'Other safety concern'].map(r =>
