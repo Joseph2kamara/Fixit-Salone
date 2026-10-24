@@ -247,8 +247,25 @@ async function d7VerifyRequest(pathname,body){
   let data={};try{data=await response.json()}catch{}
   if(!response.ok){
     const detail=data&&data.detail;
-    const message=typeof detail==='string'?detail:(detail&&detail.message)||'SMS provider rejected the request.';
-    throw new Error(message);
+    let message='';
+    if(typeof detail==='string'){
+      message=detail;
+    }else if(Array.isArray(detail)){
+      message=detail.map(item=>{
+        if(typeof item==='string')return item;
+        if(item&&typeof item.msg==='string')return item.msg;
+        if(item&&typeof item.message==='string')return item.message;
+        return '';
+      }).filter(Boolean).join('; ');
+    }else if(detail&&typeof detail.message==='string'){
+      message=detail.message;
+    }else if(data&&typeof data.message==='string'){
+      message=data.message;
+    }else if(data&&typeof data.error==='string'){
+      message=data.error;
+    }
+    if(!message)message='No detailed error message was returned by Direct7.';
+    throw new Error('Direct7 API HTTP '+response.status+': '+message);
   }
   return data;
 }
