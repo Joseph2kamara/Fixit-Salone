@@ -598,6 +598,18 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
   if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
   let client;
   try{
+    // Only let customers send requests after verifying the account phone by SMS.
+    const accountResult=await pool.query('SELECT phone FROM users WHERE id=$1',[req.user.sub]);
+    if(!accountResult.rows[0])return res.status(404).json({error:'Customer account not found.'});
+    const phoneVerification=await pool.query("SELECT status FROM phone_verifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1",[req.user.sub]);
+    if(phoneVerification.rows[0]?.status!=='verified'){
+      return res.status(403).json({error:'Verify your FixIt Salone phone number before sending a service request.'});
+    }
+    const accountPhoneDigits=String(accountResult.rows[0].phone||'').replace(/\\D/g,'');
+    const accountLocalPhone=accountPhoneDigits.startsWith('232')?accountPhoneDigits.slice(3):accountPhoneDigits.startsWith('0')?accountPhoneDigits.slice(1):accountPhoneDigits;
+    if(!/^\\d{8}$/.test(accountLocalPhone)||accountLocalPhone!==contactPhone){
+      return res.status(400).json({error:'Use the same phone number you verified on your FixIt Salone account.'});
+    }
     const provider=await pool.query('SELECT id FROM provider_profiles WHERE id=$1',[provider_id]);
     const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
     const offered=await pool.query('SELECT 1 FROM provider_services WHERE provider_id=$1 AND service_id=$2',[provider_id,service_id]);
