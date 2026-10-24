@@ -388,8 +388,7 @@ export default function App() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [verifyStatus, setVerifyStatus] = useState(null);
-  const [identityDocumentType, setIdentityDocumentType] = useState('national_id');
-  const [identityDocumentAsset, setIdentityDocumentAsset] = useState(null);
+    const [identityDocumentAsset, setIdentityDocumentAsset] = useState(null);
   const [identitySelfieAsset, setIdentitySelfieAsset] = useState(null);
   const [verificationId, setVerificationId] = useState('');
   const [otp, setOtp] = useState('');
@@ -1234,7 +1233,7 @@ export default function App() {
     setBusy(true); clearMessages();
     try {
       const form = new FormData();
-      form.append('document_type', identityDocumentType);
+      form.append('document_type', 'national_id');
       await appendIdentityUpload(form, 'document', identityDocumentAsset, 'document');
       await appendIdentityUpload(form, 'selfie', identitySelfieAsset, 'selfie');
       const result = await api('/api/verification/identity', { method: 'POST', body: form });
@@ -2154,20 +2153,10 @@ export default function App() {
           ) : verifyStatus ? (
             <Card>
               <Text style={styles.cardTitle}>Submit identity verification</Text>
-              <Text style={styles.cardDescription}>Choose your document type, upload a clear photo of the document, and take a selfie. Use images no larger than 5 MB each. Do not send your identity documents in chat or support messages.</Text>
-              <Text style={styles.fieldLabel}>Identity document type</Text>
-              <View style={styles.wrapChips}>
-                {[
-                  ['national_id', 'National ID'],
-                  ['passport', 'Passport'],
-                  ['drivers_license', "Driver's licence"],
-                  ['voter_id', 'Voter ID']
-                ].map(([value, label]) => (
-                  <Chip key={value} title={label} active={identityDocumentType === value}
-                    onPress={() => setIdentityDocumentType(value)} />
-                ))}
-              </View>
-              <Button title={identityDocumentAsset ? 'Change identity document photo' : 'Choose identity document photo'}
+              <Text style={styles.cardDescription}>Upload a clear photo of your National ID card and take a selfie. Use images no larger than 5 MB each. Do not send your identity documents in chat or support messages.</Text>
+              <Text style={styles.fieldLabel}>Required identity document</Text>
+              <Text style={styles.cardDescription}>National ID card only. Passports, driver's licences, and voter ID cards are not accepted.</Text>
+              <Button title={identityDocumentAsset ? 'Change National ID card photo' : 'Choose National ID card photo'}
                 secondary onPress={pickIdentityDocument} disabled={busy} />
               {identityDocumentAsset && <>
                 <Image source={{ uri: identityDocumentAsset.uri }} style={styles.workAssetPreview} resizeMode="contain" />
