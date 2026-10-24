@@ -614,6 +614,20 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
     const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
     const offered=await pool.query('SELECT 1 FROM provider_services WHERE provider_id=$1 AND service_id=$2',[provider_id,service_id]);
     if(!provider.rows[0]||!service.rows[0]||!offered.rows[0])return res.status(400).json({error:'That provider does not currently offer the selected service.'});
+    const dailyRequestCount=await pool.query(
+      "SELECT COUNT(*)::int AS count FROM service_requests WHERE customer_user_id=$1 AND created_at>NOW()-INTERVAL '24 hours'",
+      [req.user.sub]
+    );
+    if(Number(dailyRequestCount.rows[0]?.count||0)>=5){
+      return res.status(429).json({error:'You have reached the limit of 5 service requests in 24 hours. Please check My Jobs before submitting another request.'});
+    }
+    const duplicateRequest=await pool.query(
+      "SELECT id FROM service_requests WHERE customer_user_id=$1 AND provider_id=$2 AND service_id=$3 AND LOWER(TRIM(job_details))=LOWER(TRIM($4)) AND LOWER(TRIM(service_address))=LOWER(TRIM($5)) AND status IN ('requested','quoted','approved','in_progress') AND created_at>NOW()-INTERVAL '30 minutes' LIMIT 1",
+      [req.user.sub,provider_id,service_id,String(job_details).trim(),String(service_address).trim()]
+    );
+    if(duplicateRequest.rows[0]){
+      return res.status(409).json({error:'You have already sent this request to this provider. Please check My Jobs instead of sending it again.'});
+    }
     client=await pool.connect();
     await client.query('BEGIN');
     const {rows}=await client.query(`INSERT INTO service_requests(customer_user_id,provider_id,service_id,region,district,area,service_address,directions,contact_phone,pricing_type,job_details)
