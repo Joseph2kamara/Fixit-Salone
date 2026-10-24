@@ -1064,7 +1064,7 @@ app.post('/api/verification/identity',requireAuth,kycUpload.fields([{name:'docum
   const selfie=req.files?.selfie?.[0];
   const documentType=String(req.body?.document_type||'').trim().slice(0,50);
   if(!document||!selfie||!documentType)return res.status(400).json({error:'Document type, identity document and selfie are required.'});
-  if(!['national_id','passport','drivers_license','voter_id'].includes(documentType))return res.status(400).json({error:'Choose a supported identity document type.'});
+  if(documentType!=='national_id')return res.status(400).json({error:'Only a National ID card is accepted for identity verification.'});
   try{
     const user=await pool.query('SELECT id,role,status FROM users WHERE id=$1',[req.user.sub]);
     if(!user.rows[0])return res.status(404).json({error:'Account not found.'});
