@@ -945,7 +945,7 @@ async function verificationCenter(){
 }
 async function submitIdentityVerification(){
   openModal('<p class="eyebrow">SECURE KYC</p><h2>Verify your identity</h2><p>Your identity document and selfie are encrypted before they are stored. They are not displayed publicly.</p>'+
-    '<label class="form-label">Document type</label><select id="kycDocumentType" class="form-control"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="drivers_license">Driver\'s licence</option><option value="voter_id">Voter ID</option></select>'+
+    '<label class="form-label">Required identity document</label><p class="quote-note">National ID card only. Passports, driver\'s licences, and voter ID cards are not accepted.</p>'+
     '<label class="form-label">Identity document</label><div class="upload-choice"><label class="btn outline" for="kycDocument">📁 Choose file</label><label class="btn outline" for="kycDocumentCamera">📷 Take photo</label></div><input id="kycDocument" class="form-control" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden><input id="kycDocumentCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden><p class="quote-note">Choose an existing ID file or take a photo of your ID.</p>'+
     '<label class="form-label">Selfie</label><div class="upload-choice"><label class="btn outline" for="kycSelfie">📁 Choose photo</label><label class="btn outline" for="kycSelfieCamera">📷 Take selfie</label></div><input id="kycSelfie" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" hidden><input id="kycSelfieCamera" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" capture="user" hidden><p class="quote-note">Choose an existing selfie or take one with your front camera.</p>'+
     '<p class="quote-note">Maximum 5MB per file. Do not upload another person\'s ID or any document you are not authorized to provide.</p><button class="btn" id="submitKyc">Submit securely</button><button class="btn outline" id="kycBack">Back</button><p id="kycMessage" class="form-message"></p>');
@@ -953,7 +953,7 @@ async function submitIdentityVerification(){
     const documentFile=$('kycDocument').files[0]||$('kycDocumentCamera').files[0],selfie=$('kycSelfie').files[0]||$('kycSelfieCamera').files[0];
     if(!documentFile||!selfie){$('kycMessage').textContent='Please choose both your identity document and selfie.';return}
     if(documentFile.size>5*1024*1024||selfie.size>5*1024*1024){$('kycMessage').textContent='Each file must be 5MB or smaller.';return}
-    const fd=new FormData();fd.append('document_type',$('kycDocumentType').value);fd.append('document',documentFile);fd.append('selfie',selfie);
+    const fd=new FormData();fd.append('document_type','national_id');fd.append('document',documentFile);fd.append('selfie',selfie);
     $('submitKyc').disabled=true;$('kycMessage').textContent='Encrypting and submitting securely…';
     try{
       const result=await api('/api/verification/identity',{method:'POST',body:fd});
