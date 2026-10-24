@@ -605,9 +605,9 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
     if(phoneVerification.rows[0]?.status!=='verified'){
       return res.status(403).json({error:'Verify your FixIt Salone phone number before sending a service request.'});
     }
-    const accountPhoneDigits=String(accountResult.rows[0].phone||'').replace(/\\D/g,'');
+    const accountPhoneDigits=String(accountResult.rows[0].phone||'').replace(/\D/g,'');
     const accountLocalPhone=accountPhoneDigits.startsWith('232')?accountPhoneDigits.slice(3):accountPhoneDigits.startsWith('0')?accountPhoneDigits.slice(1):accountPhoneDigits;
-    if(!/^\\d{8}$/.test(accountLocalPhone)||accountLocalPhone!==contactPhone){
+    if(!/^\d{8}$/.test(accountLocalPhone)||accountLocalPhone!==contactPhone){
       return res.status(400).json({error:'Use the same phone number you verified on your FixIt Salone account.'});
     }
     const provider=await pool.query('SELECT id FROM provider_profiles WHERE id=$1',[provider_id]);
