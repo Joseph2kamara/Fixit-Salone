@@ -388,6 +388,9 @@ export default function App() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [verifyStatus, setVerifyStatus] = useState(null);
+  const [identityDocumentType, setIdentityDocumentType] = useState('national_id');
+  const [identityDocumentAsset, setIdentityDocumentAsset] = useState(null);
+  const [identitySelfieAsset, setIdentitySelfieAsset] = useState(null);
   const [verificationId, setVerificationId] = useState('');
   const [otp, setOtp] = useState('');
   const [incidentReason, setIncidentReason] = useState('Fraud or scam');
@@ -1152,6 +1155,105 @@ export default function App() {
     try { setVerifyStatus(await api('/api/verification/' + encodeURIComponent(user.id))); }
     catch (e) { reportError(e); }
   }
+  function saveIdentityAsset(asset, kind) {
+    if (!asset?.uri) return;
+    const mimeType = String(asset.mimeType || 'image/jpeg').toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+      setError('Please use a JPG, PNG or WEBP image for identity verification.');
+      return;
+    }
+    if (asset.fileSize != null && Number(asset.fileSize) > 5 * 1024 * 1024) {
+      setError('Each identity image must be 5 MB or smaller. Please choose or capture a smaller image.');
+      return;
+    }
+    const prepared = { ...asset, mimeType };
+    if (kind === 'document') setIdentityDocumentAsset(prepared);
+    else setIdentitySelfieAsset(prepared);
+    clearMessages();
+  }
+
+  async function pickIdentityDocument() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8
+      });
+      if (!result.canceled && result.assets?.[0]) saveIdentityAsset(result.assets[0], 'document');
+    } catch (e) {
+      setError(e?.message || 'Could not open your photo library. Please try again.');
+    }
+  }
+
+  async function takeIdentitySelfie() {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError('Camera permission is needed to take a selfie. Enable camera access in your phone settings, then try again.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        cameraType: 'front',
+        quality: 0.8
+      });
+      if (!result.canceled && result.assets?.[0]) saveIdentityAsset(result.assets[0], 'selfie');
+    } catch (e) {
+      setError(e?.message || 'Could not open the front camera. Please try again.');
+    }
+  }
+
+  async function appendIdentityUpload(form, fieldName, asset, kind) {
+    const mimeType = String(asset.mimeType || 'image/jpeg').toLowerCase();
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+    const uploadName = 'fixit-identity-' + kind + '-' + Date.now() + '.' + extension;
+    const sourceFile = new File(asset.uri);
+    const uploadFile = new File(Paths.cache, uploadName);
+    sourceFile.copy(uploadFile);
+    form.append(fieldName, uploadFile);
+  }
+
+  async function submitIdentityVerification() {
+    if (verifyStatus?.phone_status !== 'verified') {
+      setError('Verify your phone number before submitting identity verification.');
+      return;
+    }
+    const currentStatus = String(verifyStatus?.identity?.status || 'unverified').toLowerCase();
+    if (currentStatus === 'verified') {
+      setNotice('Your identity is already verified.');
+      return;
+    }
+    if (currentStatus === 'pending' || currentStatus === 'under_review') {
+      setNotice('Your identity submission is already under review. You do not need to submit it again.');
+      return;
+    }
+    if (!identityDocumentAsset || !identitySelfieAsset) {
+      setError('Please provide both a photo of your identity document and a selfie.');
+      return;
+    }
+    setBusy(true); clearMessages();
+    try {
+      const form = new FormData();
+      form.append('document_type', identityDocumentType);
+      await appendIdentityUpload(form, 'document', identityDocumentAsset, 'document');
+      await appendIdentityUpload(form, 'selfie', identitySelfieAsset, 'selfie');
+      const result = await api('/api/verification/identity', { method: 'POST', body: form });
+      setIdentityDocumentAsset(null);
+      setIdentitySelfieAsset(null);
+      setNotice(result.message || 'Identity verification submitted securely for review.');
+      try {
+        const status = await api('/api/verification/' + encodeURIComponent(user.id));
+        setVerifyStatus(status);
+      } catch {
+        // Keep the successful submission message visible if refreshing status fails.
+      }
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function requestOtp() {
     setBusy(true); clearMessages();
     try {
@@ -2034,7 +2136,53 @@ export default function App() {
             <Field label="Verification code" value={otp} onChangeText={setOtp} placeholder="Enter SMS code" keyboardType="number-pad" autoCapitalize="none" />
             <Button title="Verify phone" onPress={verifyOtp} disabled={busy} />
           </>}
-          <Text style={styles.helper}>Real SMS verification works only after the SMS provider is configured on the backend. Identity document uploads are still available on the website, not in this mobile build yet.</Text>
+          {verifyStatus?.phone_status !== 'verified' ? (
+            <Card>
+              <Text style={styles.cardTitle}>Phone verification required</Text>
+              <Text style={styles.cardDescription}>Confirm your phone number first. Once it is verified, you can submit your identity document and a selfie here.</Text>
+            </Card>
+          ) : ['pending', 'under_review'].includes(String(verifyStatus?.identity?.status || '').toLowerCase()) ? (
+            <Card>
+              <Text style={styles.cardTitle}>Identity submission received</Text>
+              <Text style={styles.cardDescription}>Your documents are waiting for Trust & Safety review. Please do not submit another copy while the review is pending.</Text>
+            </Card>
+          ) : String(verifyStatus?.identity?.status || '').toLowerCase() === 'verified' ? (
+            <Card>
+              <Text style={styles.cardTitle}>Identity verified</Text>
+              <Text style={styles.cardDescription}>Your identity verification is complete.</Text>
+            </Card>
+          ) : verifyStatus ? (
+            <Card>
+              <Text style={styles.cardTitle}>Submit identity verification</Text>
+              <Text style={styles.cardDescription}>Choose your document type, upload a clear photo of the document, and take a selfie. Use images no larger than 5 MB each. Do not send your identity documents in chat or support messages.</Text>
+              <Text style={styles.fieldLabel}>Identity document type</Text>
+              <View style={styles.wrapChips}>
+                {[
+                  ['national_id', 'National ID'],
+                  ['passport', 'Passport'],
+                  ['drivers_license', "Driver's licence"],
+                  ['voter_id', 'Voter ID']
+                ].map(([value, label]) => (
+                  <Chip key={value} title={label} active={identityDocumentType === value}
+                    onPress={() => setIdentityDocumentType(value)} />
+                ))}
+              </View>
+              <Button title={identityDocumentAsset ? 'Change identity document photo' : 'Choose identity document photo'}
+                secondary onPress={pickIdentityDocument} disabled={busy} />
+              {identityDocumentAsset && <>
+                <Image source={{ uri: identityDocumentAsset.uri }} style={styles.workAssetPreview} resizeMode="contain" />
+                <Text style={styles.helper}>Identity document photo selected.</Text>
+              </>}
+              <Button title={identitySelfieAsset ? 'Retake selfie' : 'Take selfie'} onPress={takeIdentitySelfie} disabled={busy} />
+              {identitySelfieAsset && <>
+                <Image source={{ uri: identitySelfieAsset.uri }} style={styles.selectedPhotoThumb} resizeMode="cover" />
+                <Text style={styles.helper}>Selfie selected.</Text>
+              </>}
+              <Button title={busy ? 'Submitting identity verification…' : 'Submit identity verification'}
+                onPress={submitIdentityVerification} disabled={busy || !identityDocumentAsset || !identitySelfieAsset} />
+            </Card>
+          ) : null}
+          <Text style={styles.helper}>Submitted identity files are encrypted by the backend for secure review. Trust & Safety must review and approve the submission; submitting documents does not mean the identity is verified. Real SMS verification requires the SMS provider to be configured on the backend.</Text>
         </>}
 
         {screen === 'safety' && <>
