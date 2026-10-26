@@ -467,7 +467,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Unable to load profile photo.');
-      const photoUrl = data.authenticated_photo_url || data.photo_url || ''; // Use the authenticated file endpoint first; the image component adds the bearer token.
+      const photoUrl = data.photo_url || data.authenticated_photo_url || ''; // Prefer the short-lived signed R2 URL when available; fall back to the authenticated backend endpoint.
       setProfilePhotoUrl(photoUrl);
       return photoUrl || null;
     } catch (e) {
