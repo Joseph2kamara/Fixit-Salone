@@ -14,6 +14,8 @@ const {S3Client,PutObjectCommand,DeleteObjectCommand,GetObjectCommand}=require('
 const {getSignedUrl}=require('@aws-sdk/s3-request-presigner');
 
 const app=express();
+// Render runs this service behind a trusted reverse proxy; enable correct client-IP handling for rate limits.
+app.set('trust proxy',1);
 const JWT_SECRET=process.env.JWT_SECRET;
 if(!JWT_SECRET || String(JWT_SECRET).length<32) throw new Error('JWT_SECRET must be configured and be at least 32 characters long.');
 app.use(helmet());
