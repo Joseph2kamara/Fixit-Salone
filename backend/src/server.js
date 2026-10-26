@@ -452,9 +452,9 @@ app.post('/api/customer/profile-photo',requireAuth,upload.single('photo'),async(
   try{
     const old=await pool.query('SELECT profile_photo_storage_key,profile_photo_storage_provider,profile_photo_file_url FROM users WHERE id=$1',[req.user.sub]);
     if(!old.rows[0])return res.status(404).json({error:'Customer account not found.'});
-    stored=await storeUpload(req.file,'customer-profile-photos/'+req.user.sub);
+    stored=await storeUpload(req.file,makeObjectKey('customer-profile-photos/'+req.user.sub,req.file));
     await pool.query('UPDATE users SET profile_photo_storage_key=$1,profile_photo_storage_provider=$2,profile_photo_file_url=$3,updated_at=NOW() WHERE id=$4',[stored.storage_key,stored.storage_provider,stored.file_url,req.user.sub]);
-    if(old.rows[0].profile_photo_storage_key){
+    if(old.rows[0].profile_photo_storage_key && (old.rows[0].profile_photo_storage_provider!==stored.storage_provider || old.rows[0].profile_photo_storage_key!==stored.storage_key)){
       try{await removeStoredFile(old.rows[0].profile_photo_storage_provider,old.rows[0].profile_photo_storage_key,old.rows[0].profile_photo_file_url)}catch(e){console.warn('Old customer photo cleanup failed:',e.message)}
     }
     const photo_url=stored.storage_provider==='r2'
