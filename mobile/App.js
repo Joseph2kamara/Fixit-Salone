@@ -1523,7 +1523,7 @@ export default function App() {
             <View style={styles.homeLogoMark}><Text style={styles.homeLogoSymbol}>🔧</Text></View>
             <View style={styles.homeBrandText}>
               <Text style={styles.homeBrand}><Text style={styles.homeBrandFix}>FixIt</Text><Text style={styles.homeBrandSalone}> Salone</Text></Text>
-              <Text style={styles.homeGreeting}>Welcome, {(user.full_name || 'there').split(' ')[0]}!</Text>
+              <Text style={styles.homeGreeting}>Your trusted local service network</Text>
             </View>
           </View>
         </View>
@@ -1542,10 +1542,11 @@ export default function App() {
               {homepageSlides.map((slide, index) => <Pressable key={slide.key} accessibilityRole="button" accessibilityLabel={'Show homepage slide ' + (index + 1)} onPress={() => setHomepageSlideIndex(index)} style={[styles.homepageSlideDot, index === homepageSlideIndex && styles.homepageSlideDotActive]} />)}
             </View>}
           </View>}
-          <Field value={search} onChangeText={setSearch} placeholder="⌕  Search repairs or technicians..." autoCapitalize="none" />
+          <View style={styles.homeSearchHeading}><Text style={styles.homeSearchHint}>⌖  Find trusted help near you</Text></View>
+          <Field value={search} onChangeText={setSearch} placeholder="Search plumbing, repairs, technicians..." autoCapitalize="none" />
 
           <View style={styles.homeSectionHeading}>
-            <Text style={styles.homeSectionTitle}>Quick Categories</Text>
+            <Text style={styles.homeSectionTitle}>Service Categories</Text>
           </View>
           <View style={styles.categoryCarouselWrap}
             onLayout={event => {
@@ -1611,7 +1612,7 @@ export default function App() {
           </Pressable>
 
           <View style={styles.homeSectionHeader}>
-            <Text style={styles.homeSectionTitle}>Active Jobs</Text>
+            <Text style={styles.homeSectionTitle}>Your Active Requests</Text>
             <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }}>
               <Text style={styles.seeAllText}>View all  ›</Text>
             </Pressable>
@@ -1632,7 +1633,7 @@ export default function App() {
           )}
 
           <View style={styles.homeSectionHeader}>
-            <Text style={styles.homeSectionTitle}>Local Professionals</Text>
+            <Text style={styles.homeSectionTitle}>Top Local Professionals</Text>
             <Pressable onPress={() => { setSearch(''); setScreen('providers'); clearMessages(); }}>
               <Text style={styles.seeAllText}>View all  ›</Text>
             </Pressable>
@@ -2368,6 +2369,8 @@ const styles = StyleSheet.create({
   homeBrandFix: { color: COLORS.navy },
   homeBrandSalone: { color: COLORS.orange },
   homeGreeting: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  homeSearchHeading: { marginTop: 2, marginBottom: 7 },
+  homeSearchHint: { color: '#176B50', fontSize: 12, fontWeight: '800' },
   homeSectionHeading: { marginTop: 3, marginBottom: 10 },
   homeSectionTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
   homepageSlidesWrap: { width: '100%', marginBottom: 15, borderRadius: 18, overflow: 'hidden', backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line },
