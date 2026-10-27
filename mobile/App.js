@@ -1949,11 +1949,17 @@ export default function App() {
               <Card key={String(j.id || i)}>
                 <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
                 <JobProgressDetails status={j.status} />
+                <View style={styles.jobNextAction}>
+                  <Text style={styles.jobNextActionLabel}>NEXT STEP</Text>
+                  <Text style={styles.jobNextActionText}>{j.status === 'requested' ? 'Wait for a provider to respond to your request.' : j.status === 'quoted' ? 'Review the quotation and approve or decline it.' : j.status === 'approved' ? 'Your quote is approved. Coordinate the start time with your provider.' : j.status === 'in_progress' ? 'Your job is in progress. Message your provider if you need an update.' : j.status === 'completed' ? 'Job completed. Share a review of your experience.' : j.status === 'declined' ? 'This quotation was declined. You can discuss another quote with the provider.' : j.status === 'cancelled' ? 'This request is cancelled.' : 'Check the job details and contact your provider if needed.'}</Text>
+                </View>
                 <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Provider'} · {j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
-                <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
-                <Button title="Message provider" secondary compact onPress={() => openConversation(j.id)} />
+                <View style={styles.jobQuickActions}>
+                  <View style={styles.jobQuickActionItem}><Button title="View job photos" secondary compact onPress={() => openJobPhotos(j.id)} /></View>
+                  <View style={styles.jobQuickActionItem}><Button title="Message provider" secondary compact onPress={() => openConversation(j.id)} /></View>
+                </View>
                 {j.quoted_amount != null && <View style={{ backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 15, marginTop: 12, marginBottom: 12 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.ink }}>Provider quotation</Text>
@@ -2775,6 +2781,11 @@ const styles = StyleSheet.create({
   priceText: { color: COLORS.orangeDark, fontSize: 15, fontWeight: '900', marginTop: 9 },
   verified: { color: COLORS.green, fontSize: 10, fontWeight: '900' },
   status: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: COLORS.card, borderRadius: 10, borderWidth: 1, borderColor: COLORS.line },
+  jobNextAction: { backgroundColor: COLORS.orangeLight, borderRadius: 12, borderWidth: 1, borderColor: COLORS.line, padding: 11, marginTop: 10, marginBottom: 10 },
+  jobNextActionLabel: { color: COLORS.deepNavy, fontSize: 9, fontWeight: '900', letterSpacing: 0.8, marginBottom: 4 },
+  jobNextActionText: { color: COLORS.ink, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  jobQuickActions: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 4 },
+  jobQuickActionItem: { flex: 1, minWidth: 0 },
   customerJobSummary: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   customerJobSummaryCard: { flex: 1, minWidth: 0, backgroundColor: COLORS.orangeLight, borderRadius: 13, paddingVertical: 12, paddingHorizontal: 8, borderWidth: 1, borderColor: COLORS.line },
   customerJobSummaryCount: { fontSize: 22, fontWeight: '900', color: COLORS.deepNavy, marginBottom: 3 },
