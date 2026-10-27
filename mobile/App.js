@@ -1470,6 +1470,21 @@ export default function App() {
               </View>
             </View>
 
+            <View style={styles.authHero}>
+              <Image
+                source={{ uri: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=85' }}
+                style={styles.authHeroImage}
+                resizeMode="cover"
+                accessibilityLabel="Home repair professional at work"
+              />
+              <View style={styles.authHeroShade} />
+              <View style={styles.authHeroCopy}>
+                <Text style={styles.authHeroEyebrow}>YOUR HOME. YOUR TRUSTED PRO.</Text>
+                <Text style={styles.authHeroTitle}>Reliable help, right around the corner.</Text>
+                <Text style={styles.authHeroSubtitle}>Find skilled local professionals for the jobs that matter.</Text>
+              </View>
+            </View>
+
             <View style={styles.authWelcomePanel}>
               <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Join FixIt Salone'}</Text>
               <Text style={styles.authWelcomeCopy}>Choose how you want to use FixIt Salone.</Text>
@@ -2318,6 +2333,13 @@ const styles = StyleSheet.create({
   authShield: { width: 54, height: 61, marginRight: 2, borderWidth: 2, borderColor: COLORS.deepNavy, borderRadius: 16, backgroundColor: '#E8F4EE', alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 3 },
   authShieldText: { color: COLORS.deepNavy, fontSize: 30, fontWeight: '900', lineHeight: 35 },
   authShieldCheck: { color: COLORS.deepNavy, fontSize: 13, fontWeight: '900', marginTop: -7 },
+  authHero: { height: 188, borderRadius: 22, overflow: 'hidden', marginBottom: 14, backgroundColor: COLORS.deepNavy, position: 'relative', justifyContent: 'flex-end', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 9, elevation: 3 },
+  authHeroImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  authHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13, 42, 32, 0.48)' },
+  authHeroCopy: { paddingHorizontal: 18, paddingVertical: 17 },
+  authHeroEyebrow: { color: '#D2F5E4', fontSize: 9, fontWeight: '900', letterSpacing: 1.2, marginBottom: 7 },
+  authHeroTitle: { color: COLORS.white, fontSize: 22, lineHeight: 27, fontWeight: '900', letterSpacing: -0.35, maxWidth: 300 },
+  authHeroSubtitle: { color: '#F0F8F3', fontSize: 12, lineHeight: 17, marginTop: 6, maxWidth: 310 },
   authWelcomePanel: { backgroundColor: COLORS.deepNavy, borderRadius: 25, paddingHorizontal: 20, paddingTop: 23, paddingBottom: 21, borderWidth: 1, borderColor: '#2A765D', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12, elevation: 3 },
   authWelcomeTitle: { color: '#FFFFFF', fontSize: 28, fontWeight: '900', letterSpacing: -0.6 },
   authWelcomeCopy: { color: '#E2E8F0', fontSize: 15, lineHeight: 22, marginTop: 8, marginBottom: 17 },
