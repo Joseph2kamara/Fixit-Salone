@@ -1949,6 +1949,12 @@ export default function App() {
               <Card key={String(j.id || i)}>
                 <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
                 <JobProgressDetails status={j.status} />
+                <View style={{ backgroundColor: j.status === 'requested' ? COLORS.warmPeach : j.status === 'quoted' ? COLORS.softBlue : ['approved', 'in_progress'].includes(j.status) ? COLORS.orangeLight : COLORS.card, borderRadius: 10, borderWidth: 1, borderColor: COLORS.line, padding: 11, marginTop: 8, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: COLORS.muted, letterSpacing: 0.7, marginBottom: 4 }}>NEXT ACTION</Text>
+                  <Text style={{ fontSize: 13, lineHeight: 19, color: COLORS.ink, fontWeight: '600' }}>
+                    {j.status === 'requested' ? 'Review the details and photos, then send an itemized quote to the customer.' : j.status === 'quoted' ? 'Your quote has been sent. Wait for the customer to approve or respond, and stay available for messages.' : j.status === 'approved' ? 'The customer approved your quote. Contact them to agree on the start time before beginning work.' : j.status === 'in_progress' ? 'Keep the customer updated and use messages to coordinate the job.' : j.status === 'completed' ? 'This job is marked completed. Keep the conversation available in case the customer follows up.' : j.status === 'cancelled' ? 'This request was cancelled. Review the messages if you need context.' : 'Review the job details and messages for the latest update.'}
+                  </Text>
+                </View>
                 <View style={styles.jobNextAction}>
                   <Text style={styles.jobNextActionLabel}>NEXT STEP</Text>
                   <Text style={styles.jobNextActionText}>{j.status === 'requested' ? 'Wait for a provider to respond to your request.' : j.status === 'quoted' ? 'Review the quotation and approve or decline it.' : j.status === 'approved' ? 'Your quote is approved. Coordinate the start time with your provider.' : j.status === 'in_progress' ? 'Your job is in progress. Message your provider if you need an update.' : j.status === 'completed' ? 'Job completed. Share a review of your experience.' : j.status === 'declined' ? 'This quotation was declined. You can discuss another quote with the provider.' : j.status === 'cancelled' ? 'This request is cancelled.' : 'Check the job details and contact your provider if needed.'}</Text>
