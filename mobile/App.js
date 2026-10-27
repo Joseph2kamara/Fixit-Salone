@@ -2128,6 +2128,21 @@ export default function App() {
         {screen === 'provider-setup' && <>
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
           <Text style={styles.sectionLead}>Customers need a business name, location, service, and clear description to find you.</Text>
+          <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginBottom: 14 }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: COLORS.ink, marginBottom: 5 }}>Build a profile customers can trust</Text>
+            <Text style={{ fontSize: 12, color: COLORS.muted, lineHeight: 18, marginBottom: 10 }}>Complete these details so customers can understand what you do and where you work.</Text>
+            {[
+              ['Business name', !!String(providerForm.businessName || '').trim()],
+              ['Location', !!String(providerForm.area || '').trim() && !!String(providerForm.district || '').trim()],
+              ['Main service', !!String(providerForm.serviceId || '').trim()],
+              ['Service description', !!String(providerForm.description || '').trim()]
+            ].map(([label, complete]) => (
+              <View key={label} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
+                <Text style={{ width: 22, fontSize: 14, fontWeight: '800', color: complete ? COLORS.green : COLORS.muted }}>{complete ? '✓' : '○'}</Text>
+                <Text style={{ fontSize: 13, color: complete ? COLORS.ink : COLORS.muted }}>{label}</Text>
+              </View>
+            ))}
+          </View>
           <Field label="Business name" value={providerForm.businessName} onChangeText={v => setProviderFormValue('businessName', v)} placeholder="e.g. Joe Electrical Services" />
           <OptionPicker label="Region" value={providerForm.region} options={REGIONS}
             onChange={r => {
