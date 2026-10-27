@@ -2250,6 +2250,25 @@ export default function App() {
         {screen === 'verification' && <>
           <Button title="← Back to account" secondary onPress={() => setScreen('account')} />
           <Text style={styles.sectionLead}>Review your trust status. Identity information should stay private.</Text>
+          <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginBottom: 14 }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: COLORS.ink, marginBottom: 10 }}>Your verification steps</Text>
+            {[
+              { number: '1', title: 'Confirm your phone number', detail: 'Receive and enter the SMS code.', done: verifyStatus?.phone_status === 'verified' },
+              { number: '2', title: 'Submit your National ID', detail: 'Upload a clear photo of your National ID card and take a selfie.', done: String(verifyStatus?.identity?.status || '').toLowerCase() === 'verified' },
+              { number: '3', title: 'Wait for review', detail: 'Trust & Safety reviews your submission before verification is approved.', done: String(verifyStatus?.identity?.status || '').toLowerCase() === 'verified' }
+            ].map(step => (
+              <View key={step.number} style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: 8 }}>
+                <View style={{ width: 27, height: 27, borderRadius: 14, backgroundColor: step.done ? COLORS.green : COLORS.white, borderWidth: 1, borderColor: step.done ? COLORS.green : COLORS.line, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: step.done ? COLORS.white : COLORS.ink }}>{step.done ? '✓' : step.number}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.ink }}>{step.title}</Text>
+                  <Text style={{ fontSize: 12, color: COLORS.muted, lineHeight: 17, marginTop: 2 }}>{step.detail}</Text>
+                </View>
+              </View>
+            ))}
+            <Text style={{ fontSize: 11, color: COLORS.muted, lineHeight: 16, marginTop: 12 }}>Never share your ID card or selfie in chat. Only upload identity documents through this verification screen.</Text>
+          </View>
           {!verifyStatus ? <Button title="Load verification status" onPress={loadVerification} disabled={busy} /> : <Card>
             <Text style={styles.cardTitle}>Phone verification</Text>
             <Status value={verifyStatus.phone_status || 'unverified'} />
