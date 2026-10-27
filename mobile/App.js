@@ -2237,8 +2237,15 @@ export default function App() {
 
         {screen === 'notifications' && <>
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
-          <Button title="Refresh notifications" secondary onPress={loadNotifications} />
-          {notifications.length === 0 ? <Empty text="No provider notifications found." /> : notifications.map(n =>
+          <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginBottom: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.ink }}>Your notifications</Text>
+            <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>{notifications.filter(n => !n.is_read).length} unread · {notifications.length} total</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}><Button title="Refresh" secondary onPress={loadNotifications} /></View>
+            {notifications.some(n => !n.is_read) && <View style={{ flex: 1 }}><Button title="Mark all as read" secondary onPress={async () => { const unread = notifications.filter(n => !n.is_read); for (const item of unread) await markNotificationRead(item.id); }} disabled={busy} /></View>}
+          </View>
+          {notifications.length === 0 ? <Empty text="No provider notifications found. New request and account updates will appear here." /> : notifications.map(n =>
             <Card key={String(n.id)}>
               <View style={styles.cardTop}><Text style={styles.cardTitle}>{n.title || 'Provider notification'}</Text><Status value={n.is_read ? 'read' : 'unread'} /></View>
               <Text style={styles.cardDescription}>{n.message}</Text>
