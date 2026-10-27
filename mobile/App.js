@@ -2011,7 +2011,28 @@ export default function App() {
                     <Field label="Labour (SLE)" value={quoteForm.labour} onChangeText={v => setQuoteValue('labour', v)} keyboardType="decimal-pad" placeholder="0" />
                     <Field label="Materials (SLE)" value={quoteForm.materials} onChangeText={v => setQuoteValue('materials', v)} keyboardType="decimal-pad" placeholder="0" />
                     <Field label="Transport (SLE)" value={quoteForm.transport} onChangeText={v => setQuoteValue('transport', v)} keyboardType="decimal-pad" placeholder="0" />
-                    <Text style={styles.helper}>Free providers pay the 1% FixIt fee; active subscribers pay 0%. Total must be greater than zero.</Text>
+                    <View style={{ backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginTop: 4, marginBottom: 10 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.ink, marginBottom: 10 }}>Quotation preview</Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 }}>
+                        <Text style={{ fontSize: 13, color: COLORS.muted }}>Labour</Text>
+                        <Text style={{ fontSize: 13, color: COLORS.ink }}>SLE {Number(quoteForm.labour || 0).toLocaleString()}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7 }}>
+                        <Text style={{ fontSize: 13, color: COLORS.muted }}>Materials</Text>
+                        <Text style={{ fontSize: 13, color: COLORS.ink }}>SLE {Number(quoteForm.materials || 0).toLocaleString()}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={{ fontSize: 13, color: COLORS.muted }}>Transport</Text>
+                        <Text style={{ fontSize: 13, color: COLORS.ink }}>SLE {Number(quoteForm.transport || 0).toLocaleString()}</Text>
+                      </View>
+                      <View style={{ height: 1, backgroundColor: COLORS.line, marginBottom: 10 }} />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.ink }}>Quote total</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.green }}>SLE {(Number(quoteForm.labour || 0) + Number(quoteForm.materials || 0) + Number(quoteForm.transport || 0)).toLocaleString()}</Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>FixIt fee is separate and is not added to the customer's quote total.</Text>
+                    </View>
+                    <Text style={styles.helper}>Free providers pay the 1% FixIt fee; active subscribers pay 0%. The quote total must be greater than zero.</Text>
                     <Button title="Send quote to customer" onPress={() => sendQuote(j.id)} disabled={busy} />
                     <Button title="Cancel quote" secondary onPress={() => setQuoteJobId('')} />
                   </View>}
