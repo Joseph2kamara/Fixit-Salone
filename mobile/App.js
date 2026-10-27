@@ -1982,9 +1982,18 @@ export default function App() {
               <Card key={String(j.id || i)}>
                 <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
                 <JobProgressDetails status={j.status} />
-                <Text style={styles.cardMeta}>Customer: {j.customer_name || 'Customer'}{j.customer_phone ? ' · ' + j.customer_phone : ''}</Text>
-                <Text style={styles.cardDescription}>{j.job_details}</Text>
-                <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
+                <View style={{ backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1, borderColor: COLORS.line, padding: 12, marginTop: 4, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.muted, marginBottom: 4 }}>CUSTOMER</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: COLORS.ink }}>{j.customer_name || 'Customer'}</Text>
+                  {!!j.customer_phone && <Text style={{ fontSize: 13, color: COLORS.green, marginTop: 3 }}>{j.customer_phone}</Text>}
+                  <View style={{ height: 1, backgroundColor: COLORS.line, marginVertical: 10 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.muted, marginBottom: 4 }}>JOB DESCRIPTION</Text>
+                  <Text style={styles.cardDescription}>{j.job_details || 'No extra job details were provided.'}</Text>
+                  <View style={{ height: 1, backgroundColor: COLORS.line, marginVertical: 10 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.muted, marginBottom: 4 }}>JOB LOCATION</Text>
+                  <Text style={{ fontSize: 13, color: COLORS.ink, lineHeight: 19 }}>{[j.area, j.district, j.region].filter(Boolean).join(', ') || 'Location not provided'}</Text>
+                  {!!j.service_address && <Text style={{ fontSize: 13, color: COLORS.muted, marginTop: 3 }}>{j.service_address}</Text>}
+                </View>
                 <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
                 <Button title="Message customer" secondary compact onPress={() => openConversation(j.id)} />
                 <Button title="Report suspicious customer" secondary compact onPress={() => {
