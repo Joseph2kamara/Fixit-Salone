@@ -1932,6 +1932,18 @@ export default function App() {
         {screen === 'requests' && user.role === 'customer' && <>
 
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Your service activity</Text><Button title="Refresh" secondary compact onPress={loadCustomerRequests} disabled={busy} /></View>
+          <View style={styles.customerJobSummary}>
+            {[
+              { label: 'Awaiting provider', count: jobs.filter(j => j.status === 'requested').length },
+              { label: 'Quotes to review', count: jobs.filter(j => j.status === 'quoted').length },
+              { label: 'In progress', count: jobs.filter(j => j.status === 'approved' || j.status === 'in_progress').length }
+            ].map(item => (
+              <View key={item.label} style={styles.customerJobSummaryCard}>
+                <Text style={styles.customerJobSummaryCount}>{item.count}</Text>
+                <Text style={styles.customerJobSummaryLabel}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
           {jobs.length === 0 ? <Empty text="You have no service requests yet. Find a provider on Home and tap Request service." /> :
             jobs.map((j, i) => (
               <Card key={String(j.id || i)}>
@@ -2763,6 +2775,10 @@ const styles = StyleSheet.create({
   priceText: { color: COLORS.orangeDark, fontSize: 15, fontWeight: '900', marginTop: 9 },
   verified: { color: COLORS.green, fontSize: 10, fontWeight: '900' },
   status: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: COLORS.card, borderRadius: 10, borderWidth: 1, borderColor: COLORS.line },
+  customerJobSummary: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  customerJobSummaryCard: { flex: 1, minWidth: 0, backgroundColor: COLORS.orangeLight, borderRadius: 13, paddingVertical: 12, paddingHorizontal: 8, borderWidth: 1, borderColor: COLORS.line },
+  customerJobSummaryCount: { fontSize: 22, fontWeight: '900', color: COLORS.deepNavy, marginBottom: 3 },
+  customerJobSummaryLabel: { fontSize: 10, lineHeight: 14, fontWeight: '700', color: COLORS.ink },
   statusText: { color: COLORS.ink, fontSize: 10, fontWeight: '900', textTransform: 'capitalize' },
   empty: { color: COLORS.muted, textAlign: 'center', paddingHorizontal: 20, paddingVertical: 30, lineHeight: 21, backgroundColor: COLORS.white, borderRadius: 17, borderWidth: 1, borderColor: COLORS.line, overflow: 'hidden' },
   helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginVertical: 8 },
