@@ -487,7 +487,7 @@ export default function App() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8
+        quality: 0.7
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
       const asset = result.assets[0];
@@ -828,7 +828,7 @@ export default function App() {
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
         selectionLimit: remaining,
-        quality: 0.75
+        quality: 0.6
       });
       if (!result.canceled) addPickedPhotos(result.assets || []);
     } catch (e) {
@@ -845,7 +845,7 @@ export default function App() {
         setError('Camera permission is needed to take a photo. You can still choose a photo from your gallery.');
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.75 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
       if (!result.canceled) addPickedPhotos(result.assets || []);
     } catch (e) {
       setError(e?.message || 'Could not open the camera.');
@@ -1016,7 +1016,7 @@ export default function App() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
-        quality: 0.8,
+        quality: 0.7,
         videoMaxDuration: 90
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
