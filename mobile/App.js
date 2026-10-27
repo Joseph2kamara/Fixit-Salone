@@ -1687,8 +1687,12 @@ export default function App() {
                     : <View style={styles.homeProviderPhotoFallback}><Text style={styles.homeProviderInitial}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
                   <Text numberOfLines={1} style={styles.homeProviderName}>{p.business_name || p.full_name || 'Service provider'}</Text>
                   <Text numberOfLines={1} style={styles.homeProviderService}>{p.service_name || 'Local services'}</Text>
-                  <Text numberOfLines={1} style={styles.homeProviderLocation}>{p.area || p.district || 'Sierra Leone'}</Text>
-                  <Text style={styles.homeProviderPrice}>{p.price_sle != null ? 'SLE ' + Number(p.price_sle).toLocaleString() : 'Quote needed'}</Text>
+                  {p.verification_status === 'verified' && <View style={styles.homeProviderVerified}><Text style={styles.homeProviderVerifiedText}>✓ IDENTITY VERIFIED</Text></View>}
+                  <Text numberOfLines={1} style={styles.homeProviderLocation}>⌖  {p.area || p.district || 'Sierra Leone'}</Text>
+                  <View style={styles.homeProviderPriceRow}>
+                    <Text style={styles.homeProviderPrice}>{p.price_sle != null ? 'SLE ' + Number(p.price_sle).toLocaleString() : 'Quote needed'}</Text>
+                    <Text style={styles.homeProviderPriceLabel}>{p.price_sle != null ? 'starting price' : 'ask provider'}</Text>
+                  </View>
                   <Button title="View profile" secondary compact onPress={() => openProvider(p)} />
                   <Button title="Request service" compact onPress={() => startRequest(p, p)} />
                 </View>
@@ -2592,14 +2596,18 @@ const styles = StyleSheet.create({
   jobDetailButton: { borderWidth: 1, borderColor: '#F6CDAE', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, marginTop: 10, backgroundColor: COLORS.orangeLight },
   jobDetailButtonText: { color: COLORS.orangeDark, fontSize: 12, fontWeight: '800' },
   providerCarousel: { paddingBottom: 4, paddingRight: 4 },
-  homeProviderCard: { width: 184, backgroundColor: COLORS.white, borderRadius: 18, padding: 12, marginRight: 11, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
-  homeProviderPhoto: { width: '100%', height: 104, borderRadius: 13, backgroundColor: COLORS.card, marginBottom: 10 },
-  homeProviderPhotoFallback: { width: '100%', height: 104, borderRadius: 13, backgroundColor: COLORS.softBlue, marginBottom: 10, alignItems: 'center', justifyContent: 'center' },
-  homeProviderInitial: { color: COLORS.navy, fontSize: 27, fontWeight: '900' },
-  homeProviderName: { color: COLORS.ink, fontSize: 13, fontWeight: '900' },
-  homeProviderService: { color: COLORS.orange, fontSize: 11, fontWeight: '800', marginTop: 3 },
-  homeProviderLocation: { color: COLORS.muted, fontSize: 10, marginTop: 4 },
-  homeProviderPrice: { color: COLORS.orangeDark, fontSize: 11, fontWeight: '900', marginTop: 6, marginBottom: 2 },
+  homeProviderCard: { width: 196, backgroundColor: COLORS.white, borderRadius: 20, padding: 12, marginRight: 12, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 9, elevation: 2 },
+  homeProviderPhoto: { width: '100%', height: 112, borderRadius: 15, backgroundColor: COLORS.card, marginBottom: 10 },
+  homeProviderPhotoFallback: { width: '100%', height: 112, borderRadius: 15, backgroundColor: COLORS.orangeLight, marginBottom: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.line },
+  homeProviderInitial: { color: COLORS.deepNavy, fontSize: 29, fontWeight: '900' },
+  homeProviderName: { color: COLORS.ink, fontSize: 14, fontWeight: '900', letterSpacing: -0.15 },
+  homeProviderService: { color: COLORS.deepNavy, fontSize: 11, fontWeight: '800', marginTop: 4 },
+  homeProviderVerified: { alignSelf: 'flex-start', backgroundColor: COLORS.orangeLight, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, marginTop: 7 },
+  homeProviderVerifiedText: { color: COLORS.deepNavy, fontSize: 8, fontWeight: '900', letterSpacing: 0.2 },
+  homeProviderLocation: { color: COLORS.muted, fontSize: 10, marginTop: 7 },
+  homeProviderPriceRow: { marginTop: 4, marginBottom: 4, padding: 8, backgroundColor: COLORS.card, borderRadius: 10, borderWidth: 1, borderColor: COLORS.line },
+  homeProviderPrice: { color: COLORS.deepNavy, fontSize: 12, fontWeight: '900' },
+  homeProviderPriceLabel: { color: COLORS.muted, fontSize: 9, fontWeight: '600', marginTop: 2 },
   tabIconWrap: { position: 'relative', minWidth: 26, alignItems: 'center' },
   tabBadge: { position: 'absolute', top: -4, right: -9, backgroundColor: COLORS.orange, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   tabBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '900' },
