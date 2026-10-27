@@ -1938,13 +1938,34 @@ export default function App() {
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
                 <Button title="View attached job photos" secondary compact onPress={() => openJobPhotos(j.id)} />
                 <Button title="Message provider" secondary compact onPress={() => openConversation(j.id)} />
-                {j.quoted_amount != null && <Card>
-                  <Text style={styles.cardTitle}>Quotation · SLE {Number(j.quoted_amount).toLocaleString()}</Text>
-                  <Text style={styles.cardMeta}>Labour: SLE {Number(j.labour_amount || 0).toLocaleString()}</Text>
-                  <Text style={styles.cardMeta}>Materials: SLE {Number(j.materials_amount || 0).toLocaleString()}</Text>
-                  <Text style={styles.cardMeta}>Transport: SLE {Number(j.transport_amount || 0).toLocaleString()}</Text>
-                  <Text style={styles.cardMeta}>FixIt fee: SLE {Number(j.platform_fee || 0).toLocaleString()}</Text>
-                </Card>}
+                {j.quoted_amount != null && <View style={{ backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 15, marginTop: 12, marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.ink }}>Provider quotation</Text>
+                    <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: COLORS.green }}>ITEMIZED</Text>
+                    </View>
+                  </View>
+                  {[
+                    ['Labour', j.labour_amount],
+                    ['Materials', j.materials_amount],
+                    ['Transport', j.transport_amount]
+                  ].map(([label, amount]) => (
+                    <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
+                      <Text style={{ fontSize: 13, color: COLORS.muted }}>{label}</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: COLORS.ink }}>SLE {Number(amount || 0).toLocaleString()}</Text>
+                    </View>
+                  ))}
+                  <View style={{ height: 1, backgroundColor: COLORS.line, marginTop: 2, marginBottom: 12 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: COLORS.ink }}>Quote total</Text>
+                      <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 3 }}>Review before approving</Text>
+                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.green }}>SLE {Number(j.quoted_amount).toLocaleString()}</Text>
+                  </View>
+                  {Number(j.platform_fee || 0) > 0 && <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 10 }}>Provider FixIt fee: SLE {Number(j.platform_fee).toLocaleString()} (shown separately from your quotation).</Text>}
+                  {j.status === 'quoted' && <Text style={{ fontSize: 12, color: COLORS.ink, marginTop: 12 }}>Check the costs above. Approve if you agree with the quotation, or decline if you do not.</Text>}
+                </View>}
                 {j.status === 'quoted' && <View style={styles.buttonRow}>
                   <View style={styles.buttonRowItem}><Button title="Approve quote" onPress={() => setJobStatus(j.id, 'approved')} /></View>
                   <View style={styles.buttonRowItem}><Button title="Decline" secondary onPress={() => setJobStatus(j.id, 'declined')} /></View>
