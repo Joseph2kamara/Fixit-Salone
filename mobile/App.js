@@ -2370,15 +2370,15 @@ export default function App() {
       </ScrollView>
 
       <View style={styles.tabBar}>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('home'); clearMessages(); }}>
+        <Pressable style={[styles.tabItem, screen === 'home' && styles.tabItemActive]} onPress={() => { setScreen('home'); clearMessages(); }}>
           <Text style={[styles.tabIcon, screen === 'home' && styles.tabIconActive]}>⌂</Text>
           <Text style={[styles.tabText, screen === 'home' && styles.tabTextActive]}>Home</Text>
         </Pressable>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}>
+        <Pressable style={[styles.tabItem, screen === 'requests' && styles.tabItemActive]} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}>
           <Text style={[styles.tabIcon, screen === 'requests' && styles.tabIconActive]}>▤</Text>
           <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'My Jobs' : 'My Jobs'}</Text>
         </Pressable>
-        <Pressable style={styles.tabItem} onPress={() => {
+        <Pressable style={[styles.tabItem, (screen === 'inbox' || screen === 'notifications') && styles.tabItemActive]} onPress={() => {
           clearMessages();
           if (user.role === 'provider') loadNotifications();
           else setScreen('inbox');
@@ -2389,7 +2389,7 @@ export default function App() {
           </View>
           <Text style={[styles.tabText, (screen === 'inbox' || screen === 'notifications') && styles.tabTextActive]}>Inbox</Text>
         </Pressable>
-        <Pressable style={styles.tabItem} onPress={() => { setScreen('account'); clearMessages(); }}>
+        <Pressable style={[styles.tabItem, screen === 'account' && styles.tabItemActive]} onPress={() => { setScreen('account'); clearMessages(); }}>
           <View style={[styles.profileTabAvatar, screen === 'account' && styles.profileTabAvatarActive]}>
             {user.role === 'customer' && profilePhotoUrl
               ? <AuthenticatedRequestImage uri={profilePhotoUrl} token={token} style={styles.profileTabPhoto} />
@@ -2768,12 +2768,13 @@ const styles = StyleSheet.create({
   fieldFoot: { fontSize: 11, color: COLORS.muted },
   footnote: { textAlign: 'center', color: COLORS.muted, fontSize: 11, marginTop: 16, lineHeight: 17 },
   reviewBox: { backgroundColor: COLORS.card, borderRadius: 15, padding: 13, marginTop: 9, borderWidth: 1, borderColor: COLORS.line },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E7E8EA', paddingTop: 8, paddingBottom: Platform.OS === 'ios' ? 18 : 8, paddingHorizontal: 5, minHeight: Platform.OS === 'android' ? 66 : 70, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 14 },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: 13 },
-  tabIcon: { color: '#94A3B8', fontSize: 21, lineHeight: 24, fontWeight: '800', marginBottom: 1 },
-  tabIconActive: { color: COLORS.orange },
-  tabText: { color: '#64748B', fontSize: 10, fontWeight: '800' },
-  tabTextActive: { color: COLORS.orange },
+  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.line, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 18 : 8, paddingHorizontal: 8, minHeight: Platform.OS === 'android' ? 70 : 74, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 14 },
+  tabItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 5, borderRadius: 15, marginHorizontal: 2 },
+  tabItemActive: { backgroundColor: COLORS.orangeLight },
+  tabIcon: { color: '#84918B', fontSize: 21, lineHeight: 24, fontWeight: '800', marginBottom: 1 },
+  tabIconActive: { color: COLORS.deepNavy },
+  tabText: { color: '#64716A', fontSize: 10, fontWeight: '800' },
+  tabTextActive: { color: COLORS.deepNavy, fontWeight: '900' },
   chatLog: { backgroundColor: COLORS.card, borderRadius: 17, padding: 11, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
   chatBubble: { borderRadius: 13, padding: 12, marginVertical: 4, maxWidth: '92%' },
   chatUser: { alignSelf: 'flex-end', backgroundColor: COLORS.orangeLight },
