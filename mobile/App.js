@@ -1551,6 +1551,27 @@ export default function App() {
       {noticePanel}
       <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainContent} keyboardShouldPersistTaps="handled">
         {screen === 'home' && user.role === 'customer' && <>
+          {homepageSlides.length === 0 && <View style={styles.homePromoHero}>
+            <View style={styles.homePromoCopy}>
+              <Text style={styles.homePromoEyebrow}>FIXIT SALONE • LOCAL EXPERTS</Text>
+              <Text style={styles.homePromoTitle}>Trusted help, right around the corner.</Text>
+              <Text style={styles.homePromoSubtitle}>Find skilled professionals for repairs and home services.</Text>
+              <Pressable accessibilityRole="button" onPress={() => {
+                setSearch('');
+                setRegionFilter('All');
+                setDistrictFilter('');
+                setScreen('providers');
+                clearMessages();
+              }} style={({ pressed }) => [styles.homePromoAction, pressed && styles.buttonPressed]}>
+                <Text style={styles.homePromoActionText}>Explore services  →</Text>
+              </Pressable>
+            </View>
+            <View style={styles.homePromoArt}>
+              <Text style={styles.homePromoTool}>🛠️</Text>
+              <Text style={styles.homePromoHouse}>⌂</Text>
+              <View style={styles.homePromoVerified}><Text style={styles.homePromoVerifiedText}>✓ VERIFIED</Text></View>
+            </View>
+          </View>}
           {homepageSlides.length > 0 && <View style={styles.homepageSlidesWrap}>
             <Image source={{ uri: homepageSlides[Math.min(homepageSlideIndex, homepageSlides.length - 1)]?.uri }} style={styles.homepageSlideImage} resizeMode="cover" />
             {homepageSlides.length > 1 && <View style={styles.homepageSlideDots}>
@@ -2395,6 +2416,18 @@ const styles = StyleSheet.create({
   homeSearchHint: { color: '#176B50', fontSize: 12, fontWeight: '800' },
   homeSectionHeading: { marginTop: 3, marginBottom: 10 },
   homeSectionTitle: { color: COLORS.navy, fontSize: 17, fontWeight: '900', letterSpacing: -0.25 },
+  homePromoHero: { minHeight: 190, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 21, padding: 16, marginBottom: 15, backgroundColor: '#145C46', borderWidth: 1, borderColor: '#24765D', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 9, elevation: 3 },
+  homePromoCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
+  homePromoEyebrow: { color: '#C3E9D6', fontSize: 8, fontWeight: '900', letterSpacing: 0.8, marginBottom: 8 },
+  homePromoTitle: { color: COLORS.white, fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.4 },
+  homePromoSubtitle: { color: '#E4F3EA', fontSize: 11, lineHeight: 16, marginTop: 7 },
+  homePromoAction: { alignSelf: 'flex-start', marginTop: 12, borderRadius: 10, backgroundColor: COLORS.white, paddingHorizontal: 11, paddingVertical: 9 },
+  homePromoActionText: { color: '#145C46', fontSize: 10, fontWeight: '900' },
+  homePromoArt: { width: 91, height: 125, marginLeft: 6, borderRadius: 18, backgroundColor: '#E8F4EE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C6E4D3' },
+  homePromoTool: { fontSize: 35, marginBottom: 1 },
+  homePromoHouse: { color: '#176B50', fontSize: 31, fontWeight: '900', marginTop: -7 },
+  homePromoVerified: { backgroundColor: '#176B50', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, marginTop: 3 },
+  homePromoVerifiedText: { color: COLORS.white, fontSize: 7, fontWeight: '900', letterSpacing: 0.4 },
   homepageSlidesWrap: { width: '100%', marginBottom: 15, borderRadius: 18, overflow: 'hidden', backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line },
   homepageSlideImage: { width: '100%', height: 165, backgroundColor: COLORS.card },
   homepageSlideDots: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(15,23,42,0.35)' },
