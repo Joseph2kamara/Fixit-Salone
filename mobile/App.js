@@ -1965,6 +1965,18 @@ export default function App() {
         {screen === 'requests' && user.role === 'provider' && <>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Customer jobs</Text><Button title="Refresh" secondary compact onPress={loadProviderDashboard} disabled={busy} /></View>
           <Text style={styles.helper}>Review job details and send an itemized quote before starting work. Free provider access is limited to the first three referrals; notifications may continue after that limit.</Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            {[
+              { label: 'New requests', count: jobs.filter(j => j.status === 'requested').length },
+              { label: 'Quotes sent', count: jobs.filter(j => j.status === 'quoted').length },
+              { label: 'In progress', count: jobs.filter(j => j.status === 'approved' || j.status === 'in_progress').length }
+            ].map(item => (
+              <View key={item.label} style={{ flex: 1, minWidth: 0, backgroundColor: COLORS.orangeLight, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 8, borderWidth: 1, borderColor: COLORS.line }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.green, marginBottom: 3 }}>{item.count}</Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.ink }}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
           {jobs.length === 0 ? <Empty text="No visible requests yet. Make sure your business profile and main service are saved." /> :
             jobs.map((j, i) => (
               <Card key={String(j.id || i)}>
