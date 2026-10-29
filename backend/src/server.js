@@ -689,14 +689,18 @@ app.post('/api/service-requests/:id/photos',requireAuth,upload.array('photos',5)
     const r=current.rows[0];
     const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
     if(!allowed)return res.status(403).json({error:'You do not have access to this request.'});
-    const count=await pool.query('SELECT COUNT(*)::int AS count FROM service_request_photos WHERE service_request_id=$1',[r.id]);
-    if(count.rows[0].count+files.length>5)return res.status(400).json({error:'A request can have a maximum of 5 photos.'});
+    const photoStage=String(req.body?.photo_stage||'request');
+    if(!['request','before','after'].includes(photoStage))return res.status(400).json({error:'Photo stage must be request, before, or after.'});
+    if(photoStage!=='request'&&req.user.role!=='provider')return res.status(403).json({error:'Only the assigned provider can upload before/after work photos.'});
+    if(photoStage!=='request'&&r.provider_id===null)return res.status(409).json({error:'A provider must be assigned before work photos can be uploaded.'});
+    const count=await pool.query('SELECT COUNT(*)::int AS count FROM service_request_photos WHERE service_request_id=$1 AND photo_stage=$2',[r.id,photoStage]);
+    if(count.rows[0].count+files.length>5)return res.status(400).json({error:'A maximum of 5 photos is allowed for each photo stage.'});
     const saved=[];
     for(const f of files){
       const key=makeObjectKey('service-request-photos/'+r.id,f);
       const stored=await storeUpload(f,key);
       cleanup.push(stored);
-      const row=await pool.query('INSERT INTO service_request_photos(service_request_id,uploaded_by,file_url,storage_key,storage_provider,original_name) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,file_url,storage_key,storage_provider,original_name,created_at',[r.id,req.user.sub,stored.file_url,stored.storage_key,stored.storage_provider,f.originalname]);
+      const row=await pool.query('INSERT INTO service_request_photos(service_request_id,uploaded_by,file_url,storage_key,storage_provider,original_name,photo_stage) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,file_url,storage_key,storage_provider,original_name,photo_stage,created_at',[r.id,req.user.sub,stored.file_url,stored.storage_key,stored.storage_provider,f.originalname,photoStage]);
       saved.push(row.rows[0]);
     }
     await audit(req.user.sub,r.customer_user_id,'service_request.photos_uploaded','service_request',r.id,{count:saved.length,storage:objectStorageEnabled?'r2':'local'});
@@ -726,7 +730,7 @@ app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
     const r=current.rows[0];
     const allowed=req.user.role==='customer'&&r.customer_user_id===req.user.sub || req.user.role==='provider' && (await pool.query('SELECT 1 FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub])).rows[0];
     if(!allowed)return res.status(403).json({error:'You do not have access to these photos.'});
-    const {rows}=await pool.query('SELECT id,file_url,storage_key,storage_provider,original_name,created_at FROM service_request_photos WHERE service_request_id=$1 ORDER BY created_at ASC',[req.params.id]);
+    const {rows}=await pool.query('SELECT id,file_url,storage_key,storage_provider,original_name,photo_stage,created_at FROM service_request_photos WHERE service_request_id=$1 ORDER BY created_at ASC',[req.params.id]);
     res.json(rows.map(x=>({...x,file_url:objectStorageEnabled&&x.storage_provider==='r2'?('/api/service-requests/'+encodeURIComponent(req.params.id)+'/photos/'+encodeURIComponent(x.id)+'/file'):x.file_url})));
   }catch(e){res.status(500).json({error:'Unable to load request photos.'})}
 });
@@ -869,6 +873,55 @@ app.get('/api/payments/mine',requireAuth,async(req,res)=>{
   }catch(e){res.status(500).json({error:'Unable to load your payments.'})}
 });
 
+// Job completion evidence: providers submit before/after photos; customers confirm or report an issue.
+app.post('/api/service-requests/:id/completion-submit',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const result=await pool.query(`SELECT sr.id,sr.customer_user_id,sr.provider_id,sr.status,sr.completion_submitted_at,
+      pp.user_id AS provider_user_id
+      FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id WHERE sr.id=$1`,[req.params.id]);
+    const r=result.rows[0];
+    if(!r)return res.status(404).json({error:'Service request not found.'});
+    if(r.provider_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
+    if(r.status!=='in_progress')return res.status(409).json({error:'Only an in-progress job can be submitted for completion.'});
+    if(r.completion_submitted_at)return res.status(409).json({error:'This job has already been submitted for customer confirmation.'});
+    const evidence=await pool.query("SELECT photo_stage,COUNT(*)::int AS count FROM service_request_photos WHERE service_request_id=$1 AND photo_stage IN ('before','after') GROUP BY photo_stage",[r.id]);
+    const counts=Object.fromEntries(evidence.rows.map(x=>[x.photo_stage,x.count]));
+    if(!counts.before||!counts.after)return res.status(400).json({error:'Upload at least one before-work photo and one after-work photo first.'});
+    const updated=await pool.query('UPDATE service_requests SET completion_submitted_at=NOW(),completion_issue=NULL,completion_issue_reported_at=NULL,updated_at=NOW() WHERE id=$1 RETURNING id,status,completion_submitted_at',[r.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.completion_submitted','service_request',r.id,{before_photos:counts.before,after_photos:counts.after});
+    res.json(updated.rows[0]);
+  }catch(e){console.error('Completion submit error:',e);res.status(500).json({error:'Unable to submit job for confirmation.'})}
+});
+app.post('/api/service-requests/:id/completion-confirm',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  try{
+    const result=await pool.query('SELECT id,customer_user_id,provider_id,status,completion_submitted_at FROM service_requests WHERE id=$1',[req.params.id]);
+    const r=result.rows[0];
+    if(!r)return res.status(404).json({error:'Service request not found.'});
+    if(r.customer_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
+    if(r.status!=='in_progress'||!r.completion_submitted_at)return res.status(409).json({error:'The provider has not submitted this job for confirmation.'});
+    const updated=await pool.query("UPDATE service_requests SET status='completed',completion_confirmed_at=NOW(),completion_issue=NULL,updated_at=NOW() WHERE id=$1 RETURNING id,status,completion_confirmed_at",[r.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.completion_confirmed','service_request',r.id,{});
+    res.json(updated.rows[0]);
+  }catch(e){console.error('Completion confirm error:',e);res.status(500).json({error:'Unable to confirm job completion.'})}
+});
+app.post('/api/service-requests/:id/completion-issue',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  const issue=String((req.body||{}).issue||'').trim().slice(0,2000);
+  if(issue.length<5)return res.status(400).json({error:'Please describe the problem (at least 5 characters).'});
+  try{
+    const result=await pool.query('SELECT id,customer_user_id,status,completion_submitted_at FROM service_requests WHERE id=$1',[req.params.id]);
+    const r=result.rows[0];
+    if(!r)return res.status(404).json({error:'Service request not found.'});
+    if(r.customer_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
+    if(r.status!=='in_progress'||!r.completion_submitted_at)return res.status(409).json({error:'There is no submitted completion to report against.'});
+    const updated=await pool.query('UPDATE service_requests SET completion_issue=$1,completion_issue_reported_at=NOW(),updated_at=NOW() WHERE id=$2 RETURNING id,status,completion_submitted_at,completion_issue,completion_issue_reported_at',[issue,r.id]);
+    await audit(req.user.sub,r.customer_user_id,'service_request.completion_issue_reported','service_request',r.id,{issue});
+    res.json(updated.rows[0]);
+  }catch(e){console.error('Completion issue error:',e);res.status(500).json({error:'Unable to report the completion issue.'})}
+});
+
 app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   const {status}=req.body||{};
   const allowed=['quoted','approved','in_progress','completed','cancelled','declined'];
@@ -886,6 +939,7 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
       provider:{requested:['declined','cancelled'],quoted:['in_progress','cancelled'],approved:['in_progress','cancelled'],in_progress:['completed','cancelled'],completed:[],declined:[],cancelled:[]}
     };
     const next=(transitions[req.user.role]&&transitions[req.user.role][r.status])||[];
+    if(status==='completed'&&req.user.role==='provider')return res.status(409).json({error:'Submit this job for customer confirmation instead. The customer must confirm completion.'});
     if(!next.includes(status))return res.status(409).json({error:'That status change is not allowed from the current request status.'});
     const {rows}=await pool.query('UPDATE service_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status,updated_at',[status,req.params.id]);
     await audit(req.user.sub,r.customer_user_id,'service_request.status_update','service_request',r.id,{status});
