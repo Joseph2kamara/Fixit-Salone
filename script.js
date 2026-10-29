@@ -633,7 +633,7 @@ async function providerJobs(){
       const actions=[];
       if(r.status==='requested')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="quote">Send quote</button>','<button class="btn outline" data-job="'+esc(r.id)+'" data-action="decline">Decline</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="start">Start job</button>');
-      if(r.status==='in_progress')actions.push('<button class="btn" data-job="'+esc(r.id)+'" data-action="complete">Mark completed</button>');
+      if(r.status==='in_progress')actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="before">Upload before photos</button>','<button class="btn outline" data-job="'+esc(r.id)+'" data-action="after">Upload after photos</button>','<button class="btn" data-job="'+esc(r.id)+'" data-action="submit-completion">Submit for customer confirmation</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-job="'+esc(r.id)+'" data-action="cancel">Cancel</button>');
       return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service request')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(status)+'</span></div><p><b>Customer:</b> '+esc(r.customer_name||'Customer')+' · '+esc(r.customer_phone||'')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+(r.directions?'<br><small>Directions: '+esc(r.directions)+'</small>':'')+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<div class="job-actions"><button class="btn outline" data-job="'+esc(r.id)+'" data-action="photos">View job photos</button>'+actions.join('')+'</div></article>';
     }).join(''):'<div class="card"><h3>No incoming requests</h3><p class="desc">New customer requests will appear here.</p></div>';
@@ -644,6 +644,31 @@ async function providerJobs(){
 }
 async function handleProviderJob(id,action){
   try{
+    if(action==='before'||action==='after'){
+      const stage=action;
+      openModal('<p class="eyebrow">JOB EVIDENCE</p><h2>Upload '+(stage==='before'?'before-work':'after-work')+' photos</h2><p class="quote-note">Choose up to 5 photos. These will be saved as '+stage+'-work evidence for this job.</p><input id="completionPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple class="form-control"><p id="completionPhotoMessage" class="form-message"></p><button class="btn" id="saveCompletionPhotos">Upload photos</button><button class="btn outline" id="cancelCompletionPhotos">Cancel</button>');
+      $('cancelCompletionPhotos').onclick=providerJobs;
+      $('saveCompletionPhotos').onclick=async()=>{
+        const files=Array.from($('completionPhotos').files||[]);
+        if(!files.length){$('completionPhotoMessage').textContent='Choose at least one photo.';return}
+        if(files.length>5){$('completionPhotoMessage').textContent='Choose no more than 5 photos.';return}
+        const form=new FormData();files.forEach(file=>form.append('photos',file));form.append('photo_stage',stage);
+        $('saveCompletionPhotos').disabled=true;$('completionPhotoMessage').textContent='Uploading…';
+        try{
+          const response=await fetch(API_BASE+'/api/service-requests/'+encodeURIComponent(id)+'/photos',{method:'POST',headers:{Authorization:'Bearer '+authToken()},body:form});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||'Unable to upload photos.');
+          providerJobs();
+        }catch(e){$('completionPhotoMessage').textContent=e.message;$('saveCompletionPhotos').disabled=false}
+      };
+      return;
+    }
+    if(action==='submit-completion'){
+      if(!confirm('Submit this job to the customer for completion confirmation? You must upload before-work and after-work photos first.'))return;
+      await api('/api/service-requests/'+encodeURIComponent(id)+'/completion-submit',{method:'POST',body:JSON.stringify({})});
+      alert('Job submitted. The customer must confirm completion.');
+      providerJobs();return;
+    }
     if(action==='photos'){
       const photos=await api('/api/service-requests/'+encodeURIComponent(id)+'/photos');
       openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Customer job photos</h2>'+(photos.length?'<div class="photo-grid">'+photos.map((p,i)=>'<a href="#" class="job-photo-link" data-photo-index="'+i+'" target="_blank" rel="noopener"><span class="job-photo-loading">Loading photo…</span></a>').join(''):'<p>No photos attached.</p>')+'<button class="btn outline" id="closeJobPhotos">Back to jobs</button>');$('closeJobPhotos').onclick=providerJobs;
