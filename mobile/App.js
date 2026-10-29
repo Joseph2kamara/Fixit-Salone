@@ -2301,7 +2301,11 @@ export default function App() {
                   <Button title="Decline request" secondary onPress={() => setJobStatus(j.id, 'declined')} />
                 </>}
                 {j.status === 'approved' && <Button title="Start job" onPress={() => setJobStatus(j.id, 'in_progress')} />}
-                {j.status === 'in_progress' && <Button title="Mark job completed" onPress={() => submitCompletion(j.id)} />}
+                {j.status === 'in_progress' && <>
+                  <Button title="Upload before-work photos" secondary onPress={() => uploadCompletionPhotos(j.id, 'before')} disabled={busy} />
+                  <Button title="Upload after-work photos" secondary onPress={() => uploadCompletionPhotos(j.id, 'after')} disabled={busy} />
+                  <Button title="Submit for customer confirmation" onPress={() => submitCompletion(j.id)} disabled={busy} />
+                </>}
                 {['requested', 'quoted', 'approved', 'in_progress'].includes(j.status) && <Button title="Cancel job" secondary onPress={() => setJobStatus(j.id, 'cancelled')} />}
               </Card>
             ))}
