@@ -170,6 +170,13 @@ CREATE TABLE IF NOT EXISTS service_request_photos (
 CREATE INDEX IF NOT EXISTS idx_request_photos_request ON service_request_photos(service_request_id,created_at ASC);
 ALTER TABLE service_request_photos ADD COLUMN IF NOT EXISTS storage_key TEXT;
 ALTER TABLE service_request_photos ADD COLUMN IF NOT EXISTS storage_provider VARCHAR(30) NOT NULL DEFAULT 'local';
+ALTER TABLE service_request_photos ADD COLUMN IF NOT EXISTS photo_stage VARCHAR(20) NOT NULL DEFAULT 'request';
+UPDATE service_request_photos SET photo_stage='request' WHERE photo_stage IS NULL;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS completion_submitted_at TIMESTAMPTZ;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS completion_confirmed_at TIMESTAMPTZ;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS completion_issue TEXT;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS completion_issue_reported_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_request_photos_stage ON service_request_photos(service_request_id,photo_stage,created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_request_photos_storage ON service_request_photos(storage_provider,storage_key);
 
 INSERT INTO services(name,description) VALUES
