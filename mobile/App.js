@@ -1160,7 +1160,7 @@ export default function App() {
     }[char]));
     const money = value => 'SLE ' + Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
     const total = Number(job.quoted_amount || 0);
-    const html = \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
         body{font-family:Arial,Helvetica,sans-serif;color:#252D2A;padding:28px;font-size:12px}
         .brand{font-size:24px;font-weight:800;color:#176B50;letter-spacing:.3px}
@@ -1178,15 +1178,15 @@ export default function App() {
       </style></head><body>
       <div class="brand">FixIt Salone</div><div class="tag">Your Trusted Home &amp; Repair Services in Sierra Leone</div><div class="rule"></div>
       <h1>Service Quotation</h1>
-      <div class="meta">Request ID: \${escapeHtml(job.id)}<br>Service: \${escapeHtml(job.service_name || 'Service request')}<br>Provider: \${escapeHtml(job.business_name || job.provider_name || 'FixIt Salone provider')}<br>Date: \${escapeHtml(job.created_at ? new Date(job.created_at).toLocaleDateString() : new Date().toLocaleDateString())}<br>Status: \${escapeHtml(job.status || 'quoted')}</div>
+      <div class="meta">Request ID: ${escapeHtml(job.id)}<br>Service: ${escapeHtml(job.service_name || 'Service request')}<br>Provider: ${escapeHtml(job.business_name || job.provider_name || 'FixIt Salone provider')}<br>Date: ${escapeHtml(job.created_at ? new Date(job.created_at).toLocaleDateString() : new Date().toLocaleDateString())}<br>Status: ${escapeHtml(job.status || 'quoted')}</div>
       <table><thead><tr><th>Description</th><th class="amount">Amount</th></tr></thead><tbody>
-      <tr><td>Labour</td><td class="amount">\${money(job.labour_amount)}</td></tr>
-      <tr><td>Materials</td><td class="amount">\${money(job.materials_amount)}</td></tr>
-      <tr><td>Transport</td><td class="amount">\${money(job.transport_amount)}</td></tr>
+      <tr><td>Labour</td><td class="amount">${money(job.labour_amount)}</td></tr>
+      <tr><td>Materials</td><td class="amount">${money(job.materials_amount)}</td></tr>
+      <tr><td>Transport</td><td class="amount">${money(job.transport_amount)}</td></tr>
       </tbody></table>
-      <div class="total"><span>Total quotation</span><strong>\${money(total)}</strong></div>
+      <div class="total"><span>Total quotation</span><strong>${money(total)}</strong></div>
       <div class="note">Please review the itemized costs before approving this quotation in the FixIt Salone app. This document is a quotation, not a payment receipt. Online service payments are not currently processed by FixIt Salone.</div>
-      </body></html>\`;
+      </body></html>`;
     setBusy(true); clearMessages();
     try {
       const file = await Print.printToFileAsync({ html });
