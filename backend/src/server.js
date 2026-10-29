@@ -1075,6 +1075,13 @@ app.post('/api/phone-verification/request',requirePhoneVerificationAuth,authLimi
       expiry:600,
       data_coding:'text'
     });
+    // Some SMS provider responses can be HTTP 200 while the message itself is rejected.
+    // Do not tell the user a code was sent when D7 explicitly reports rejection.
+    const providerStatus=String(sms.status||sms.message_status||'').trim().toLowerCase();
+    if(['rejected','failed','failure','undelivered'].includes(providerStatus)){
+      console.error('D7 rejected OTP request:',{status:providerStatus,request_id:sms.request_id||null});
+      throw new Error('Direct7 did not accept the SMS request. Please try again later; if this continues, contact support.');
+    }
     const otpId=String(sms.otp_id||sms.request_id||'');
     if(!otpId)throw new Error('SMS provider did not return a verification ID.');
     await pool.query("UPDATE phone_verifications SET status='expired' WHERE user_id=$1 AND status='pending'",[req.user.sub]);
