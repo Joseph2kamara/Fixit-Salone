@@ -8,6 +8,8 @@ import * as SecureStore from 'expo-secure-store';
 import { File, Paths } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as ImagePicker from 'expo-image-picker';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
 const COLORS = {
@@ -1152,6 +1154,54 @@ export default function App() {
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
+  async function downloadQuotePdf(job) {
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+    const money = value => 'SLE ' + Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const total = Number(job.quoted_amount || 0);
+    const html = \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#252D2A;padding:28px;font-size:12px}
+        .brand{font-size:24px;font-weight:800;color:#176B50;letter-spacing:.3px}
+        .tag{color:#5F6B65;margin-top:4px;font-size:11px}
+        .rule{height:3px;background:#176B50;margin:20px 0}
+        h1{font-size:21px;margin:0 0 6px}
+        .meta{color:#5F6B65;line-height:1.7}
+        table{width:100%;border-collapse:collapse;margin-top:22px}
+        th{background:#E8F4EE;text-align:left;color:#176B50}
+        th,td{padding:12px;border-bottom:1px solid #DCE7E0}
+        td.amount,th.amount{text-align:right}
+        .total{margin-top:18px;background:#E8F4EE;padding:16px;border-radius:8px;text-align:right}
+        .total span{font-size:12px;color:#5F6B65}.total strong{display:block;font-size:23px;color:#176B50;margin-top:5px}
+        .note{margin-top:26px;color:#5F6B65;line-height:1.6;font-size:10px}
+      </style></head><body>
+      <div class="brand">FixIt Salone</div><div class="tag">Your Trusted Home &amp; Repair Services in Sierra Leone</div><div class="rule"></div>
+      <h1>Service Quotation</h1>
+      <div class="meta">Request ID: \${escapeHtml(job.id)}<br>Service: \${escapeHtml(job.service_name || 'Service request')}<br>Provider: \${escapeHtml(job.business_name || job.provider_name || 'FixIt Salone provider')}<br>Date: \${escapeHtml(job.created_at ? new Date(job.created_at).toLocaleDateString() : new Date().toLocaleDateString())}<br>Status: \${escapeHtml(job.status || 'quoted')}</div>
+      <table><thead><tr><th>Description</th><th class="amount">Amount</th></tr></thead><tbody>
+      <tr><td>Labour</td><td class="amount">\${money(job.labour_amount)}</td></tr>
+      <tr><td>Materials</td><td class="amount">\${money(job.materials_amount)}</td></tr>
+      <tr><td>Transport</td><td class="amount">\${money(job.transport_amount)}</td></tr>
+      </tbody></table>
+      <div class="total"><span>Total quotation</span><strong>\${money(total)}</strong></div>
+      <div class="note">Please review the itemized costs before approving this quotation in the FixIt Salone app. This document is a quotation, not a payment receipt. Online service payments are not currently processed by FixIt Salone.</div>
+      </body></html>\`;
+    setBusy(true); clearMessages();
+    try {
+      const file = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Save or share FixIt Salone quotation', UTI: 'com.adobe.pdf' });
+        setNotice('Your quotation PDF is ready. Choose an option to save or share it.');
+      } else {
+        setNotice('Your quotation PDF was created at ' + file.uri);
+        Alert.alert('Quotation PDF created', 'The PDF was created, but sharing is not available on this device.');
+      }
+    } catch (e) {
+      setError('Could not create the quotation PDF. Please try again. ' + (e?.message || ''));
+    } finally { setBusy(false); }
+  }
+
   async function openSubscription() {
     setScreen('subscription'); clearMessages();
     try { setSubscriptionInfo(await api('/api/provider/subscription')); }
@@ -2023,6 +2073,9 @@ export default function App() {
                     <Text style={{ fontSize: 20, fontWeight: '800', color: COLORS.green }}>SLE {Number(j.quoted_amount).toLocaleString()}</Text>
                   </View>
                   {Number(j.platform_fee || 0) > 0 && <Text style={{ fontSize: 11, color: COLORS.muted, marginTop: 10 }}>Provider FixIt fee: SLE {Number(j.platform_fee).toLocaleString()} (shown separately from your quotation).</Text>}
+                  <View style={{ marginTop: 12 }}>
+                    <Button title="Download quotation PDF" secondary onPress={() => downloadQuotePdf(j)} disabled={busy} />
+                  </View>
                   {j.status === 'quoted' && <Text style={{ fontSize: 12, color: COLORS.ink, marginTop: 12 }}>Check the costs above. Approve if you agree with the quotation, or decline if you do not.</Text>}
                 </View>}
                 {j.status === 'quoted' && <View style={styles.buttonRow}>
