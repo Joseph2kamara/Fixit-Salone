@@ -57,7 +57,7 @@ const HOME_CATEGORIES = [
   { label: 'Landscaping & Gardening', symbol: '🌿', query: 'landscaping', tint: '#E8F4EE' },
   { label: 'Water Tank & Well', symbol: '🚰', query: 'water tank', tint: '#E8F4EE' }
 ];
-const CATEGORY_PAGE_SIZE = 6;
+const CATEGORY_PAGE_SIZE = 8;
 const CATEGORY_PAGES = Array.from(
   { length: Math.ceil(HOME_CATEGORIES.length / CATEGORY_PAGE_SIZE) },
   (_, page) => HOME_CATEGORIES.slice(page * CATEGORY_PAGE_SIZE, (page + 1) * CATEGORY_PAGE_SIZE)
@@ -2798,11 +2798,11 @@ const styles = StyleSheet.create({
   categoryCarouselWrap: { width: '100%', marginBottom: 9 },
   categoryCarouselPage: { paddingHorizontal: 1 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 2 },
-  categoryTile: { width: '31.6%', alignItems: 'center', marginBottom: 12, borderRadius: 17, paddingHorizontal: 5, paddingTop: 5, paddingBottom: 7, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 5, elevation: 1 },
+  categoryTile: { width: '23.7%', alignItems: 'center', marginBottom: 12, borderRadius: 16, paddingHorizontal: 4, paddingTop: 5, paddingBottom: 7, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.045, shadowRadius: 5, elevation: 1 },
   categoryTilePressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
-  categoryArt: { width: '100%', aspectRatio: 1.12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DCE7E0' },
-  categorySymbol: { fontSize: 34 },
-  categoryLabel: { color: COLORS.navy, textAlign: 'center', fontWeight: '800', fontSize: 11, lineHeight: 15, marginTop: 7, minHeight: 30 },
+  categoryArt: { width: '100%', aspectRatio: 1.05, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E1E9F3' },
+  categorySymbol: { fontSize: 29 },
+  categoryLabel: { color: COLORS.navy, textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 13, marginTop: 6, minHeight: 28 },
   categoryDots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingTop: 2, paddingBottom: 2 },
   categoryDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#CBD5E1' },
   categoryDotActive: { width: 13, backgroundColor: COLORS.orange },
