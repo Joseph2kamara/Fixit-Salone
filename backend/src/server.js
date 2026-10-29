@@ -112,7 +112,15 @@ const memoryStorage=multer.memoryStorage();
 const upload=multer({
   storage:objectStorageEnabled?memoryStorage:diskStorage,
   limits:{fileSize:(Number(process.env.MAX_UPLOAD_MB)||15)*1024*1024},
-  fileFilter:(req,file,cb)=>cb(null,['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.mimetype))
+  fileFilter:(req,file,cb)=>{
+    const allowed=['image/jpeg','image/png','image/webp','video/mp4','video/webm'];
+    if(!allowed.includes(String(file.mimetype||'').toLowerCase())){
+      const error=new Error('Unsupported file type. Please use JPG, PNG or WEBP images, or MP4/WebM videos.');
+      error.status=400;
+      return cb(error);
+    }
+    cb(null,true);
+  }
 });
 const siteImageUpload=multer({
   storage:objectStorageEnabled?memoryStorage:diskStorage,
