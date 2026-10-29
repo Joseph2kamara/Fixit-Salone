@@ -386,6 +386,11 @@ export default function App() {
   });
   const [quoteJobId, setQuoteJobId] = useState('');
   const [quoteForm, setQuoteForm] = useState({ labour: '', materials: '', transport: '' });
+  const [receiptJobId, setReceiptJobId] = useState('');
+  const [receiptAmount, setReceiptAmount] = useState('');
+  const [receiptMethod, setReceiptMethod] = useState('Cash');
+  const [receiptReference, setReceiptReference] = useState('');
+  const [receiptConfirmed, setReceiptConfirmed] = useState(false);
   const [reviewJobId, setReviewJobId] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
@@ -1199,6 +1204,58 @@ export default function App() {
       }
     } catch (e) {
       setError('Could not create the quotation PDF. Please try again. ' + (e?.message || ''));
+    } finally { setBusy(false); }
+  }
+
+  async function createPaymentReceiptPdf(job) {
+    const amount = Number(receiptAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter the amount actually received before creating a receipt.');
+      return;
+    }
+    if (!receiptConfirmed) {
+      setError('Please confirm that you have received this payment before issuing a receipt.');
+      return;
+    }
+    const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+    const money = value => 'SLE ' + Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const receiptNumber = 'FS-' + String(job.id).replace(/[^a-zA-Z0-9-]/g, '') + '-' + Date.now().toString().slice(-6);
+    const issuedAt = new Date().toLocaleString();
+    const html = \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#252D2A;padding:28px;font-size:12px}
+        .brand{font-size:24px;font-weight:800;color:#176B50}.tag{color:#5F6B65;margin-top:4px;font-size:11px}
+        .rule{height:3px;background:#176B50;margin:20px 0}h1{font-size:22px;margin:0 0 8px;color:#176B50}
+        .meta{color:#5F6B65;line-height:1.8}.paid{margin-top:20px;background:#E8F4EE;border:1px solid #B7DCC8;border-radius:8px;padding:18px;text-align:center}
+        .paid strong{display:block;font-size:27px;color:#176B50;margin-top:6px}
+        table{width:100%;border-collapse:collapse;margin-top:22px}th,td{padding:11px;border-bottom:1px solid #DCE7E0;text-align:left}
+        .note{margin-top:28px;color:#5F6B65;line-height:1.6;font-size:10px}
+      </style></head><body>
+      <div class="brand">FixIt Salone</div><div class="tag">Your Trusted Home &amp; Repair Services in Sierra Leone</div><div class="rule"></div>
+      <h1>Payment Receipt</h1>
+      <div class="meta">Receipt No: \${escapeHtml(receiptNumber)}<br>Issued: \${escapeHtml(issuedAt)}<br>Service request: \${escapeHtml(job.id)}<br>Service: \${escapeHtml(job.service_name || 'Repair service')}<br>Provider: \${escapeHtml(job.business_name || job.provider_name || user?.name || 'Service provider')}<br>Customer: \${escapeHtml(job.customer_name || 'Customer')}</div>
+      <div class="paid">PAYMENT RECEIVED<strong>\${money(amount)}</strong></div>
+      <table><tbody><tr><th>Payment method</th><td>\${escapeHtml(receiptMethod)}</td></tr>
+      <tr><th>Payment reference</th><td>\${escapeHtml(receiptReference.trim() || 'Not provided')}</td></tr>
+      <tr><th>Service quotation</th><td>\${money(job.quoted_amount)}</td></tr></tbody></table>
+      <div class="note">This receipt was issued by the service provider to acknowledge payment received. Please retain it for your records. FixIt Salone does not independently verify or process this payment.</div>
+      </body></html>\`;
+    setBusy(true); clearMessages();
+    try {
+      const file = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'Save or share payment receipt', UTI: 'com.adobe.pdf' });
+        setNotice('Receipt PDF is ready to save or share.');
+        setReceiptJobId('');
+        setReceiptConfirmed(false);
+      } else {
+        setNotice('Receipt PDF created at ' + file.uri);
+        Alert.alert('Receipt PDF created', 'The PDF was created, but sharing is not available on this device.');
+      }
+    } catch (e) {
+      setError('Could not create the receipt PDF. Please try again. ' + (e?.message || ''));
     } finally { setBusy(false); }
   }
 
@@ -2138,6 +2195,32 @@ export default function App() {
                   clearMessages();
                 }} />
                 {j.quoted_amount != null && <Text style={styles.priceText}>Quote: SLE {Number(j.quoted_amount).toLocaleString()}</Text>}
+                {j.status === 'completed' && <>
+                  <Button title={receiptJobId === String(j.id) ? 'Receipt form open' : 'Create payment receipt PDF'} secondary onPress={() => {
+                    if (receiptJobId === String(j.id)) { setReceiptJobId(''); return; }
+                    setReceiptJobId(String(j.id));
+                    setReceiptAmount(String(j.quoted_amount ?? ''));
+                    setReceiptMethod('Cash');
+                    setReceiptReference('');
+                    setReceiptConfirmed(false);
+                    clearMessages();
+                  }} disabled={busy} />
+                  {receiptJobId === String(j.id) && <View style={styles.reviewBox}>
+                    <Text style={styles.cardTitle}>Payment receipt details</Text>
+                    <Text style={styles.helper}>Only issue a receipt after you have actually received payment.</Text>
+                    <Field label="Amount received (SLE)" value={receiptAmount} onChangeText={setReceiptAmount} keyboardType="decimal-pad" placeholder="Enter amount received" />
+                    <Field label="Payment method" value={receiptMethod} onChangeText={setReceiptMethod} placeholder="Cash, bank transfer, mobile money" />
+                    <Field label="Payment reference (optional)" value={receiptReference} onChangeText={setReceiptReference} placeholder="Transaction ID or reference" />
+                    <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: receiptConfirmed }} onPress={() => setReceiptConfirmed(v => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
+                      <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 1, borderColor: receiptConfirmed ? COLORS.green : COLORS.line, backgroundColor: receiptConfirmed ? COLORS.green : COLORS.white, alignItems: 'center', justifyContent: 'center' }}>
+                        {receiptConfirmed ? <Text style={{ color: COLORS.white, fontWeight: '800' }}>✓</Text> : null}
+                      </View>
+                      <Text style={{ flex: 1, color: COLORS.ink, fontSize: 13 }}>I confirm I have received this payment.</Text>
+                    </Pressable>
+                    <Button title="Generate receipt PDF" onPress={() => createPaymentReceiptPdf(j)} disabled={busy} />
+                    <Button title="Cancel" secondary onPress={() => setReceiptJobId('')} />
+                  </View>}
+                </>}
                 {j.status === 'requested' && <>
                   <Button title="Send itemized quote" onPress={() => { setQuoteJobId(String(j.id)); setQuoteForm({ labour: '', materials: '', transport: '' }); }} />
                   {quoteJobId === String(j.id) && <View style={styles.reviewBox}>
