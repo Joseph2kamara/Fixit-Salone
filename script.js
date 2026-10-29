@@ -466,6 +466,7 @@ async function customerRequests(){
       if(r.status==='quoted')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="approve">Approve quote</button>','<button class="btn outline quote-decline" data-customer-job="'+esc(r.id)+'" data-customer-action="decline">Decline quote</button>');
       if(r.status==='approved')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="pay">Prepare payment</button>');
       if(r.status==='completed')actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="review">Rate provider ⭐</button>');
+      if(r.completion_submitted_at&&!r.completion_confirmed_at)actions.push('<button class="btn" data-customer-job="'+esc(r.id)+'" data-customer-action="confirm-completion">Confirm work completed</button>','<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="completion-issue">Report a problem</button>');
       if(['requested','quoted','approved','in_progress'].includes(r.status))actions.push('<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="cancel">Cancel</button>');
       return '<article class="job-card"><div class="job-head"><div><b>'+esc(r.service_name||'Service')+'</b><small>'+esc(r.created_at?new Date(r.created_at).toLocaleString():'')+'</small></div><span class="status-pill">'+esc(r.status.replaceAll('_',' '))+'</span></div><p><b>Provider:</b> '+esc(r.business_name||r.provider_name||'Provider')+'</p><p><b>Location:</b> '+esc(r.area)+', '+esc(r.district)+', '+esc(r.region)+'<br>'+esc(r.service_address)+'</p><p><b>Job:</b> '+esc(r.job_details)+'</p><p><b>Quote:</b> '+'</p>'+quote+'<button class="btn outline" data-customer-job="'+esc(r.id)+'" data-customer-action="photos">View job photos</button>'+actions.join('')+'</article>';
     }).join(''):'<div class="card"><h3>No requests yet</h3><p class="desc">Your service requests will appear here.</p></div>';
@@ -475,6 +476,18 @@ async function customerRequests(){
         if(btn.dataset.customerAction==='photos'){
           const photos=await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/photos');
           openModal('<p class="eyebrow">JOB PHOTOS</p><h2>Photos for this request</h2>'+(photos.length?'<div class="photo-grid">'+photos.map(p=>'<a href="'+esc(mediaUrl(p.file_url))+'" target="_blank" rel="noopener"><img src="'+esc(mediaUrl(p.file_url))+'" alt="Job photo"></a>').join('')+'</div>':'<p>No photos attached to this request.</p>')+'<button class="btn outline" id="closePhotos">Done</button>');$('closePhotos').onclick=()=>customerRequests();return;
+        }
+        if(btn.dataset.customerAction==='confirm-completion'){
+          if(!confirm('Confirm that the provider has completed the work satisfactorily?'))return;
+          await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/completion-confirm',{method:'POST',body:JSON.stringify({})});
+          alert('Thank you. Job completion confirmed.');customerRequests();return;
+        }
+        if(btn.dataset.customerAction==='completion-issue'){
+          const issue=prompt('Please describe what is unfinished or wrong with the work:');
+          if(issue===null)return;
+          if(issue.trim().length<5){alert('Please enter at least 5 characters describing the problem.');return}
+          await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/completion-issue',{method:'POST',body:JSON.stringify({issue:issue.trim()})});
+          alert('Your concern has been recorded. The job has not been marked completed.');customerRequests();return;
         }
         if(btn.dataset.customerAction==='review'){reviewCompletedJob(btn.dataset.customerJob);return;}
         if(btn.dataset.customerAction==='decline'){if(!confirm('Decline this quote? The provider will be notified that you do not wish to proceed.'))return;await api('/api/service-requests/'+encodeURIComponent(btn.dataset.customerJob)+'/status',{method:'PATCH',body:JSON.stringify({status:'declined'})});customerRequests();return;}
