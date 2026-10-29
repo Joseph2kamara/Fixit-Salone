@@ -1494,6 +1494,12 @@ export default function App() {
                 <AuthRoleChoice active={role === 'customer'} title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
                 <AuthRoleChoice active={role === 'provider'} title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
               </View>
+              {authMode === 'register' && (
+                <View style={styles.authOnboardingHint}>
+                  <Text style={styles.authOnboardingHintTitle}>{role === 'customer' ? 'Ready to book a service?' : 'Ready to grow your service business?'}</Text>
+                  <Text style={styles.authOnboardingHintCopy}>{role === 'customer' ? 'Use a phone number you can access. After creating your account, you can explore services and submit a job request.' : 'Use your real name and an active phone number. You can complete your professional profile and service details after creating your account.'}</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.authDetailsPanel}>
@@ -2498,6 +2504,9 @@ const styles = StyleSheet.create({
   authWelcomeTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', letterSpacing: -0.3 },
   authWelcomeCopy: { color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 2, marginBottom: 6 },
   authRoleRow: { flexDirection: 'row', gap: 9 },
+  authOnboardingHint: { marginTop: 9, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F0F7F2', borderWidth: 1, borderColor: '#DCEBE0' },
+  authOnboardingHintTitle: { color: COLORS.ink, fontSize: 11, fontWeight: '700', marginBottom: 3 },
+  authOnboardingHintCopy: { color: COLORS.muted, fontSize: 10, lineHeight: 14 },
   authRoleChoice: { flex: 1, minHeight: 46, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white },
   authRoleChoiceActive: { backgroundColor: COLORS.orangeLight, borderColor: COLORS.deepNavy },
   authRolePressed: { opacity: 0.82 },
