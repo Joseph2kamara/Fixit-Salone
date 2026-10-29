@@ -738,7 +738,7 @@ app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
 app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   try{
-    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
+    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,sr.completion_submitted_at,sr.completion_confirmed_at,sr.completion_issue,sr.completion_issue_reported_at,
       pp.business_name,u.full_name AS provider_name,s.name AS service_name
       FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id LEFT JOIN users u ON u.id=pp.user_id LEFT JOIN services s ON s.id=sr.service_id
       WHERE sr.customer_user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
