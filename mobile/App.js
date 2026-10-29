@@ -2166,17 +2166,27 @@ export default function App() {
           <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginBottom: 14 }}>
             <Text style={{ fontSize: 15, fontWeight: '800', color: COLORS.ink, marginBottom: 5 }}>Build a profile customers can trust</Text>
             <Text style={{ fontSize: 12, color: COLORS.muted, lineHeight: 18, marginBottom: 10 }}>Complete these details so customers can understand what you do and where you work.</Text>
-            {[
-              ['Business name', !!String(providerForm.businessName || '').trim()],
-              ['Location', !!String(providerForm.area || '').trim() && !!String(providerForm.district || '').trim()],
-              ['Main service', !!String(providerForm.serviceId || '').trim()],
-              ['Service description', !!String(providerForm.description || '').trim()]
-            ].map(([label, complete]) => (
+            {(() => {
+              const essentials = [
+                ['Business name', !!String(providerForm.businessName || '').trim()],
+                ['Location', !!String(providerForm.area || '').trim() && !!String(providerForm.district || '').trim()],
+                ['Main service', !!String(providerForm.serviceId || '').trim()],
+                ['Service description', !!String(providerForm.description || '').trim()]
+              ];
+              const completedCount = essentials.filter(([, complete]) => complete).length;
+              return <>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.ink, marginBottom: 4 }}>{completedCount} of {essentials.length} profile essentials completed</Text>
+                <View style={{ height: 5, borderRadius: 5, backgroundColor: '#E5E7EB', overflow: 'hidden', marginBottom: 8 }}>
+                  <View style={{ height: '100%', width: (completedCount / essentials.length * 100) + '%', backgroundColor: COLORS.green, borderRadius: 5 }} />
+                </View>
+                {essentials.map(([label, complete]) => (
               <View key={label} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5 }}>
                 <Text style={{ width: 22, fontSize: 14, fontWeight: '800', color: complete ? COLORS.green : COLORS.muted }}>{complete ? '✓' : '○'}</Text>
                 <Text style={{ fontSize: 13, color: complete ? COLORS.ink : COLORS.muted }}>{label}</Text>
               </View>
-            ))}
+                ))}
+              </>;
+            })()}
           </View>
           <Field label="Business name" value={providerForm.businessName} onChangeText={v => setProviderFormValue('businessName', v)} placeholder="e.g. Joe Electrical Services" />
           <OptionPicker label="Region" value={providerForm.region} options={REGIONS}
