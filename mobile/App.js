@@ -415,6 +415,30 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+    async function recoverCameraResult() {
+      try {
+        // Android may destroy the app activity while the system camera is open.
+        // Recover the captured image when Expo starts the app again.
+        const result = await ImagePicker.getPendingResultAsync();
+        if (!active || !result) return;
+        if (result.code) {
+          setError('The camera returned an error. Please try taking the photo again, or choose one from your gallery.');
+          return;
+        }
+        if (!result.canceled && result.assets?.length) {
+          addPickedPhotos(result.assets);
+          setNotice('Your camera photo was recovered. Review it before sending your request.');
+        }
+      } catch {
+        if (active) setError('We could not recover the camera photo. Please try again or choose a photo from your gallery.');
+      }
+    }
+    recoverCameraResult();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     async function restoreSavedSession() {
       try {
         const savedToken = await SecureStore.getItemAsync('fixit-salone-session-token');
@@ -846,7 +870,7 @@ export default function App() {
         setError('Camera permission is needed to take a photo. You can still choose a photo from your gallery.');
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.4, exif: false, allowsEditing: false });
       if (!result.canceled) addPickedPhotos(result.assets || []);
     } catch (e) {
       setError(e?.message || 'Could not open the camera.');
