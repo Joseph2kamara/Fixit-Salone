@@ -958,6 +958,47 @@ export default function App() {
     finally { setBusy(false); }
   }
 
+  async function uploadCompletionPhotos(jobId, stage) {
+    setBusy(true); clearMessages();
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, quality: 0.65, exif: false });
+      if (result.canceled || !result.assets?.length) return;
+      const form = new FormData();
+      result.assets.slice(0, 5).forEach((asset, i) => form.append('photos', { uri: asset.uri, name: asset.fileName || (stage + '-' + (i + 1) + '.jpg'), type: asset.mimeType || 'image/jpeg' }));
+      form.append('photo_stage', stage);
+      await api('/api/service-requests/' + encodeURIComponent(jobId) + '/photos', { method: 'POST', body: form });
+      setNotice((stage === 'before' ? 'Before-work' : 'After-work') + ' photos uploaded.');
+      await loadProviderDashboard();
+    } catch (e) { reportError(e); }
+    finally { setBusy(false); }
+  }
+  async function submitCompletion(jobId) {
+    setBusy(true); clearMessages();
+    try {
+      await api('/api/service-requests/' + encodeURIComponent(jobId) + '/completion-submit', { method: 'POST', body: JSON.stringify({}) });
+      setNotice('Job submitted for customer confirmation.');
+      await loadProviderDashboard();
+    } catch (e) { reportError(e); }
+    finally { setBusy(false); }
+  }
+  async function confirmCompletion(jobId) {
+    Alert.alert('Confirm completed work', 'Confirm that the provider has completed the work satisfactorily?', [
+      { text: 'Not yet', style: 'cancel' },
+      { text: 'Confirm', onPress: async () => {
+        setBusy(true); clearMessages();
+        try {
+          await api('/api/service-requests/' + encodeURIComponent(jobId) + '/completion-confirm', { method: 'POST', body: JSON.stringify({}) });
+          setNotice('Job completion confirmed. Thank you.');
+          await loadCustomerRequests();
+        } catch (e) { reportError(e); }
+        finally { setBusy(false); }
+      } }
+    ]);
+  }
+  async function reportCompletionIssue(jobId) {
+    Alert.alert('Report a problem', 'Please use the job conversation to describe the issue to the provider. The job will remain unconfirmed.');
+    await openConversation(jobId);
+  }
   async function setJobStatus(jobId, status) {
     const labels = { approved: 'approve this quote', declined: 'decline this quote', cancelled: 'cancel this request', in_progress: 'start this job', completed: 'mark this job completed' };
     const prompt = labels[status] || 'change this job';
@@ -2100,6 +2141,11 @@ export default function App() {
                 <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Provider'} · {j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
+                {j.completion_submitted_at && !j.completion_confirmed_at && <View style={{ marginTop: 10, gap: 8 }}>
+                  <Text style={styles.cardMeta}>The provider has submitted completion evidence. Review the photos before confirming.</Text>
+                  <Button title="Confirm work completed" onPress={() => confirmCompletion(j.id)} disabled={busy} />
+                  <Button title="Report a problem" secondary onPress={() => reportCompletionIssue(j.id)} disabled={busy} />
+                </View>}
                 <View style={styles.jobQuickActions}>
                   <View style={styles.jobQuickActionItem}><Button title="View job photos" secondary compact onPress={() => openJobPhotos(j.id)} /></View>
                   <View style={styles.jobQuickActionItem}><Button title="Message provider" secondary compact onPress={() => openConversation(j.id)} /></View>
@@ -2255,7 +2301,7 @@ export default function App() {
                   <Button title="Decline request" secondary onPress={() => setJobStatus(j.id, 'declined')} />
                 </>}
                 {j.status === 'approved' && <Button title="Start job" onPress={() => setJobStatus(j.id, 'in_progress')} />}
-                {j.status === 'in_progress' && <Button title="Mark job completed" onPress={() => setJobStatus(j.id, 'completed')} />}
+                {j.status === 'in_progress' && <Button title="Mark job completed" onPress={() => submitCompletion(j.id)} />}
                 {['requested', 'quoted', 'approved', 'in_progress'].includes(j.status) && <Button title="Cancel job" secondary onPress={() => setJobStatus(j.id, 'cancelled')} />}
               </Card>
             ))}
