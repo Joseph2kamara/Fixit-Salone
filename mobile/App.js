@@ -1507,7 +1507,6 @@ export default function App() {
                 <TextInput value={phone} onChangeText={setPhone} placeholder="76 123 456" placeholderTextColor="#6F7B89"
                   keyboardType="phone-pad" autoCapitalize="none" autoCorrect={false} style={styles.authInput}
                   accessibilityLabel="Phone number" returnKeyType="next" />
-                <Text style={styles.authPhoneIcon}>☎</Text>
               </View>
 
               <Text style={[styles.authFieldLabel, styles.authPasswordLabel]}>Password</Text>
