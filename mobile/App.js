@@ -1223,7 +1223,7 @@ export default function App() {
     const money = value => 'SLE ' + Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
     const receiptNumber = 'FS-' + String(job.id).replace(/[^a-zA-Z0-9-]/g, '') + '-' + Date.now().toString().slice(-6);
     const issuedAt = new Date().toLocaleString();
-    const html = \`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
         body{font-family:Arial,Helvetica,sans-serif;color:#252D2A;padding:28px;font-size:12px}
         .brand{font-size:24px;font-weight:800;color:#176B50}.tag{color:#5F6B65;margin-top:4px;font-size:11px}
@@ -1235,13 +1235,13 @@ export default function App() {
       </style></head><body>
       <div class="brand">FixIt Salone</div><div class="tag">Your Trusted Home &amp; Repair Services in Sierra Leone</div><div class="rule"></div>
       <h1>Payment Receipt</h1>
-      <div class="meta">Receipt No: \${escapeHtml(receiptNumber)}<br>Issued: \${escapeHtml(issuedAt)}<br>Service request: \${escapeHtml(job.id)}<br>Service: \${escapeHtml(job.service_name || 'Repair service')}<br>Provider: \${escapeHtml(job.business_name || job.provider_name || user?.name || 'Service provider')}<br>Customer: \${escapeHtml(job.customer_name || 'Customer')}</div>
-      <div class="paid">PAYMENT RECEIVED<strong>\${money(amount)}</strong></div>
-      <table><tbody><tr><th>Payment method</th><td>\${escapeHtml(receiptMethod)}</td></tr>
-      <tr><th>Payment reference</th><td>\${escapeHtml(receiptReference.trim() || 'Not provided')}</td></tr>
-      <tr><th>Service quotation</th><td>\${money(job.quoted_amount)}</td></tr></tbody></table>
+      <div class="meta">Receipt No: ${escapeHtml(receiptNumber)}<br>Issued: ${escapeHtml(issuedAt)}<br>Service request: ${escapeHtml(job.id)}<br>Service: ${escapeHtml(job.service_name || 'Repair service')}<br>Provider: ${escapeHtml(job.business_name || job.provider_name || user?.name || 'Service provider')}<br>Customer: ${escapeHtml(job.customer_name || 'Customer')}</div>
+      <div class="paid">PAYMENT RECEIVED<strong>${money(amount)}</strong></div>
+      <table><tbody><tr><th>Payment method</th><td>${escapeHtml(receiptMethod)}</td></tr>
+      <tr><th>Payment reference</th><td>${escapeHtml(receiptReference.trim() || 'Not provided')}</td></tr>
+      <tr><th>Service quotation</th><td>${money(job.quoted_amount)}</td></tr></tbody></table>
       <div class="note">This receipt was issued by the service provider to acknowledge payment received. Please retain it for your records. FixIt Salone does not independently verify or process this payment.</div>
-      </body></html>\`;
+      </body></html>`;
     setBusy(true); clearMessages();
     try {
       const file = await Print.printToFileAsync({ html });
