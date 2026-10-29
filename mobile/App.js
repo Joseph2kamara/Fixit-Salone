@@ -803,7 +803,8 @@ export default function App() {
     let unsupported = false;
     for (const asset of assets || []) {
       if (!asset?.uri) continue;
-      const type = String(asset.mimeType || 'image/jpeg').toLowerCase();
+      const reportedType = String(asset.mimeType || 'image/jpeg').toLowerCase();
+      const type = reportedType === 'image/jpg' ? 'image/jpeg' : reportedType;
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) { unsupported = true; continue; }
       if (asset.fileSize != null && asset.fileSize > 10 * 1024 * 1024) { tooLarge = true; continue; }
       if (combined.some(photo => photo.uri === asset.uri)) continue;
@@ -855,7 +856,8 @@ export default function App() {
   async function uploadRequestPhotos(requestId) {
     const form = new FormData();
     selectedPhotos.forEach((photo, index) => {
-      const type = String(photo.mimeType || 'image/jpeg').toLowerCase();
+      const reportedType = String(photo.mimeType || 'image/jpeg').toLowerCase();
+      const type = reportedType === 'image/jpg' ? 'image/jpeg' : reportedType;
       const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
       const sourceFile = new File(photo.uri);
       const uploadName = 'fixit-request-' + String(requestId) + '-' + String(index + 1) + '-' + Date.now() + '.' + ext;
