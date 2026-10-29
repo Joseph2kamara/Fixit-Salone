@@ -1489,7 +1489,7 @@ export default function App() {
 
             <View style={styles.authWelcomePanel}>
               <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Join FixIt Salone'}</Text>
-              <Text style={styles.authWelcomeCopy}>Choose how you want to use FixIt Salone.</Text>
+              <Text style={styles.authWelcomeCopy}>{authMode === 'register' ? (role === 'customer' ? 'Create an account to book trusted local services.' : 'Join as a professional and manage customer jobs.') : 'Choose how you want to use FixIt Salone.'}</Text>
               <View style={styles.authRoleRow}>
                 <AuthRoleChoice active={role === 'customer'} title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
                 <AuthRoleChoice active={role === 'provider'} title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
