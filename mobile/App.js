@@ -1908,10 +1908,16 @@ export default function App() {
                     : <View style={styles.avatar}><Text style={styles.avatarText}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
                   <View style={styles.grow}>
                     <Text style={styles.cardTitle}>{p.business_name || p.full_name || 'Service provider'}</Text>
-                    <Text style={styles.cardMeta}>{p.service_name || 'Local services'} · {p.region || 'Sierra Leone'}</Text>
-                    <Text style={styles.cardMeta}>{p.area || ''}{p.district ? ', ' + p.district : ''}</Text>
+                    <View style={styles.providerServicePill}>
+                      <Text style={styles.providerServicePillText}>{p.service_name || 'Home services'}</Text>
+                    </View>
+                    <Text style={styles.cardMeta}>⌖  {[p.area, p.district, p.region].filter(Boolean).join(', ') || 'Sierra Leone'}</Text>
                   </View>
-                  <Text style={styles.verified}>{p.verification_status === 'verified' ? '✓ Verified' : ''}</Text>
+                  <View style={[styles.providerTrustPill, p.verification_status === 'verified' ? styles.providerTrustVerified : styles.providerTrustLocal]}>
+                    <Text style={[styles.providerTrustText, p.verification_status === 'verified' ? styles.providerTrustTextVerified : styles.providerTrustTextLocal]}>
+                      {p.verification_status === 'verified' ? '✓ Verified' : 'Local pro'}
+                    </Text>
+                  </View>
                 </View>
                 <Text style={styles.cardDescription}>{p.service_description || 'Local FixIt Salone service professional.'}</Text>
                 <Text style={styles.priceText}>{p.price_sle != null ? 'SLE ' + Number(p.price_sle).toLocaleString() : 'Request a quotation'}</Text>
@@ -2986,7 +2992,15 @@ const styles = StyleSheet.create({
   signOutText: { color: COLORS.red, fontSize: 13, fontWeight: '900' },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 },
   providerCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  avatarImage: { width: 46, height: 46, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.card },
+  providerServicePill: { alignSelf: 'flex-start', backgroundColor: COLORS.softBlue, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, marginTop: 5, marginBottom: 3 },
+  providerServicePillText: { color: COLORS.deepNavy, fontSize: 10, fontWeight: '800' },
+  providerTrustPill: { borderRadius: 9, paddingHorizontal: 8, paddingVertical: 5, alignSelf: 'flex-start' },
+  providerTrustVerified: { backgroundColor: '#E8F7EE' },
+  providerTrustLocal: { backgroundColor: '#F0F4F9' },
+  providerTrustText: { fontSize: 10, fontWeight: '900' },
+  providerTrustTextVerified: { color: '#168044' },
+  providerTrustTextLocal: { color: '#63738A' },
+  avatarImage: { width: 54, height: 54, borderRadius: 17, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.card },
   providerProfileHero: { flexDirection: 'row', alignItems: 'center', gap: 15, marginBottom: 14 },
   profilePhoto: { width: 94, height: 94, borderRadius: 25, backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line },
   profileIdentity: { flex: 1, minWidth: 0 },
