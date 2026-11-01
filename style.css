@@ -758,3 +758,54 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .message-compose-actions,.message-footer-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px}
 .message-compose button:disabled{opacity:.6;cursor:wait}
 @media(max-width:600px){.message-thread{max-height:42vh;padding:9px}.message-bubble{max-width:96%}.message-compose-actions,.message-footer-actions{align-items:stretch}.message-compose-actions button,.message-footer-actions button{flex:1}}
+
+
+/* Homepage header stabilization: prevent navigation and account actions colliding */
+@media (min-width: 851px) {
+  header > .wrap.nav {
+    height: auto;
+    min-height: 78px;
+    padding-block: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 10px;
+  }
+  header .nav > nav {
+    flex: 1 1 420px;
+    min-width: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+    white-space: normal;
+    gap: 8px 18px;
+  }
+  header .nav-actions {
+    flex: 1 1 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header .nav-actions .btn {
+    white-space: nowrap;
+    padding: 10px 14px;
+  }
+}
+@media (min-width: 851px) and (max-width: 1120px) {
+  header .nav > nav { flex-basis: 100%; order: 3; }
+  header .nav-actions { flex-basis: 100%; order: 4; }
+}
+.homepage-hero-carousel {
+  width: 100%;
+  overflow: hidden;
+  background: linear-gradient(135deg, #edf7f0, #f8faf8);
+}
+.homepage-hero-slides,
+.homepage-hero-slide {
+  width: 100%;
+  max-width: 100%;
+}
+.homepage-hero-slide {
+  display: block;
+  height: clamp(190px, 32vw, 360px);
+  object-fit: cover;
+}
+.homepage-hero-slide[hidden] { display: none !important; }
