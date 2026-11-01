@@ -487,3 +487,98 @@ footer p a:hover{color:#FDBA74}
 .homepage-hero-dot.is-active{background:var(--fixit-orange,#f97316);border-color:var(--fixit-orange,#f97316)}
 .homepage-hero-dot:focus-visible{outline:2px solid var(--fixit-orange,#f97316);outline-offset:3px}
 @media(max-width:600px){.homepage-hero-dots{gap:10px;padding:14px 0 6px}.homepage-hero-dot{width:18px;height:18px;min-width:18px}}
+/* FixIt Salone — clean, modern homepage polish */
+:root {
+  --fixit-green: #147a50;
+  --fixit-green-dark: #0f5f3e;
+  --fixit-ink: #17251e;
+  --fixit-muted: #65736b;
+  --fixit-border: #e2ebe5;
+  --fixit-soft: #f5faf7;
+}
+
+body {
+  color: var(--fixit-ink);
+  background: #fff;
+}
+
+.nav {
+  min-height: 76px;
+}
+
+.brand {
+  letter-spacing: -0.4px;
+}
+
+.btn {
+  border-radius: 12px;
+  transition: background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.btn:hover {
+  background: var(--fixit-green-dark);
+  box-shadow: 0 6px 16px #147a5024;
+  transform: translateY(-1px);
+}
+
+.outline:hover {
+  background: var(--fixit-soft);
+  color: var(--fixit-green-dark);
+}
+
+.hero {
+  background: linear-gradient(135deg, #f2faf5 0%, #fff 72%);
+}
+
+.hero h1 {
+  letter-spacing: -2px;
+}
+
+.lead {
+  color: var(--fixit-muted);
+}
+
+.hero-card,
+.job-card,
+.category-card,
+.service-card,
+.provider-card {
+  border: 1px solid var(--fixit-border);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px #10271d0a;
+}
+
+.job-card:hover,
+.category-card:hover,
+.service-card:hover,
+.provider-card:hover {
+  border-color: #b8d9c6;
+  box-shadow: 0 14px 34px #10271d12;
+}
+
+section {
+  scroll-margin-top: 90px;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding: 52px 0 60px;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 10vw, 48px);
+    letter-spacing: -1.5px;
+  }
+
+  .lead {
+    font-size: 16px;
+  }
+
+  .hero-card,
+  .job-card,
+  .category-card,
+  .service-card,
+  .provider-card {
+    border-radius: 15px;
+  }
+}
