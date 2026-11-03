@@ -1345,7 +1345,7 @@ app.post('/api/admin/site-images',siteImageUpload.single('image'),async(req,res)
     try{await removeStoredFile(oldRow.storage_provider,oldRow.storage_key,oldRow.file_url)}
     catch(e){console.error('Old site image cleanup failed:',e)}
   }
-  try{await audit(req.user.sub,null,'admin.site_image_upload','site_image',imageKey,{label:slot.label,storage_provider:stored.storage_provider})}
+  try{await audit(req.user.sub,null,'admin.site_image_upload','site_image',null,{image_key:imageKey,label:slot.label,storage_provider:stored.storage_provider})}
   catch(e){console.error('Site image audit logging failed:',e)}
   let imageUrl=null;
   try{imageUrl=await storedFileUrl(savedRow.storage_provider,savedRow.storage_key,savedRow.file_url,1800)}
