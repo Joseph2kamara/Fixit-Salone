@@ -1960,11 +1960,9 @@ export default function App() {
             <Button title={providerProfile ? 'Edit business profile and services' : 'Set up provider profile'} onPress={openProviderSetup} />
           </Card>
           <Card>
-            <Text style={styles.cardTitle}>Referrals and subscription</Text>
-            <Text style={styles.cardDescription}>Free providers receive 3 customer referrals. Paid plans unlock unlimited referrals and remove the 1% FixIt fee on job value.</Text>
-            <Text style={styles.cardMeta}>Referrals used: {subscriptionInfo?.referral_count ?? jobMeta.referral_count ?? 0} / 3</Text>
-            <Text style={styles.cardMeta}>Plan status: {subscriptionInfo?.subscription ? 'Active until ' + new Date(subscriptionInfo.subscription.expires_at).toLocaleDateString() : 'Free plan'}</Text>
-            <Button title="View plans (SLE 20 / 40 / 60)" secondary onPress={openSubscription} />
+            <Text style={styles.cardTitle}>Free during launch</Text>
+            <Text style={styles.cardDescription}>Providers can receive and manage customer requests without referral limits or subscription fees. FixIt platform fees are waived during launch.</Text>
+            <Text style={styles.cardMeta}>Customer requests received: {subscriptionInfo?.referral_count ?? jobMeta.referral_count ?? 0}</Text>
           </Card>
           <Card>
             <Text style={styles.cardTitle}>Incoming jobs</Text>
@@ -2300,7 +2298,7 @@ export default function App() {
                       </View>
                       <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 8 }}>FixIt fee is separate and is not added to the customer's quote total.</Text>
                     </View>
-                    <Text style={styles.helper}>Free providers pay the 1% FixIt fee; active subscribers pay 0%. The quote total must be greater than zero.</Text>
+                    <Text style={styles.helper}>The FixIt platform fee is waived during launch. The quote total must be greater than zero.</Text>
                     <Button title="Send quote to customer" onPress={() => sendQuote(j.id)} disabled={busy} />
                     <Button title="Cancel quote" secondary onPress={() => setQuoteJobId('')} />
                   </View>}
@@ -2315,8 +2313,7 @@ export default function App() {
                 {['requested', 'quoted', 'approved', 'in_progress'].includes(j.status) && <Button title="Cancel job" secondary onPress={() => setJobStatus(j.id, 'cancelled')} />}
               </Card>
             ))}
-          <Text style={styles.helper}>Referral access: {jobMeta.referral_count ?? 0} used · {jobMeta.subscription ? 'Subscription active' : 'Free plan'}.</Text>
-          <Button title="Manage subscription" secondary onPress={openSubscription} />
+          <Text style={styles.helper}>Provider subscriptions are free during launch. All assigned requests remain accessible.</Text>
         </>}
 
         {screen === 'account' && <>
@@ -2476,8 +2473,8 @@ export default function App() {
 
         {screen === 'subscription' && <>
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
-          <Text style={styles.sectionLead}>Choose the plan that matches your business.</Text>
-          <Card><Text style={styles.cardTitle}>Free · SLE 0/month</Text><Text style={styles.cardDescription}>3 customer referrals. New request details become locked after the free allowance.</Text><Text style={styles.cardMeta}>1% FixIt transaction fee</Text></Card>
+          <Text style={styles.sectionLead}>Provider subscriptions are free during launch.</Text>
+          <Card><Text style={styles.cardTitle}>Launch access · SLE 0</Text><Text style={styles.cardDescription}>Unlimited customer requests, assigned-job access, and provider messaging. No subscription payment or FixIt platform fee during launch.</Text></Card>
           {[
             { name: 'Pro', price: 20, description: 'Unlimited referrals and 0% FixIt transaction fee.' },
             { name: 'Business', price: 40, description: 'Pro benefits plus enhanced business visibility and provider tools as they become available.' },
@@ -2487,7 +2484,7 @@ export default function App() {
             <Text style={styles.cardDescription}>{p.description}</Text>
             <Button title={'Request ' + p.name + ' plan'} onPress={() => requestSubscription(p.name)} disabled={busy || !!(subscriptionInfo?.payments || []).some(x => ['pending', 'processing'].includes(x.status))} />
           </Card>)}
-          <Card><Text style={styles.cardTitle}>How subscriptions work for now</Text><Text style={styles.cardDescription}>Choose a plan to submit a request. No money is collected in the app and your plan will not activate immediately. Follow the official FixIt Salone support instructions for payment, then an admin must verify the payment before activating your subscription.</Text><Text style={styles.helper}>Never send money to an unofficial number or share your PIN, password, or OTP.</Text></Card>
+          <Card><Text style={styles.cardTitle}>Paid plans are paused</Text><Text style={styles.cardDescription}>Subscription options are being kept for a future launch phase. You do not need to pay to receive requests or manage assigned jobs.</Text></Card>
           {subscriptionInfo && <>
             <Text style={styles.sectionTitle}>Current status</Text>
             <Card><Text style={styles.cardTitle}>{subscriptionInfo.subscription ? 'Subscription active' : 'No active paid subscription'}</Text><Text style={styles.cardMeta}>Referrals used: {subscriptionInfo.referral_count || 0} · Free referrals: {subscriptionInfo.free_referrals || 3}</Text></Card>
