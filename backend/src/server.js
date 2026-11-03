@@ -663,10 +663,10 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
     const countResult=await client.query('SELECT COUNT(*)::int AS count FROM service_requests WHERE provider_id=$1',[provider_id]);
     const referralCount=Number(countResult.rows[0]?.count||0);
     const subscriptionResult=await client.query("SELECT id FROM provider_subscriptions WHERE provider_id=$1 AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1",[provider_id]);
-    const locked=referralCount>3&&!subscriptionResult.rows[0];
+    const locked=false; // Launch policy: provider subscriptions are free and do not restrict referrals.
     await client.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',[
       provider_id,'job_request','New service request',
-      locked?'A customer has requested your service. You have used your 3 free referrals. Subscribe to view the request details and receive new requests.':'A customer has requested your service. Open your Provider Portal to view the request details.',
+      'A customer has requested your service. Open your Provider Portal to view the request details.',
       rows[0].id
     ]);
     await client.query('COMMIT');
@@ -773,7 +773,7 @@ app.get('/api/provider/subscription',requireAuth,async(req,res)=>{
     const subscription=await providerSubscriptionState(providerId);
     const referrals=await providerReferralCount(providerId);
     const payments=await pool.query('SELECT id,plan_name,amount_sle,status,provider_reference,created_at FROM provider_subscription_payments WHERE provider_id=$1 ORDER BY created_at DESC LIMIT 10',[providerId]);
-    res.json({subscription,referral_count:referrals,free_referrals:3,can_receive_requests:!!subscription||referrals<3,payments:payments.rows});
+    res.json({subscription,referral_count:referrals,free_referrals:null,can_receive_requests:true,launch_free:true,payments:payments.rows});
   }catch(e){res.status(500).json({error:'Unable to load subscription status.'})}
 });
 app.post('/api/provider/subscription/request',requireAuth,async(req,res)=>{
@@ -809,8 +809,8 @@ app.get('/api/provider/requests',requireAuth,async(req,res)=>{
       ORDER BY sr.created_at DESC LIMIT 100`;
     const result=await pool.query(base,[providerId]);
     const freeRequestIds=new Set([...result.rows].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).slice(0,3).map(r=>r.id));
-    const requests=subscription?result.rows:result.rows.filter(r=>freeRequestIds.has(r.id));
-    res.json({requests,subscription:subscription||null,referral_count:referralCount,free_referrals:3,locked_requests:subscription?0:Math.max(0,referralCount-3),can_receive_requests:!!subscription||referralCount<3});
+    const requests=result.rows; // Launch policy: all assigned requests remain accessible without a subscription.
+    res.json({requests,subscription:subscription||null,referral_count:referralCount,free_referrals:null,locked_requests:0,can_receive_requests:true,launch_free:true});
   }catch(e){console.error('Provider requests error:',e);res.status(500).json({error:'Unable to load provider requests.'})}
 });
 
@@ -830,7 +830,7 @@ app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
     if(!owner.rows[0])return res.status(403).json({error:'You do not have access to this request.'});
     if(!['requested','quoted'].includes(r.status))return res.status(409).json({error:'A quote can only be sent while the request is awaiting a quote.'});
     const subscription=await providerSubscriptionState(r.provider_id);
-    const fee=subscription?0:Number((amount*0.01).toFixed(2));
+    const fee=0; // Launch policy: no FixIt platform fee for providers.
     const earnings=Number((amount-fee).toFixed(2));
     const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,labour_amount=$2,materials_amount=$3,transport_amount=$4,platform_fee=$5,provider_earnings=$6,updated_at=NOW() WHERE id=$7 RETURNING id,status,quoted_amount,labour_amount,materials_amount,transport_amount,platform_fee,provider_earnings,updated_at`,[amount,labour,materials,transport,fee,earnings,r.id]);
     await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,labour_amount:labour,materials_amount:materials,transport_amount:transport,platform_fee:fee,provider_earnings:earnings,subscription_active:!!subscription});
