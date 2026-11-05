@@ -1638,7 +1638,7 @@ export default function App() {
               <View style={styles.authBrandTop}>
                 <View style={styles.authBrandCopy}>
                   <Text style={styles.authBrandTitle}><Text style={styles.authBrandGold}>FixIt</Text><Text style={styles.authBrandWhite}> Salone</Text></Text>
-                  <Text style={styles.authTagline}>Trusted local services, made simpler.</Text>
+                  <Text style={styles.authTagline}>Your trusted home and repair services.</Text>
                 </View>
                 <View style={styles.authShield}><Text style={styles.authShieldText}>⌂</Text><Text style={styles.authShieldCheck}>✓</Text></View>
               </View>
@@ -1661,7 +1661,7 @@ export default function App() {
 
             <View style={styles.authWelcomePanel}>
               <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Join FixIt Salone'}</Text>
-              <Text style={styles.authWelcomeCopy}>{authMode === 'register' ? (role === 'customer' ? 'Create an account to book trusted local services.' : 'Join as a professional and manage customer jobs.') : 'Choose how you want to use FixIt Salone.'}</Text>
+              <Text style={styles.authWelcomeCopy}>{authMode === 'register' ? (role === 'customer' ? 'Create an account to book trusted local services.' : 'Join as a professional and manage customer jobs.') : 'Sign in to continue.'}</Text>
               <View style={styles.authRoleRow}>
                 <AuthRoleChoice active={role === 'customer'} title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
                 <AuthRoleChoice active={role === 'provider'} title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
@@ -1676,7 +1676,7 @@ export default function App() {
 
             <View style={styles.authDetailsPanel}>
               <Text style={styles.authSecurityNote}>Locally rooted and secured.</Text>
-              <Text style={styles.authDetailsTitle}>{authMode === 'login' ? 'Enter Details' : 'Create Account'}</Text>
+              <Text style={styles.authDetailsTitle}>{authMode === 'login' ? '' : 'Create Account'}</Text>
               {authMode === 'register' && <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your full name" />}
               <Text style={styles.authFieldLabel}>Phone number</Text>
               <View style={styles.authInputRow}>
@@ -2705,7 +2705,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 44 : 0 },
   authSafe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 12 : 0 },
-  authScreen: { flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 10, backgroundColor: '#F4FAF6' },
+  authScreen: { flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 20, backgroundColor: '#F7F9FC' },
   authBrandHeader: { paddingHorizontal: 4, paddingTop: 0, paddingBottom: 5 },
   authBrandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   authBrandCopy: { flex: 1, alignItems: 'center' },
@@ -2716,7 +2716,7 @@ const styles = StyleSheet.create({
   authShield: { width: 42, height: 46, marginRight: 2, borderWidth: 2, borderColor: COLORS.deepNavy, borderRadius: 16, backgroundColor: '#E8F4EE', alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 3 },
   authShieldText: { color: COLORS.deepNavy, fontSize: 26, fontWeight: '900', lineHeight: 30 },
   authShieldCheck: { color: COLORS.deepNavy, fontSize: 13, fontWeight: '900', marginTop: -7 },
-  authHero: { height: 96, borderRadius: 16, overflow: 'hidden', marginBottom: 5, backgroundColor: COLORS.deepNavy, position: 'relative', justifyContent: 'flex-end' },
+  authHero: { height: 0, borderRadius: 16, overflow: 'hidden', marginBottom: 5, backgroundColor: COLORS.deepNavy, position: 'relative', justifyContent: 'flex-end' },
   authHeroImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   authHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13, 42, 32, 0.48)' },
   authHeroCopy: { paddingHorizontal: 12, paddingVertical: 7 },
@@ -2724,24 +2724,24 @@ const styles = StyleSheet.create({
   authHeroTitle: { color: COLORS.white, fontSize: 16, lineHeight: 19, fontWeight: '900', letterSpacing: -0.2, maxWidth: 300 },
   authHeroSubtitle: { color: '#F0F8F3', fontSize: 10, lineHeight: 13, marginTop: 2, maxWidth: 310 },
   authWelcomePanel: { backgroundColor: 'transparent', borderRadius: 0, paddingHorizontal: 2, paddingTop: 3, paddingBottom: 4, borderWidth: 0, borderColor: 'transparent' },
-  authWelcomeTitle: { color: COLORS.navy, fontSize: 21, fontWeight: '900', letterSpacing: -0.3 },
-  authWelcomeCopy: { color: COLORS.muted, fontSize: 12, lineHeight: 16, marginTop: 2, marginBottom: 6 },
+  authWelcomeTitle: { color: '#102B55', fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
+  authWelcomeCopy: { color: '#5D6675', fontSize: 16, lineHeight: 22, marginTop: 3, marginBottom: 18 },
   authRoleRow: { flexDirection: 'row', gap: 9 },
   authOnboardingHint: { marginTop: 9, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F0F7F2', borderWidth: 1, borderColor: '#DCEBE0' },
   authOnboardingHintTitle: { color: COLORS.ink, fontSize: 11, fontWeight: '700', marginBottom: 3 },
   authOnboardingHintCopy: { color: COLORS.muted, fontSize: 10, lineHeight: 14 },
   authRoleChoice: { flex: 1, minHeight: 46, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white },
-  authRoleChoiceActive: { backgroundColor: COLORS.orangeLight, borderColor: COLORS.deepNavy },
+  authRoleChoiceActive: { backgroundColor: '#0862C7', borderColor: '#0862C7' },
   authRolePressed: { opacity: 0.82 },
   authRoleTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900', textAlign: 'center' },
-  authRoleTitleActive: { color: '#176B50' },
+  authRoleTitleActive: { color: '#FFFFFF' },
   authRoleSubtitle: { color: COLORS.muted, fontSize: 9, lineHeight: 13, textAlign: 'center', marginTop: 3 },
-  authRoleSubtitleActive: { color: '#252D2A' },
-  authDetailsPanel: { backgroundColor: COLORS.white, marginTop: 5, borderRadius: 16, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 9, borderWidth: 1, borderColor: '#E1EBE4' },
+  authRoleSubtitleActive: { color: '#FFFFFF' },
+  authDetailsPanel: { backgroundColor: 'transparent', marginTop: 18, borderRadius: 0, paddingHorizontal: 0, paddingTop: 8, paddingBottom: 9, borderWidth: 0, borderColor: 'transparent' },
   authSecurityNote: { color: COLORS.muted, fontSize: 10, fontWeight: '700', textAlign: 'center', marginBottom: 3 },
   authDetailsTitle: { color: COLORS.navy, fontSize: 19, fontWeight: '900', letterSpacing: -0.2, marginBottom: 6 },
   authFieldLabel: { color: COLORS.navy, fontSize: 13, fontWeight: '800', marginBottom: 6, marginTop: 1 },
-  authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44, borderRadius: 12, backgroundColor: COLORS.pale, borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 10 },
+  authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#CBD2DC', paddingHorizontal: 14 },
   authCountryFlag: { fontSize: 22, marginRight: 8 },
   authCountryCode: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginRight: 8 },
   authInput: { flex: 1, minWidth: 0, color: COLORS.ink, fontSize: 15, paddingVertical: 11 },
