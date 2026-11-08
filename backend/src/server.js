@@ -508,7 +508,7 @@ app.get('/api/providers',async(req,res)=>{
       ORDER BY pp.created_at DESC LIMIT 200`;
     const {rows}=await pool.query(sql,values);
     res.json(await Promise.all(rows.map(async row=>({...row,profile_photo_url:row.profile_photo_storage_provider==='r2'&&row.profile_photo_storage_key&&objectStorageEnabled?await storedFileUrl('r2',row.profile_photo_storage_key,row.profile_photo_file_url,900):row.profile_photo_file_url||null}))));
-  }catch(e){res.status(500).json({error:'Unable to load providers.'})}
+  }catch(e){console.error('Provider list error:',e);res.status(500).json({error:'Unable to load providers.'})}
 });
 
 app.get('/api/providers/:id',async(req,res)=>{
