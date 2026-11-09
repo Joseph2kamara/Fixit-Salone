@@ -619,6 +619,32 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
   }finally{if(client)client.release()}
 });
 
+app.patch('/api/service-requests/:id',requireAuth,async(req,res)=>{
+  if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
+  const {region,district,area,service_address,directions,pricing_type,job_details}=req.body||{};
+  if(!region||!district||!area||!service_address||!pricing_type||!job_details)return res.status(400).json({error:'Region, district, area, address, pricing type and job details are required.'});
+  if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
+  try{
+    const current=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
+    if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
+    const request=current.rows[0];
+    if(request.customer_user_id!==req.user.sub)return res.status(403).json({error:'You do not have access to this request.'});
+    if(request.status!=='requested')return res.status(409).json({error:'Requests can only be edited before the provider responds.'});
+    const {rows}=await pool.query(`UPDATE service_requests SET region=$1,district=$2,area=$3,service_address=$4,directions=$5,pricing_type=$6,job_details=$7,updated_at=NOW()
+      WHERE id=$8 AND customer_user_id=$9 AND status='requested' RETURNING id,status,updated_at`,
+      [String(region).trim(),String(district).trim(),String(area).trim(),String(service_address).trim(),String(directions||'').trim()||null,pricing_type,String(job_details).trim(),request.id,req.user.sub]);
+    if(!rows[0])return res.status(409).json({error:'This request can no longer be edited because its status changed.'});
+    try{
+      await pool.query('INSERT INTO provider_notifications(provider_id,type,title,message,service_request_id) VALUES($1,$2,$3,$4,$5)',[
+        request.provider_id,'job_request_updated','Customer updated a request',
+        'A customer updated the details of a service request. Open your jobs to review the changes.',request.id
+      ]);
+    }catch(notificationError){console.error('Service request update notification error:',notificationError)}
+    try{await audit(req.user.sub,null,'service_request.updated','service_request',request.id,{fields:['region','district','area','service_address','directions','pricing_type','job_details']})}catch(auditError){console.error('Service request update audit error:',auditError)}
+    res.json(rows[0]);
+  }catch(e){console.error('Service request update error:',e);res.status(500).json({error:'Unable to update service request.'})}
+});
+
 app.post('/api/service-requests/:id/photos',requireAuth,upload.array('photos',5),async(req,res)=>{
   const files=req.files||[];
   if(!files.length)return res.status(400).json({error:'Please upload at least one photo.'});
@@ -674,7 +700,7 @@ app.get('/api/service-requests/:id/photos',requireAuth,async(req,res)=>{
 app.get('/api/service-requests/mine',requireAuth,async(req,res)=>{
   if(req.user.role!=='customer')return res.status(403).json({error:'Customer account required.'});
   try{
-    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
+    const {rows}=await pool.query(`SELECT sr.id,sr.status,sr.region,sr.district,sr.area,sr.service_address,sr.directions,sr.pricing_type,sr.job_details,sr.quoted_amount,sr.labour_amount,sr.materials_amount,sr.transport_amount,sr.platform_fee,sr.created_at,
       pp.business_name,u.full_name AS provider_name,s.name AS service_name
       FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id LEFT JOIN users u ON u.id=pp.user_id LEFT JOIN services s ON s.id=sr.service_id
       WHERE sr.customer_user_id=$1 ORDER BY sr.created_at DESC LIMIT 100`,[req.user.sub]);
