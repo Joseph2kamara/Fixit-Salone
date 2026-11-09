@@ -133,6 +133,27 @@ CREATE TABLE IF NOT EXISTS provider_services (
 );
 CREATE INDEX IF NOT EXISTS idx_provider_services_service ON provider_services(service_id);
 
+CREATE TABLE IF NOT EXISTS profession_suggestions (
+ id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
+ requested_name VARCHAR(100) NOT NULL,
+ normalized_name VARCHAR(100) NOT NULL,
+ pricing_type VARCHAR(30) NOT NULL DEFAULT 'quote_required' CHECK (pricing_type IN ('fixed_price','starting_price','quote_required')),
+ price_sle NUMERIC(14,2),
+ description VARCHAR(500),
+ status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+ service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+ reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+ reviewed_at TIMESTAMPTZ,
+ review_note VARCHAR(500),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profession_suggestions_pending_unique
+ ON profession_suggestions(provider_id,normalized_name) WHERE status='pending';
+CREATE INDEX IF NOT EXISTS idx_profession_suggestions_status_created
+ ON profession_suggestions(status,created_at DESC);
+
 CREATE TABLE IF NOT EXISTS service_requests (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  customer_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,

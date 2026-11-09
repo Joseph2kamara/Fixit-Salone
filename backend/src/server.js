@@ -91,6 +91,24 @@ async function ensureServiceCatalogue(){
   console.log('Service catalogue checked: '+SERVICE_CATALOGUE.length+' service types.');
 }
 
+async function ensureProfessionSuggestionsTable(){
+  await pool.query('CREATE TABLE IF NOT EXISTS profession_suggestions ('+
+    'id UUID PRIMARY KEY DEFAULT gen_random_uuid(),'+
+    'provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,'+
+    'requested_name VARCHAR(100) NOT NULL,'+
+    'normalized_name VARCHAR(100) NOT NULL,'+
+    "pricing_type VARCHAR(30) NOT NULL DEFAULT 'quote_required' CHECK (pricing_type IN ('fixed_price','starting_price','quote_required')),"+
+    'price_sle NUMERIC(14,2),description VARCHAR(500),'+
+    "status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),"+
+    'service_id UUID REFERENCES services(id) ON DELETE SET NULL,'+
+    'reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,'+
+    'reviewed_at TIMESTAMPTZ,review_note VARCHAR(500),'+
+    'created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()'+
+  ')');
+  await pool.query("CREATE UNIQUE INDEX IF NOT EXISTS idx_profession_suggestions_pending_unique ON profession_suggestions(provider_id,normalized_name) WHERE status='pending'");
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_profession_suggestions_status_created ON profession_suggestions(status,created_at DESC)');
+}
+
 const uploadDir=path.resolve(process.env.UPLOAD_DIR||'uploads');
 fs.mkdirSync(uploadDir,{recursive:true});
 const R2_ENDPOINT=String(process.env.R2_ENDPOINT||'').trim();
@@ -1180,7 +1198,121 @@ Additional operating rules:
 });
 
 
+app.post('/api/providers/me/profession-suggestions',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  const name=String(req.body&&req.body.name||'').trim().replace(/\s+/g,' ');
+  const normalizedName=name.toLowerCase();
+  const pricingType=String(req.body&&req.body.pricing_type||'quote_required');
+  const rawPrice=req.body&&req.body.price_sle;
+  const description=String(req.body&&req.body.description||'').trim();
+  if(name.length<2||name.length>100)return res.status(400).json({error:'Profession name must be between 2 and 100 characters.'});
+  if(!['fixed_price','starting_price','quote_required'].includes(pricingType))return res.status(400).json({error:'Choose a valid pricing type.'});
+  if(rawPrice!==null&&rawPrice!==undefined&&rawPrice!==''&&(!Number.isFinite(Number(rawPrice))||Number(rawPrice)<0))return res.status(400).json({error:'Price must be a valid non-negative amount.'});
+  if(description.length>500)return res.status(400).json({error:'Service description must be 500 characters or fewer.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
+    if(!profile.rows[0])return res.status(400).json({error:'Create your provider profile first.'});
+    const existing=await pool.query('SELECT id FROM services WHERE active=true AND lower(name)=lower($1) LIMIT 1',[name]);
+    if(existing.rows[0])return res.status(409).json({error:'That profession is already listed. Select it from the service list.'});
+    const {rows}=await pool.query(
+      'INSERT INTO profession_suggestions(provider_id,requested_name,normalized_name,pricing_type,price_sle,description) '+
+      'VALUES($1,$2,$3,$4,$5,$6) '+
+      "ON CONFLICT(provider_id,normalized_name) WHERE status='pending' DO UPDATE SET pricing_type=EXCLUDED.pricing_type,price_sle=EXCLUDED.price_sle,description=EXCLUDED.description,updated_at=NOW() "+
+      'RETURNING id,requested_name,status,created_at,updated_at',
+      [profile.rows[0].id,name,normalizedName,pricingType,rawPrice===''||rawPrice===undefined?null:rawPrice,description||null]
+    );
+    res.status(201).json({suggestion:rows[0]});
+  }catch(e){
+    console.error('Profession suggestion error:',e);
+    res.status(500).json({error:'Unable to submit profession suggestion.'});
+  }
+});
+
+app.get('/api/providers/me/profession-suggestions',requireAuth,async(req,res)=>{
+  if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
+  try{
+    const profile=await pool.query('SELECT id FROM provider_profiles WHERE user_id=$1',[req.user.sub]);
+    if(!profile.rows[0])return res.json([]);
+    const {rows}=await pool.query(
+      'SELECT id,requested_name,status,created_at,reviewed_at,review_note FROM profession_suggestions WHERE provider_id=$1 ORDER BY created_at DESC LIMIT 50',
+      [profile.rows[0].id]
+    );
+    res.json(rows);
+  }catch(e){
+    console.error('Provider profession suggestions error:',e);
+    res.status(500).json({error:'Unable to load profession suggestions.'});
+  }
+});
+
 app.use('/api/admin',requireAuth,requireAdmin,adminLimiter);
+
+app.get('/api/admin/profession-suggestions',async(req,res)=>{
+  const status=String(req.query.status||'pending');
+  if(!['pending','approved','rejected','all'].includes(status))return res.status(400).json({error:'Invalid profession suggestion status.'});
+  try{
+    const {rows}=await pool.query(
+      'SELECT ps.id,ps.provider_id,ps.requested_name,ps.description,ps.pricing_type,ps.price_sle,ps.status,ps.created_at,ps.reviewed_at,ps.review_note,pp.business_name,u.full_name AS provider_name '+
+      'FROM profession_suggestions ps JOIN provider_profiles pp ON pp.id=ps.provider_id JOIN users u ON u.id=pp.user_id '+
+      "WHERE ($1='all' OR ps.status=$1) ORDER BY CASE WHEN ps.status='pending' THEN 0 ELSE 1 END,ps.created_at DESC LIMIT 500",
+      [status]
+    );
+    res.json(rows);
+  }catch(e){
+    console.error('Admin profession suggestions error:',e);
+    res.status(500).json({error:'Unable to load profession suggestions.'});
+  }
+});
+
+app.patch('/api/admin/profession-suggestions/:id',async(req,res)=>{
+  const status=String(req.body&&req.body.status||'').trim();
+  if(!['approved','rejected'].includes(status))return res.status(400).json({error:'Choose approved or rejected.'});
+  const serviceDescription=String(req.body&&req.body.service_description||'').trim().slice(0,255);
+  const reviewNote=String(req.body&&req.body.review_note||'').trim().slice(0,500);
+  let client;
+  try{
+    client=await pool.connect();
+    await client.query('BEGIN');
+    const {rows}=await client.query(
+      'SELECT ps.*,pp.user_id AS provider_user_id FROM profession_suggestions ps JOIN provider_profiles pp ON pp.id=ps.provider_id WHERE ps.id::text=$1 FOR UPDATE',
+      [req.params.id]
+    );
+    const suggestion=rows[0];
+    if(!suggestion){await client.query('ROLLBACK');return res.status(404).json({error:'Profession suggestion not found.'});}
+    if(suggestion.status!=='pending'){await client.query('ROLLBACK');return res.status(409).json({error:'This profession suggestion has already been reviewed.'});}
+    let serviceId=null;
+    if(status==='approved'){
+      const current=await client.query('SELECT id FROM services WHERE lower(name)=lower($1) ORDER BY active DESC LIMIT 1',[suggestion.requested_name]);
+      if(current.rows[0]){
+        serviceId=current.rows[0].id;
+        await client.query('UPDATE services SET active=true,description=COALESCE(NULLIF($2,\'\'),description) WHERE id=$1',[serviceId,serviceDescription]);
+      }else{
+        const created=await client.query(
+          'INSERT INTO services(name,description,active) VALUES($1,$2,true) RETURNING id',
+          [suggestion.requested_name,serviceDescription||'Profession approved from provider suggestion']
+        );
+        serviceId=created.rows[0].id;
+      }
+      await client.query(
+        'INSERT INTO provider_services(provider_id,service_id,pricing_type,price_sle,description) VALUES($1,$2,$3,$4,$5) '+
+        'ON CONFLICT(provider_id,service_id) DO UPDATE SET pricing_type=EXCLUDED.pricing_type,price_sle=EXCLUDED.price_sle,description=EXCLUDED.description,updated_at=NOW()',
+        [suggestion.provider_id,serviceId,suggestion.pricing_type,suggestion.price_sle,suggestion.description]
+      );
+    }
+    const updated=await client.query(
+      'UPDATE profession_suggestions SET status=$2,service_id=$3,reviewed_by=$4,reviewed_at=NOW(),review_note=$5,updated_at=NOW() WHERE id=$1 RETURNING id,requested_name,status,service_id,reviewed_at,review_note',
+      [suggestion.id,status,serviceId,req.user.sub,reviewNote||null]
+    );
+    await client.query('COMMIT');
+    try{
+      await audit(req.user.sub,suggestion.provider_user_id,'admin.profession_suggestion_'+status,'profession_suggestion',suggestion.id,{profession:suggestion.requested_name});
+    }catch(auditError){console.error('Profession suggestion audit error:',auditError);}
+    res.json({suggestion:updated.rows[0]});
+  }catch(e){
+    if(client){try{await client.query('ROLLBACK')}catch{}}
+    console.error('Profession suggestion review error:',e);
+    res.status(500).json({error:'Unable to review profession suggestion.'});
+  }finally{if(client)client.release();}
+});
 
 app.get('/api/admin/site-images',async(req,res)=>{
   try{
@@ -1415,4 +1547,4 @@ async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureExpoPushTokensTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureExpoPushTokensTable()).then(()=>ensureServiceCatalogue()).then(()=>ensureProfessionSuggestionsTable()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
