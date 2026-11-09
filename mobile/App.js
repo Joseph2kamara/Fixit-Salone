@@ -1,17 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Animated, Image, KeyboardAvoidingView, Linking, Modal, Platform,
+  ActivityIndicator, Alert, Animated, Image, ImageBackground, KeyboardAvoidingView, Linking, Modal, Platform,
   Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View
 } from 'react-native';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import { File, Paths } from 'expo-file-system';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 const API_BASE = (Constants.expoConfig?.extra?.apiBaseUrl || 'https://fixit-salone-api.onrender.com').replace(/\/$/, '');
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false })
+});
+const GOOGLE_WEB_CLIENT_ID = String(Constants.expoConfig?.extra?.googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '').trim();
 const COLORS = {
   navy: '#173B72',
   deepNavy: '#1769D2',
@@ -56,6 +62,61 @@ const HOME_CATEGORIES = [
   { label: 'Auto Repair', symbol: '🚗', query: 'auto repair', tint: '#E8F4EE' },
   { label: 'Landscaping & Gardening', symbol: '🌿', query: 'landscaping', tint: '#E8F4EE' },
   { label: 'Water Tank & Well', symbol: '🚰', query: 'water tank', tint: '#E8F4EE' }
+];
+const HOME_HERO_ASSETS = {
+  plumbing: require('./assets/hero-plumbing.jpg'),
+  electrical: require('./assets/hero-electrical.jpg'),
+  repairs: require('./assets/hero-repairs.jpg'),
+  carpentry: require('./assets/hero-carpentry.jpg'),
+  appliances: require('./assets/hero-appliances.jpg'),
+  cooling: require('./assets/hero-cooling.jpg'),
+  painting: require('./assets/hero-painting.jpg'),
+  cleaning: require('./assets/hero-cleaning.jpg'),
+  pest: require('./assets/hero-pest-control.jpg'),
+  moving: require('./assets/hero-moving.jpg'),
+  beauty: require('./assets/hero-beauty.jpg'),
+  auto: require('./assets/hero-auto-repair.jpg'),
+  landscaping: require('./assets/hero-landscaping.jpg'),
+  computer: require('./assets/hero-it-computer.jpg')
+};
+const HOME_HERO_IMAGE_BY_CATEGORY = {
+  Plumbing: 'plumbing',
+  Electrical: 'electrical',
+  'General Home': 'repairs',
+  Roofing: 'carpentry',
+  'Appliance Repair': 'appliances',
+  'Emergency Services': 'repairs',
+  'IT & Computer': 'computer',
+  Cleaning: 'cleaning',
+  Carpentry: 'carpentry',
+  Painting: 'painting',
+  'Pest Control': 'pest',
+  'Moving & Delivery': 'moving',
+  'Beauty & Grooming': 'beauty',
+  'AC & Refrigerator': 'cooling',
+  'Generator Repair': 'appliances',
+  'CCTV & Security': 'electrical',
+  'Welding & Metal Work': 'auto',
+  'Solar & Inverter': 'electrical',
+  'Tiling & Masonry': 'repairs',
+  'Auto Repair': 'auto',
+  'Landscaping & Gardening': 'landscaping',
+  'Water Tank & Well': 'plumbing'
+};
+const HOME_HERO_SLIDES = HOME_CATEGORIES.map((category, index) => ({
+  ...category,
+  image: HOME_HERO_ASSETS[HOME_HERO_IMAGE_BY_CATEGORY[category.label]] || HOME_HERO_ASSETS.repairs,
+  ordinal: index + 1
+}));
+const CUSTOMER_QUICK_CATEGORIES = [
+  { label: 'Plumbing', symbol: '🚰', query: 'plumbing', tint: '#E7F5EF' },
+  { label: 'Electrical', symbol: 'ϟ', query: 'electrical', tint: '#FFF4D9' },
+  { label: 'Carpentry', symbol: '🔨', query: 'carpentry', tint: '#F5EFE4' },
+  { label: 'Painting', symbol: '🖌️', query: 'painting', tint: '#E8F3EC' },
+  { label: 'Repairs', symbol: '🛠️', query: 'repair', tint: '#E7F1FA' },
+  { label: 'Cleaning', symbol: '🧹', query: 'cleaning', tint: '#F0EBFA' },
+  { label: 'AC & Cooling', symbol: '❄️', query: 'AC', tint: '#E7F1FA' },
+  { label: 'More', symbol: '•••', query: '', tint: '#F1F4F2' }
 ];
 const CATEGORY_PAGE_SIZE = 8;
 const CATEGORY_PAGES = Array.from(
@@ -111,22 +172,22 @@ function AuthenticatedRequestImage({ uri, token, style }) {
   return <Image source={source} style={style} resizeMode="cover" onError={() => setFailed(true)} />;
 }
 
-function Button({ title, onPress, secondary = false, disabled = false, compact = false }) {
+function Button({ title, onPress, secondary = false, disabled = false, compact = false, tone = 'brand' }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={disabled}
-      style={({ pressed }) => [styles.button, secondary && styles.buttonSecondary, compact && styles.buttonCompact, disabled && styles.disabled, pressed && !disabled && styles.buttonPressed]}>
-      <Text style={[styles.buttonText, secondary && styles.buttonSecondaryText]}>{title}</Text>
+      style={({ pressed }) => [styles.button, tone === 'green' && styles.buttonGreen, secondary && styles.buttonSecondary, compact && styles.buttonCompact, disabled && styles.disabled, pressed && !disabled && styles.buttonPressed]}>
+      <Text style={[styles.buttonText, tone === 'green' && styles.buttonGreenText, secondary && styles.buttonSecondaryText]}>{title}</Text>
     </Pressable>
   );
 }
-function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences', multiline = false }) {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry = false, keyboardType = 'default', autoCapitalize = 'sentences', multiline = false, editable = true }) {
   return (
     <View style={styles.fieldWrap}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
       <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#98A2B3"
         secureTextEntry={secureTextEntry} keyboardType={keyboardType} autoCapitalize={autoCapitalize}
-        multiline={multiline} textAlignVertical={multiline ? 'top' : 'center'}
-        style={[styles.input, multiline && styles.textArea]} />
+        multiline={multiline} textAlignVertical={multiline ? 'top' : 'center'} editable={editable}
+        style={[styles.input, multiline && styles.textArea, !editable && { backgroundColor: '#F3F6F8' }]} />
     </View>
   );
 }
@@ -160,7 +221,7 @@ function getWorkIcon(serviceName) {
   return '🛠️';
 }
 
-function ActiveWorkCard({ job, role, onPress }) {
+function ActiveWorkCard({ job, role, onPress, fullWidth = false }) {
   const progress = getWorkProgress(job.status);
   const isCustomer = role === 'customer';
   const partner = isCustomer
@@ -170,7 +231,7 @@ function ActiveWorkCard({ job, role, onPress }) {
   const date = job.created_at ? new Date(job.created_at).toLocaleDateString() : '';
 
   return (
-    <View style={styles.activeJobCard}>
+    <View style={[styles.activeJobCard, fullWidth && styles.activeJobCardFullWidth]}>
       <View style={styles.activeJobTop}>
         <View style={styles.jobIllustration}>
           <Text style={styles.jobIllustrationText}>{getWorkIcon(job.service_name)}</Text>
@@ -200,6 +261,52 @@ function ActiveWorkCard({ job, role, onPress }) {
   );
 }
 
+function ProviderRequestCard({ job, onPress }) {
+  const location = [job.area, job.district, job.region].filter(Boolean).join(', ');
+  const createdAt = job.created_at ? new Date(job.created_at) : null;
+  const requestedDate = createdAt && !Number.isNaN(createdAt.getTime())
+    ? createdAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
+
+  return (
+    <View style={styles.providerRequestCard}>
+      <View style={styles.providerRequestTop}>
+        <View style={styles.providerRequestIcon}>
+          <Text style={styles.providerRequestIconText}>{getWorkIcon(job.service_name)}</Text>
+        </View>
+        <View style={styles.providerRequestCopy}>
+          <Text numberOfLines={1} style={styles.providerRequestService}>{job.service_name || 'Service request'}</Text>
+          <View style={styles.providerRequestBadge}>
+            <Text style={styles.providerRequestBadgeText}>New request</Text>
+          </View>
+          <Text numberOfLines={2} style={styles.providerRequestCustomer}>Customer: {job.customer_name || 'Customer'}</Text>
+          {!!location && <Text numberOfLines={2} style={styles.providerRequestLocation}>⌖  {location}</Text>}
+        </View>
+      </View>
+      {!!requestedDate && (
+        <View style={styles.providerRequestDateRow}>
+          <Text style={styles.providerRequestDateIcon}>▦</Text>
+          <Text style={styles.providerRequestDate}>Requested: {requestedDate}</Text>
+        </View>
+      )}
+      <Pressable accessibilityRole="button"
+        accessibilityLabel={'View request details for ' + (job.service_name || 'service request')}
+        onPress={onPress}
+        style={({ pressed }) => [styles.providerDashboardButton, pressed && styles.buttonPressed]}>
+        <Text style={styles.providerDashboardButtonText}>View details  →</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ProviderDashboardButton({ title, onPress }) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress}
+      style={({ pressed }) => [styles.providerDashboardButton, pressed && styles.buttonPressed]}>
+      <Text style={styles.providerDashboardButtonText}>{title}</Text>
+    </Pressable>
+  );
+}
 function JobProgressDetails({ status }) {
   const currentStatus = String(status || 'requested').toLowerCase();
   const stages = [
@@ -240,14 +347,31 @@ function JobProgressDetails({ status }) {
   );
 }
 
-function AuthRoleChoice({ active, title, subtitle, onPress }) {
+function AuthRoleChoice({ active, icon, title, subtitle, onPress }) {
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress}
       style={({ pressed }) => [styles.authRoleChoice, active && styles.authRoleChoiceActive, pressed && styles.authRolePressed]}>
-      <Text style={[styles.authRoleTitle, active && styles.authRoleTitleActive]}>{title}</Text>
-      <Text style={[styles.authRoleSubtitle, active && styles.authRoleSubtitleActive]}>{subtitle}</Text>
+      {icon === 'customer' ? <View style={styles.authPeopleIcon}>
+        <View style={styles.authPeopleHeads}><View style={[styles.authPersonHead, active && styles.authPersonActive]} /><View style={[styles.authPersonHead, active && styles.authPersonActive]} /></View>
+        <View style={styles.authPeopleBodies}><View style={[styles.authPersonBody, active && styles.authPersonActive]} /><View style={[styles.authPersonBody, active && styles.authPersonActive]} /></View>
+      </View> : <View style={styles.authHardHat}><View style={[styles.authHardHatDome, active && styles.authPersonActive]} /><View style={[styles.authHardHatStripe, active && styles.authHardHatStripeActive]} /><View style={[styles.authHardHatBrim, active && styles.authPersonActive]} /></View>}
+      <View style={styles.authRoleTextWrap}>
+        <Text style={[styles.authRoleTitle, active && styles.authRoleTitleActive]}>{title}</Text>
+        <Text style={[styles.authRoleSubtitle, active && styles.authRoleSubtitleActive]}>{subtitle}</Text>
+      </View>
+      <Text style={[styles.authRoleArrow, active && styles.authRoleArrowActive]}>›</Text>
     </Pressable>
   );
+}
+function BellGlyph() {
+  return <View style={styles.bellGlyph}><View style={styles.bellDome} /><View style={styles.bellBase} /><View style={styles.bellClapper} /></View>;
+}
+function FilterGlyph() {
+  return <View style={styles.filterGlyph}>
+    <View style={styles.filterTrack}><View style={styles.filterKnobLeft} /></View>
+    <View style={styles.filterTrack}><View style={styles.filterKnobRight} /></View>
+    <View style={styles.filterTrack}><View style={styles.filterKnobCenter} /></View>
+  </View>;
 }
 function ActionTile({ icon, title, subtitle, onPress, disabled = false }) {
   return (
@@ -336,6 +460,8 @@ export default function App() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [pendingGoogleIdToken, setPendingGoogleIdToken] = useState('');
+  const googleAuthConfigured = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
   const [profilePhotoBusy, setProfilePhotoBusy] = useState(false);
@@ -345,8 +471,8 @@ export default function App() {
 
   const [services, setServices] = useState([]);
   const [providers, setProviders] = useState([]);
-  const [homepageSlides, setHomepageSlides] = useState([]);
   const [homepageSlideIndex, setHomepageSlideIndex] = useState(0);
+  const activeHomeHeroSlide = HOME_HERO_SLIDES[homepageSlideIndex % HOME_HERO_SLIDES.length];
   const categoryCarouselRef = useRef(null);
   const [categoryCarouselWidth, setCategoryCarouselWidth] = useState(0);
   const [categoryPageIndex, setCategoryPageIndex] = useState(0);
@@ -362,12 +488,15 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [providerProfile, setProviderProfile] = useState(null);
   const [providerServices, setProviderServices] = useState([]);
+  const [professionSuggestions, setProfessionSuggestions] = useState([]);
   const [providerWorkItems, setProviderWorkItems] = useState([]);
   const [workAsset, setWorkAsset] = useState(null);
   const [workCaption, setWorkCaption] = useState('');
   const [workUploadBusy, setWorkUploadBusy] = useState(false);
   const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [pushToken, setPushToken] = useState('');
+  const [pushBusy, setPushBusy] = useState(false);
   const [conversationRequestId, setConversationRequestId] = useState('');
   const [conversationMessages, setConversationMessages] = useState([]);
   const [conversationDraft, setConversationDraft] = useState('');
@@ -376,13 +505,14 @@ export default function App() {
   const [requestForm, setRequestForm] = useState({
     contactPhone: '', region: 'Western Area', district: 'Western Area Urban', area: '', address: '', directions: '', details: '', pricingType: 'quote_required'
   });
+  const [editingRequest, setEditingRequest] = useState(null);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [pendingPhotoRequestId, setPendingPhotoRequestId] = useState('');
   const [jobPhotos, setJobPhotos] = useState([]);
   const [jobPhotosRequestId, setJobPhotosRequestId] = useState('');
   const [providerForm, setProviderForm] = useState({
     businessName: '', region: 'Western Area', district: 'Western Area Urban', area: '', address: '',
-    serviceId: '', pricingType: 'starting_price', price: '', description: ''
+    serviceId: '', otherProfession: '', pricingType: 'starting_price', price: '', description: ''
   });
   const [quoteJobId, setQuoteJobId] = useState('');
   const [quoteForm, setQuoteForm] = useState({ labour: '', materials: '', transport: '' });
@@ -463,7 +593,7 @@ export default function App() {
         setUser(data.user);
         setRole(data.user.role);
         setScreen('home');
-        if (data.user.role === 'customer') await loadCustomerProfilePhoto(savedToken);
+        await loadProfilePhoto(savedToken, data.user.role);
       } catch (e) {
         // Keep the sign-in screen available if the device is offline or the saved session cannot be checked.
       } finally {
@@ -483,6 +613,51 @@ export default function App() {
     if (!response.ok) throw new Error(data.error || 'Unable to complete this request.');
     return data;
   }
+  async function registerPushNotifications(requestPermission = false) {
+    if (Platform.OS === 'web' || !Constants.isDevice) {
+      if (requestPermission) setError('Push alerts require a physical Android or iOS device.');
+      return null;
+    }
+    setPushBusy(true);
+    try {
+      let permission = await Notifications.getPermissionsAsync();
+      if (permission.status !== 'granted' && requestPermission) permission = await Notifications.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        if (requestPermission) setError('Allow FixIt Salone notifications in your device settings to receive job and message updates.');
+        return null;
+      }
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'FixIt updates', importance: Notifications.AndroidImportance.DEFAULT,
+          vibrationPattern: [0, 250, 250, 250], lightColor: '#159447'
+        });
+      }
+      const projectId = Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) throw new Error('The EAS project ID is missing from app configuration.');
+      const result = await Notifications.getExpoPushTokenAsync({ projectId });
+      await api('/api/push-token', {
+        method: 'POST', body: JSON.stringify({ token: result.data, platform: Platform.OS })
+      });
+      await SecureStore.deleteItemAsync('fixit-salone-push-disabled').catch(() => {});
+      setPushToken(result.data);
+      if (requestPermission) setNotice('Push alerts are enabled on this device.');
+      return result.data;
+    } catch (e) {
+      if (requestPermission) reportError(e);
+      return null;
+    } finally { setPushBusy(false); }
+  }
+  async function disablePushNotifications() {
+    if (!pushToken || pushBusy) return;
+    setPushBusy(true);
+    try {
+      await api('/api/push-token', { method: 'DELETE', body: JSON.stringify({ token: pushToken }) });
+      await SecureStore.setItemAsync('fixit-salone-push-disabled', 'true');
+      setPushToken('');
+      setNotice('Push alerts are disabled on this device.');
+    } catch (e) { reportError(e); }
+    finally { setPushBusy(false); }
+  }
   function reportError(e) {
     const message = e?.message || 'Something went wrong. Please try again.';
     setError(message);
@@ -490,15 +665,19 @@ export default function App() {
     return message;
   }
   function clearMessages() { setError(''); setNotice(''); }
-  async function loadCustomerProfilePhoto(accessToken = token) {
-    if (!accessToken) { setProfilePhotoUrl(''); return; }
+  async function loadProfilePhoto(accessToken = token, accountRole = user?.role) {
+    if (!accessToken || !['customer', 'provider'].includes(accountRole)) {
+      setProfilePhotoUrl('');
+      return null;
+    }
+    const endpoint = accountRole === 'provider' ? '/api/provider/profile-photo' : '/api/customer/profile-photo';
     try {
-      const response = await expoFetch(API_BASE + '/api/customer/profile-photo', {
+      const response = await expoFetch(API_BASE + endpoint, {
         headers: { Authorization: 'Bearer ' + accessToken }
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Unable to load profile photo.');
-      const photoUrl = data.photo_url || data.authenticated_photo_url || ''; // Prefer the short-lived signed R2 URL when available; fall back to the authenticated backend endpoint.
+      const photoUrl = data.photo_url || data.authenticated_photo_url || '';
       setProfilePhotoUrl(photoUrl);
       return photoUrl || null;
     } catch (e) {
@@ -507,8 +686,8 @@ export default function App() {
     }
   }
   async function pickProfilePhoto() {
-    if (user?.role !== 'customer') {
-      setError('Profile photo upload is available for customer accounts right now.');
+    if (!['customer', 'provider'].includes(user?.role)) {
+      setError('Profile photo upload is available for customer and provider accounts.');
       return;
     }
     if (profilePhotoBusy) return;
@@ -534,22 +713,19 @@ export default function App() {
       }
       const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
       const uploadName = 'fixit-profile-photo-' + Date.now() + '.' + extension;
-      // Expo SDK 57 expects a File object in multipart FormData, not the legacy
-      // React Native { uri, name, type } object. Use the picked file directly
-      // rather than copying it to a temporary path that may not exist on Android.
       const uploadFile = new File(asset.uri);
       const form = new FormData();
       form.append('photo', uploadFile, uploadName);
+      const photoEndpoint = user.role === 'provider' ? '/api/provider/profile-photo' : '/api/customer/profile-photo';
       setProfilePhotoBusy(true);
-      const uploadResponse = await expoFetch(API_BASE + '/api/customer/profile-photo', {
+      const uploadResponse = await expoFetch(API_BASE + photoEndpoint, {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token },
         body: form
       });
       const data = await uploadResponse.json().catch(() => ({}));
       if (!uploadResponse.ok) throw new Error(data.error || 'Unable to upload profile photo.');
-      // Re-read the saved URL from the server to avoid showing a stale local upload path.
-      const visiblePhotoUrl = await loadCustomerProfilePhoto(token);
+      const visiblePhotoUrl = await loadProfilePhoto(token, user.role);
       if (!visiblePhotoUrl) throw new Error('The upload finished, but the server could not return the saved photo. Please retry after the backend is redeployed.');
       setNotice(data.storage_persistent === false
         ? 'Profile photo uploaded. Note: permanent media storage is not configured yet, so the file could be lost if the server restarts.'
@@ -563,6 +739,78 @@ export default function App() {
   function setProviderFormValue(key, value) { setProviderForm(prev => ({ ...prev, [key]: value })); }
   function setRequestValue(key, value) { setRequestForm(prev => ({ ...prev, [key]: value })); }
   function setQuoteValue(key, value) { setQuoteForm(prev => ({ ...prev, [key]: value })); }
+
+  async function completeAuthSession(data, message) {
+    if (!data?.token || !data?.user) throw new Error('The sign-in response was incomplete. Please try again.');
+    await SecureStore.setItemAsync('fixit-salone-session-token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setRole(data.user.role);
+    setScreen('home');
+    setPassword('');
+    setPendingGoogleIdToken('');
+    await loadProfilePhoto(data.token, data.user.role);
+    setNotice(message);
+  }
+
+  async function signInWithGoogle() {
+    clearMessages();
+    setBusy(true);
+    try {
+      if (Platform.OS === 'web') throw new Error('Google sign-in is currently set up for the Android and iPhone app.');
+      if (!pendingGoogleIdToken && !GOOGLE_WEB_CLIENT_ID) {
+        throw new Error('Google sign-in needs the Google Web Client ID added to the app configuration first.');
+      }
+
+      let idToken = pendingGoogleIdToken;
+      let googleName = fullName.trim();
+      if (!idToken) {
+        let google;
+        try { google = require('react-native-nitro-google-signin'); }
+        catch (_) { throw new Error('Google sign-in needs the FixIt development build. Expo Go does not include the Google sign-in module.'); }
+        const { GoogleOneTapSignIn, isNoSavedCredentialFoundResponse, isSuccessResponse } = google;
+        if (!googleAuthConfigured.current) {
+          GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+          googleAuthConfigured.current = true;
+        }
+        await GoogleOneTapSignIn.checkPlayServices();
+        let response = await GoogleOneTapSignIn.signIn();
+        if (isNoSavedCredentialFoundResponse(response)) response = await GoogleOneTapSignIn.createAccount();
+        if (isNoSavedCredentialFoundResponse(response)) response = await GoogleOneTapSignIn.presentExplicitSignIn();
+        if (!isSuccessResponse(response)) return;
+        idToken = String(response.data?.idToken || '');
+        googleName = String(response.data?.user?.name || googleName).trim();
+        if (!idToken) throw new Error('Google did not return a sign-in token. Check the Web Client ID configuration.');
+      }
+
+      const rawPhone = phone.trim().replace(/[\s()-]/g, '');
+      const normalizedPhone = /^\+?232\d{8}$/.test(rawPhone) ? (rawPhone.startsWith('+') ? rawPhone : '+' + rawPhone) : /^0\d{8}$/.test(rawPhone) ? '+232' + rawPhone.slice(1) : /^\d{8}$/.test(rawPhone) ? '+232' + rawPhone : rawPhone;
+      setPendingGoogleIdToken(idToken);
+      const data = await api('/api/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({
+          idToken,
+          role,
+          phone: normalizedPhone,
+          password,
+          full_name: googleName
+        })
+      });
+      if (data.requiresPhone) {
+        setPendingGoogleIdToken(idToken);
+        setFullName(data.full_name || googleName);
+        setAuthMode('register');
+        setNotice('Add your Sierra Leone phone number to finish setting up your account, then continue with Google again.');
+        return;
+      }
+      await completeAuthSession(data, 'You are signed in with Google.');
+    } catch (e) {
+      if (/expired or is invalid/i.test(e?.message || '')) setPendingGoogleIdToken('');
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function signInOrRegister() {
     clearMessages();
@@ -591,15 +839,7 @@ export default function App() {
         setNotice(data.message || 'Verify your phone number to continue.');
         return;
       }
-      await SecureStore.setItemAsync('fixit-salone-session-token', data.token);
-      setToken(data.token);
-      setUser(data.user);
-      setRole(data.user.role);
-      setScreen('home');
-      setPassword('');
-      if (data.user.role === 'customer') await loadCustomerProfilePhoto(data.token);
-      else setProfilePhotoUrl('');
-      setNotice(registering ? 'Your FixIt Salone account has been created.' : 'You are signed in.');
+      await completeAuthSession(data, registering ? 'Your FixIt Salone account has been created.' : 'You are signed in.');
     } catch (e) { reportError(e); }
     finally { setBusy(false); }
   }
@@ -703,6 +943,10 @@ export default function App() {
       }
     } catch (e) { setProviderProfile(null); setProviderServices([]); }
     try {
+      const suggestions = await api('/api/providers/me/profession-suggestions');
+      setProfessionSuggestions(Array.isArray(suggestions) ? suggestions : []);
+    } catch (e) { setProfessionSuggestions([]); }
+    try {
       const data = await api('/api/provider/requests');
       setJobs(Array.isArray(data.requests) ? data.requests : []);
       setJobMeta(data);
@@ -733,34 +977,42 @@ export default function App() {
   }, [token, user?.id, user?.role, screen]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadHomepageSlides() {
-      try {
-        const response = await expoFetch(API_BASE + '/api/site-images');
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) return;
-        const rows = Array.isArray(data.images) ? data.images : [];
-        const keyed = new Map(rows.map(item => [item.image_key, item]));
-        const slides = [1, 2, 3, 4, 5, 6]
-          .map(number => keyed.get('homepage-slide-' + number))
-          .filter(item => item?.image_url)
-          .map(item => ({ key: item.image_key, uri: mediaUri(item.image_url) }));
-        if (!slides.length) {
-          const hero = keyed.get('homepage-hero');
-          if (hero?.image_url) slides.push({ key: hero.image_key, uri: mediaUri(hero.image_url) });
-        }
-        if (!cancelled) { setHomepageSlides(slides); setHomepageSlideIndex(0); }
-      } catch (_) { if (!cancelled) setHomepageSlides([]); }
-    }
-    loadHomepageSlides();
-    return () => { cancelled = true; };
-  }, []);
+    if (!token || !['customer', 'provider'].includes(user?.role)) return;
+    let active = true;
+    SecureStore.getItemAsync('fixit-salone-push-disabled').then(disabled => {
+      if (active && disabled !== 'true') return Notifications.getPermissionsAsync();
+      return null;
+    }).then(permission => {
+      if (active && permission?.status === 'granted') return registerPushNotifications(false);
+    }).catch(() => {});
+    const handleNotificationResponse = response => {
+      const payload = response?.notification?.request?.content?.data || {};
+      const requestId = payload.requestId;
+      Notifications.clearLastNotificationResponseAsync().catch(() => {});
+      if (requestId && payload.type === 'new_message') {
+        openConversation(requestId);
+      } else if (requestId) {
+        setScreen('requests');
+        if (user?.role === 'provider') loadProviderDashboard();
+        else loadCustomerRequests();
+      } else if (user?.role === 'provider') {
+        setScreen('notifications'); loadNotifications();
+      } else {
+        setScreen('requests'); loadCustomerRequests();
+      }
+    };
+    const responseListener = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+    Notifications.getLastNotificationResponseAsync().then(response => {
+      if (active && response) handleNotificationResponse(response);
+    }).catch(() => {});
+    return () => { active = false; responseListener.remove(); };
+  }, [token, user?.id, user?.role]);
 
   useEffect(() => {
-    if (screen !== 'home' || homepageSlides.length < 2) return;
-    const timer = setInterval(() => setHomepageSlideIndex(index => (index + 1) % homepageSlides.length), 5000);
+    if (!token || user?.role !== 'customer' || screen !== 'home') return;
+    const timer = setInterval(() => setHomepageSlideIndex(index => (index + 1) % HOME_HERO_SLIDES.length), 4500);
     return () => clearInterval(timer);
-  }, [screen, homepageSlides.length]);
+  }, [token, user?.role, screen]);
 
   useEffect(() => {
     if (!token || user?.role !== 'customer' || screen !== 'home' || categoryCarouselWidth <= 0 || CATEGORY_PAGES.length < 2) return;
@@ -811,6 +1063,7 @@ export default function App() {
       setError('Please sign in with a customer account to request a service.');
       setScreen('auth'); setAuthMode('login'); setRole('customer'); return;
     }
+    setEditingRequest(null);
     setSelectedProvider(provider);
     setSelectedPhotos([]);
     setPendingPhotoRequestId('');
@@ -827,28 +1080,92 @@ export default function App() {
     setScreen('request-form');
     clearMessages();
   }
-  function addPickedPhotos(assets) {
-    const current = selectedPhotos.slice();
+  function startEditingRequest(request) {
+    if (!request || request.status !== 'requested') {
+      setError('You can edit a request only before the provider responds.');
+      return;
+    }
+    setEditingRequest(request);
+    setSelectedProvider({ business_name: request.business_name || request.provider_name || 'your provider' });
+    setSelectedPhotos([]);
+    setPendingPhotoRequestId('');
+    const savedPhoneDigits = String(request.contact_phone || user?.phone || '').replace(/\D/g, '');
+    const defaultContactPhone = savedPhoneDigits.startsWith('232') ? savedPhoneDigits.slice(3)
+      : savedPhoneDigits.startsWith('0') && savedPhoneDigits.length === 9 ? savedPhoneDigits.slice(1) : savedPhoneDigits;
+    setRequestForm({
+      contactPhone: defaultContactPhone,
+      region: request.region || 'Western Area',
+      district: request.district || 'Western Area Urban',
+      area: request.area || '',
+      address: request.service_address || '',
+      directions: request.directions || '',
+      details: request.job_details || '',
+      pricingType: request.pricing_type || 'quote_required'
+    });
+    setScreen('request-form');
+    clearMessages();
+  }
+  async function prepareRequestPhotoAssets(assets, existingPhotos = [], maxCount = 5) {
+    const current = existingPhotos.slice();
     const combined = [...current];
     let tooLarge = false;
     let unsupported = false;
+    let conversionFailed = false;
     for (const asset of assets || []) {
       if (!asset?.uri) continue;
-      const reportedType = String(asset.mimeType || 'image/jpeg').toLowerCase();
-      const type = reportedType === 'image/jpg' ? 'image/jpeg' : reportedType;
+      const reportedType = String(asset.mimeType || '').toLowerCase();
+      let type = reportedType === 'image/jpg' ? 'image/jpeg' : reportedType;
+      const fileHint = String(asset.fileName || asset.uri || '').split(/[?#]/, 1)[0];
+      const isHeic = /^image\/(x-)?hei[cf](?:-sequence)?$/.test(type) || /\.(heic|heif)$/i.test(fileHint);
+      let preparedAsset = asset;
+      if (isHeic) {
+        try {
+          const width = Number(asset.width) || 0;
+          const height = Number(asset.height) || 0;
+          const actions = [];
+          if (width >= height && width > 1920) actions.push({ resize: { width: 1920 } });
+          else if (height > width && height > 1920) actions.push({ resize: { height: 1920 } });
+          const converted = await ImageManipulator.manipulateAsync(asset.uri, actions, {
+            compress: 0.82,
+            format: ImageManipulator.SaveFormat.JPEG
+          });
+          const convertedFile = new File(converted.uri);
+          preparedAsset = { ...asset, uri: converted.uri, fileName: 'request-photo.jpg', mimeType: 'image/jpeg', fileSize: convertedFile.size };
+          type = 'image/jpeg';
+        } catch {
+          conversionFailed = true;
+          continue;
+        }
+      }
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) { unsupported = true; continue; }
-      if (asset.fileSize != null && asset.fileSize > 10 * 1024 * 1024) { tooLarge = true; continue; }
-      if (combined.some(photo => photo.uri === asset.uri)) continue;
-      if (combined.length >= 5) break;
-      combined.push({ ...asset, mimeType: type });
+      if (preparedAsset.fileSize != null && preparedAsset.fileSize > 10 * 1024 * 1024) { tooLarge = true; continue; }
+      if (combined.some(photo => photo.uri === preparedAsset.uri)) continue;
+      if (combined.length >= maxCount) break;
+      combined.push({ ...preparedAsset, mimeType: type });
     }
-    setSelectedPhotos(combined.slice(0, 5));
-    if (tooLarge) setError('A photo was skipped because it is larger than 10 MB. Please choose a smaller image.');
-    else if (unsupported) setError('Only JPG, PNG, and WEBP photos are supported.');
+    return {
+      photos: combined.slice(0, maxCount),
+      addedCount: Math.max(0, combined.length - current.length),
+      tooLarge,
+      unsupported,
+      conversionFailed
+    };
+  }
+
+  function photoPreparationMessage(prepared) {
+    if (prepared.conversionFailed) return 'A HEIC/HEIF photo could not be converted. Please choose a JPG photo or turn off High efficiency pictures in Samsung Camera settings.';
+    if (prepared.tooLarge) return 'A photo was skipped because it is larger than 10 MB. Please choose a smaller image.';
+    if (prepared.unsupported) return 'This photo format is unsupported. Choose JPG, PNG, or WEBP.';
+    return '';
+  }
+
+  async function addPickedPhotos(assets) {
+    const prepared = await prepareRequestPhotoAssets(assets, selectedPhotos, 5);
+    setSelectedPhotos(prepared.photos);
+    const message = photoPreparationMessage(prepared);
+    if (message) setError(message);
     else clearMessages();
-    if (assets?.length && combined.length === current.length && !tooLarge && !unsupported) {
-      setNotice('You can attach up to 5 photos to a request.');
-    }
+    if (assets?.length && prepared.addedCount === 0 && !message) setNotice('You can attach up to 5 photos to a request.');
   }
 
   async function pickRequestPhotos() {
@@ -862,7 +1179,7 @@ export default function App() {
         selectionLimit: remaining,
         quality: 0.6
       });
-      if (!result.canceled) addPickedPhotos(result.assets || []);
+      if (!result.canceled) await addPickedPhotos(result.assets || []);
     } catch (e) {
       setError(e?.message || 'Could not open your photo library.');
     }
@@ -878,28 +1195,89 @@ export default function App() {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.4, exif: false, allowsEditing: false });
-      if (!result.canceled) addPickedPhotos(result.assets || []);
+      if (!result.canceled) await addPickedPhotos(result.assets || []);
     } catch (e) {
       setError(e?.message || 'Could not open the camera.');
     }
   }
 
-  async function uploadRequestPhotos(requestId) {
+  async function uploadRequestPhotos(requestId, photos = selectedPhotos) {
     const form = new FormData();
-    selectedPhotos.forEach((photo, index) => {
+    photos.forEach((photo, index) => {
       const reportedType = String(photo.mimeType || 'image/jpeg').toLowerCase();
       const type = reportedType === 'image/jpg' ? 'image/jpeg' : reportedType;
       const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
       const sourceFile = new File(photo.uri);
       const uploadName = 'fixit-request-' + String(requestId) + '-' + String(index + 1) + '-' + Date.now() + '.' + ext;
-      const uploadFile = new File(Paths.cache, uploadName);
-      sourceFile.copy(uploadFile);
-      form.append('photos', uploadFile);
+      form.append('photos', sourceFile, uploadName);
     });
     return api('/api/service-requests/' + encodeURIComponent(requestId) + '/photos', {
       method: 'POST',
       body: form
     });
+  }
+
+  async function saveServiceRequestEdits() {
+    if (!editingRequest?.id) return;
+    const rawContactPhone = String(requestForm.contactPhone || '').replace(/\D/g, '');
+    const contactDigits = rawContactPhone.startsWith('232') ? rawContactPhone.slice(3)
+      : rawContactPhone.startsWith('0') && rawContactPhone.length === 9 ? rawContactPhone.slice(1) : rawContactPhone;
+    if (!/^\d{8}$/.test(contactDigits)) { setError('Enter the verified Sierra Leone account phone number with 8 digits after +232.'); return; }
+    if (!requestForm.region.trim() || !requestForm.district.trim() || !requestForm.area.trim() || !requestForm.address.trim() || !requestForm.details.trim()) {
+      setError('Complete the region, district, area, address and job details.'); return;
+    }
+    setBusy(true);
+    clearMessages();
+    try {
+      await api('/api/service-requests/' + encodeURIComponent(editingRequest.id), {
+        method: 'PATCH',
+        body: JSON.stringify({
+          region: requestForm.region.trim(), district: requestForm.district.trim(),
+          area: requestForm.area.trim(), service_address: requestForm.address.trim(),
+          directions: requestForm.directions.trim(), contact_phone: '+232' + contactDigits,
+          pricing_type: requestForm.pricingType, job_details: requestForm.details.trim()
+        })
+      });
+      setEditingRequest(null);
+      await loadCustomerRequests();
+      setScreen('requests');
+      setNotice('Your service request was updated.');
+    } catch (e) {
+      setError(e?.message || 'Could not update this service request.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPhotosToExistingRequest() {
+    if (!jobPhotosRequestId) return;
+    const remaining = 5 - jobPhotos.length;
+    if (remaining <= 0) { setError('This request already has the maximum of 5 photos.'); return; }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: remaining,
+        quality: 0.6
+      });
+      if (result.canceled) return;
+      setBusy(true);
+      clearMessages();
+      const prepared = await prepareRequestPhotoAssets(result.assets || [], [], remaining);
+      if (!prepared.photos.length) {
+        setError(photoPreparationMessage(prepared) || 'No supported new photos were selected.');
+        return;
+      }
+      await uploadRequestPhotos(jobPhotosRequestId, prepared.photos);
+      const rows = await api('/api/service-requests/' + encodeURIComponent(jobPhotosRequestId) + '/photos');
+      setJobPhotos(Array.isArray(rows) ? rows : []);
+      const message = photoPreparationMessage(prepared);
+      setNotice(message ? 'The selected photos were attached; ' + message.charAt(0).toLowerCase() + message.slice(1) : 'Photos uploaded successfully to request ' + jobPhotosRequestId + '.');
+    } catch (e) {
+      setError(e?.message || 'Could not upload photos to this request.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function createServiceRequest() {
@@ -1056,9 +1434,13 @@ export default function App() {
     clearMessages();
   }
   async function saveProviderProfile() {
+    const requestingOtherProfession = providerForm.serviceId === '__other__';
     if (!providerForm.businessName.trim() || !providerForm.region.trim() || !providerForm.district.trim() ||
-        !providerForm.area.trim() || !providerForm.address.trim() || !providerForm.serviceId) {
-      setError('Complete your business name, location and main service.'); return;
+        !providerForm.area.trim() || !providerForm.address.trim() || !providerForm.serviceId ||
+        (requestingOtherProfession && !providerForm.otherProfession.trim())) {
+      setError(requestingOtherProfession
+        ? 'Complete your business details and enter the profession you want us to add.'
+        : 'Complete your business name, location and main service.'); return;
     }
     setBusy(true); clearMessages();
     try {
@@ -1070,16 +1452,29 @@ export default function App() {
           service_address: providerForm.address.trim()
         })
       });
-      await api('/api/providers/me/services', {
-        method: 'POST',
-        body: JSON.stringify({
-          service_id: providerForm.serviceId, pricing_type: providerForm.pricingType,
-          price_sle: providerForm.price.trim() ? Number(providerForm.price) : null,
-          description: providerForm.description.trim()
-        })
-      });
+      if (requestingOtherProfession) {
+        await api('/api/providers/me/profession-suggestions', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: providerForm.otherProfession.trim(), pricing_type: providerForm.pricingType,
+            price_sle: providerForm.price.trim() ? Number(providerForm.price) : null,
+            description: providerForm.description.trim()
+          })
+        });
+      } else {
+        await api('/api/providers/me/services', {
+          method: 'POST',
+          body: JSON.stringify({
+            service_id: providerForm.serviceId, pricing_type: providerForm.pricingType,
+            price_sle: providerForm.price.trim() ? Number(providerForm.price) : null,
+            description: providerForm.description.trim()
+          })
+        });
+      }
       setProviderProfile(saved.profile);
-      setNotice('Your provider profile and main service have been saved. You can now add work samples below.');
+      setNotice(requestingOtherProfession
+        ? `Your profile was saved. “${providerForm.otherProfession.trim()}” was sent for review. It will appear in the service list after approval.`
+        : 'Your provider profile and main service have been saved. You can now add work samples below.');
       await loadProviderDashboard();
       // Keep this screen open so the provider can continue directly to Portfolio / Work samples.
     } catch (e) { reportError(e); }
@@ -1453,8 +1848,7 @@ export default function App() {
         setUser(result.user);
         setRole(result.user.role);
         setScreen('home');
-        if (result.user.role === 'customer') await loadCustomerProfilePhoto(result.token);
-        else setProfilePhotoUrl('');
+        await loadProfilePhoto(result.token, result.user.role);
         setNotice('Phone verified. Welcome to FixIt Salone.');
       } else {
         await loadVerification();
@@ -1496,8 +1890,10 @@ export default function App() {
     } finally { setBusy(false); }
   }
   function signOut() {
+    if (pushToken) api('/api/push-token', { method: 'DELETE', body: JSON.stringify({ token: pushToken }) }).catch(() => {});
     SecureStore.deleteItemAsync('fixit-salone-session-token').catch(() => {});
     setToken(''); setUser(null); setScreen('auth'); setAuthMode('login'); setPassword('');
+    setPushToken('');
     setProfilePhotoUrl(''); setProfilePhotoBusy(false);
     setJobs([]); setProviders([]); setServices([]); setProviderProfile(null); setProviderServices([]);
     setSubscriptionInfo(null); setNotifications([]); clearMessages();
@@ -1518,6 +1914,13 @@ export default function App() {
     : screen === 'safety' ? 'Safety Center'
     : screen === 'support' ? 'FixIt Support'
     : screen === 'payments' ? 'Payment records' : 'FixIt Salone';
+
+  const providerPendingJobs = user?.role === 'provider'
+    ? jobs.filter(j => String(j.status || '').toLowerCase() === 'requested')
+    : [];
+  const providerActiveJobs = user?.role === 'provider'
+    ? jobs.filter(j => ['quoted', 'approved', 'in_progress'].includes(String(j.status || '').toLowerCase()))
+    : [];
 
   const noticePanel = error || notice ? (
     <View style={[styles.message, error ? styles.messageError : styles.messageSuccess]}>
@@ -1635,36 +2038,24 @@ export default function App() {
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.authScreen}>
             <View style={styles.authBrandHeader}>
-              <View style={styles.authBrandTop}>
-                <View style={styles.authBrandCopy}>
-                  <Text style={styles.authBrandTitle}><Text style={styles.authBrandGold}>FixIt</Text><Text style={styles.authBrandWhite}> Salone</Text></Text>
-                  <Text style={styles.authTagline}>Your trusted home and repair services.</Text>
-                </View>
-                <View style={styles.authShield}><Text style={styles.authShieldText}>⌂</Text><Text style={styles.authShieldCheck}>✓</Text></View>
+              <View style={styles.authHouseMark}>
+                <View style={styles.authRoofLeft} /><View style={styles.authRoofRight} />
+                <View style={styles.authHouseBody}><View style={styles.authHouseWindow} /></View>
               </View>
-            </View>
-
-            <View style={styles.authHero}>
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=85' }}
-                style={styles.authHeroImage}
-                resizeMode="cover"
-                accessibilityLabel="Home repair professional at work"
-              />
-              <View style={styles.authHeroShade} />
-              <View style={styles.authHeroCopy}>
-                <Text style={styles.authHeroEyebrow}>YOUR HOME. YOUR TRUSTED PRO.</Text>
-                <Text style={styles.authHeroTitle}>Reliable help, right around the corner.</Text>
-                <Text style={styles.authHeroSubtitle}>Find skilled local professionals for the jobs that matter.</Text>
-              </View>
+              <Text style={styles.authBrandTitle}><Text style={styles.authBrandGreen}>FixIt</Text><Text style={styles.authBrandDark}> Salone</Text></Text>
+              <Text style={styles.authTagline}>Your Trusted Home &amp; Repair Services{'\n'}in Sierra Leone</Text>
             </View>
 
             <View style={styles.authWelcomePanel}>
-              <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Join FixIt Salone'}</Text>
-              <Text style={styles.authWelcomeCopy}>{authMode === 'register' ? (role === 'customer' ? 'Create an account to book trusted local services.' : 'Join as a professional and manage customer jobs.') : 'Sign in to continue.'}</Text>
+              <View style={styles.authScenicHouse}>
+                <View style={styles.authScenicRoofLeft} /><View style={styles.authScenicRoofRight} />
+                <View style={styles.authScenicHome}><View style={styles.authScenicWindow} /><View style={styles.authScenicWindow} /></View>
+              </View>
+              <Text style={styles.authWelcomeTitle}>{authMode === 'login' ? 'Welcome back' : 'Welcome to FixIt'}</Text>
+              <Text style={styles.authWelcomeCopy}>{authMode === 'register' ? (role === 'customer' ? 'Create an account to book trusted local services.' : 'Join as a professional and manage customer jobs.') : <>Choose how you want to use{'\n'}FixIt Salone.</>}</Text>
               <View style={styles.authRoleRow}>
-                <AuthRoleChoice active={role === 'customer'} title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
-                <AuthRoleChoice active={role === 'provider'} title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
+                <AuthRoleChoice active={role === 'customer'} icon="customer" title="Customer" subtitle="Find services, book jobs" onPress={() => setRole('customer')} />
+                <AuthRoleChoice active={role === 'provider'} icon="provider" title="Service provider" subtitle="Offer services, manage jobs" onPress={() => setRole('provider')} />
               </View>
               {authMode === 'register' && (
                 <View style={styles.authOnboardingHint}>
@@ -1675,8 +2066,9 @@ export default function App() {
             </View>
 
             <View style={styles.authDetailsPanel}>
-              <Text style={styles.authSecurityNote}>Locally rooted and secured.</Text>
-              <Text style={styles.authDetailsTitle}>{authMode === 'login' ? '' : 'Create Account'}</Text>
+              <View style={styles.authSecurityLine}><Text style={styles.authSecurityIcon}>✓</Text><Text style={styles.authSecurityNote}>Locally rooted and secured.</Text></View>
+              <Text style={styles.authDetailsTitle}>{authMode === 'login' ? 'Enter Details' : 'Create Account'}</Text>
+              <Text style={styles.authDetailsCopy}>{authMode === 'login' ? 'Sign in to your FixIt Salone account.' : 'Create your FixIt Salone account.'}</Text>
               {authMode === 'register' && <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Your full name" />}
               <Text style={styles.authFieldLabel}>Phone number</Text>
               <View style={styles.authInputRow}>
@@ -1698,10 +2090,18 @@ export default function App() {
                 </Pressable>
               </View>
               {noticePanel}
-              <Button title={busy ? 'Please wait…' : authMode === 'login' ? 'Sign in' : 'Create account'} onPress={signInOrRegister} disabled={busy} />
-              <Button title={authMode === 'login' ? 'New here? Create an account' : 'Already registered? Sign in'} secondary onPress={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setShowPassword(false); clearMessages(); }} />
-              <Text style={styles.authFootnote}>We prioritize your privacy and local security.</Text>
+              <Button title={busy ? 'Please wait…' : authMode === 'login' ? 'Sign in  →' : 'Create account  →'} tone="green" onPress={signInOrRegister} disabled={busy} />
+              <Pressable accessibilityRole="button" onPress={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setShowPassword(false); clearMessages(); }} style={styles.authModeLinkWrap}>
+                <Text style={styles.authModeLink}>{authMode === 'login' ? 'New here? Create an account' : 'Already registered? Sign in'}</Text>
+              </Pressable>
+              <View style={styles.authGoogleDivider}><View style={styles.authGoogleDividerLine} /><Text style={styles.authGoogleOr}>OR</Text><View style={styles.authGoogleDividerLine} /></View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Continue with Google" onPress={signInWithGoogle} disabled={busy}
+                style={({ pressed }) => [styles.authGoogleButton, pressed && !busy && styles.authGoogleButtonPressed, busy && styles.authGoogleButtonDisabled]}>
+                <View style={styles.authGoogleMark}><Text style={styles.authGoogleMarkText}>G</Text></View>
+                <Text style={styles.authGoogleButtonText}>{busy ? 'Connecting…' : 'Continue with Google'}</Text>
+              </Pressable>
             </View>
+            <View style={styles.authFooter}><Text style={styles.authFooterCopy}>Trusted local services, made simpler.</Text></View>
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
@@ -1710,15 +2110,36 @@ export default function App() {
 
   return (
     <View style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.navy} />
-      {screen === 'home' && user.role === 'customer' ? (
+      <StatusBar barStyle={screen === 'home' && ['customer', 'provider'].includes(user.role) ? 'dark-content' : 'light-content'} backgroundColor={screen === 'home' && ['customer', 'provider'].includes(user.role) ? '#F5F8F6' : COLORS.navy} />
+      {screen === 'home' && user.role === 'provider' ? (
         <View style={styles.homeHeader}>
           <View style={styles.homeBrandRow}>
-            <View style={styles.homeLogoMark}><Text style={styles.homeLogoSymbol}>🔧</Text></View>
+            <View style={styles.homeLogoMark}><Text style={styles.homeLogoSymbol}>⌂</Text><View style={styles.homeLogoWindow} /></View>
             <View style={styles.homeBrandText}>
               <Text style={styles.homeBrand}><Text style={styles.homeBrandFix}>FixIt</Text><Text style={styles.homeBrandSalone}> Salone</Text></Text>
-              <Text style={styles.homeGreeting}>Your trusted local service network</Text>
+              <Text style={styles.homeGreeting}>Your Trusted Home &amp; Repair Services</Text>
             </View>
+            <View style={styles.providerHeaderActionWrap}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Open provider notifications"
+                style={styles.homeHeaderAction} onPress={loadNotifications}><BellGlyph /></Pressable>
+              {notifications.some(n => !n.is_read) && (
+                <View style={styles.homeHeaderBadge}>
+                  <Text style={styles.homeHeaderBadgeText}>{notifications.filter(n => !n.is_read).length > 9 ? '9+' : notifications.filter(n => !n.is_read).length}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      ) : screen === 'home' && user.role === 'customer' ? (
+        <View style={styles.homeHeader}>
+          <View style={styles.homeBrandRow}>
+            <View style={styles.homeLogoMark}><Text style={styles.homeLogoSymbol}>⌂</Text><View style={styles.homeLogoWindow} /></View>
+            <View style={styles.homeBrandText}>
+              <Text style={styles.homeBrand}><Text style={styles.homeBrandFix}>FixIt</Text><Text style={styles.homeBrandSalone}> Salone</Text></Text>
+              <Text style={styles.homeGreeting}>Your Trusted Home &amp; Repair Services</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Open messages" style={styles.homeHeaderAction}
+              onPress={() => { setScreen('inbox'); clearMessages(); }}><BellGlyph /></Pressable>
           </View>
         </View>
       ) : (
@@ -1730,155 +2151,100 @@ export default function App() {
       {noticePanel}
       <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainContent} keyboardShouldPersistTaps="handled">
         {screen === 'home' && user.role === 'customer' && <>
-          {homepageSlides.length === 0 && <View style={styles.homePromoHero}>
-            <View style={styles.homePromoCopy}>
-              <Text style={styles.homePromoEyebrow}>FIXIT SALONE • LOCAL EXPERTS</Text>
-              <Text style={styles.homePromoTitle}>Trusted help, right around the corner.</Text>
-              <Text style={styles.homePromoSubtitle}>Find skilled professionals for repairs and home services.</Text>
-              <Pressable accessibilityRole="button" onPress={() => {
-                setSearch('');
-                setRegionFilter('All');
-                setDistrictFilter('');
-                setScreen('providers');
-                clearMessages();
-              }} style={({ pressed }) => [styles.homePromoAction, pressed && styles.buttonPressed]}>
-                <Text style={styles.homePromoActionText}>Explore services  →</Text>
-              </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { setScreen('providers'); clearMessages(); }} style={styles.homeLocationRow}>
+            <Text style={styles.homeLocationPin}>⌖</Text>
+            <View style={styles.homeLocationCopy}>
+              <Text style={styles.homeLocationLabel}>YOUR LOCATION</Text>
+              <Text style={styles.homeLocationValue}>{districtFilter || (regionFilter === 'All' ? 'Sierra Leone' : regionFilter)}  <Text style={styles.homeLocationChevron}>⌄</Text></Text>
             </View>
-            <View style={styles.homePromoArt}>
-              <Text style={styles.homePromoTool}>🛠️</Text>
-              <Text style={styles.homePromoHouse}>⌂</Text>
-              <View style={styles.homePromoVerified}><Text style={styles.homePromoVerifiedText}>✓ VERIFIED</Text></View>
-            </View>
-          </View>}
-          {homepageSlides.length > 0 && <View style={styles.homepageSlidesWrap}>
-            <Image source={{ uri: homepageSlides[Math.min(homepageSlideIndex, homepageSlides.length - 1)]?.uri }} style={styles.homepageSlideImage} resizeMode="cover" />
-            {homepageSlides.length > 1 && <View style={styles.homepageSlideDots}>
-              {homepageSlides.map((slide, index) => <Pressable key={slide.key} accessibilityRole="button" accessibilityLabel={'Show homepage slide ' + (index + 1)} onPress={() => setHomepageSlideIndex(index)} style={[styles.homepageSlideDot, index === homepageSlideIndex && styles.homepageSlideDotActive]} />)}
-            </View>}
-          </View>}
-          <View style={styles.homeSearchHeading}><Text style={styles.homeSearchHint}>⌖  Find trusted help near you</Text></View>
-          <Field value={search} onChangeText={setSearch} placeholder="Search plumbing, repairs, technicians..." autoCapitalize="none" />
-
-          <View style={styles.homeSectionHeading}>
-            <Text style={styles.homeSectionTitle}>Service Categories</Text>
-          </View>
-          <View style={styles.categoryCarouselWrap}
-            onLayout={event => {
-              const width = event.nativeEvent.layout.width;
-              if (width > 0 && Math.abs(width - categoryCarouselWidth) > 1) setCategoryCarouselWidth(width);
-            }}>
-            <ScrollView
-              ref={categoryCarouselRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              scrollEventThrottle={16}
-              onMomentumScrollEnd={event => {
-                if (categoryCarouselWidth > 0) {
-                  const page = Math.round(event.nativeEvent.contentOffset.x / categoryCarouselWidth);
-                  if (page !== categoryPageIndex) setCategoryPageIndex(page);
-                }
-              }}
-            >
-              {CATEGORY_PAGES.map((page, pageIndex) => (
-                <View key={'category-page-' + pageIndex} style={[styles.categoryCarouselPage, { width: categoryCarouselWidth || '100%' }]}>
-                  <View style={styles.categoryGrid}>
-                    {page.map(category => (
-                      <Pressable key={category.label} accessibilityRole="button"
-                        onPress={() => {
-                          setSearch(category.query);
-                          setRegionFilter('All');
-                          setDistrictFilter('');
-                          setScreen('providers');
-                          clearMessages();
-                        }}
-                        style={({ pressed }) => [styles.categoryTile, pressed && styles.categoryTilePressed]}>
-                        <View style={[styles.categoryArt, { backgroundColor: category.tint }]}>
-                          <Text style={styles.categorySymbol}>{category.symbol}</Text>
-                        </View>
-                        <Text style={styles.categoryLabel}>{category.label}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            <View style={styles.categoryDots} accessibilityRole="tablist">
-              {CATEGORY_PAGES.map((page, index) => (
-                <Pressable key={'category-dot-' + index} accessibilityRole="tab"
-                  accessibilityState={{ selected: categoryPageIndex === index }}
-                  accessibilityLabel={'Show category page ' + (index + 1)}
-                  onPress={() => goToCategoryPage(index)}
-                  style={[styles.categoryDot, categoryPageIndex === index && styles.categoryDotActive]} />
-              ))}
-            </View>
-          </View>
-
-          <Pressable accessibilityRole="button" onPress={() => {
-            setSearch('');
-            setRegionFilter('All');
-            setDistrictFilter('');
-            setScreen('providers');
-            clearMessages();
-          }} style={({ pressed }) => [styles.bookNowButton, pressed && styles.buttonPressed]}>
-            <Text style={styles.bookNowText}>Book Now</Text>
-            <Text style={styles.bookNowArrow}>→</Text>
           </Pressable>
 
-          <View style={styles.homeSectionHeader}>
-            <Text style={styles.homeSectionTitle}>Your Active Requests</Text>
-            <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }}>
-              <Text style={styles.seeAllText}>View all  ›</Text>
-            </Pressable>
+          <View style={styles.homeSearchRow}>
+            <Text style={styles.homeSearchIcon}>⌕</Text>
+            <TextInput value={search} onChangeText={setSearch} placeholder="What service do you need?" placeholderTextColor="#8A9690"
+              autoCapitalize="none" autoCorrect={false} returnKeyType="search" style={styles.homeSearchInput}
+              accessibilityLabel="Search services and providers" />
+            <Pressable accessibilityRole="button" accessibilityLabel="Open provider filters" style={styles.homeFilterButton}
+              onPress={() => { setScreen('providers'); clearMessages(); }}><FilterGlyph /></Pressable>
           </View>
-          {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).length === 0 ? (
-            <View style={styles.activeJobEmpty}>
-              <View style={styles.emptyJobIcon}><Text style={styles.emptyJobIconText}>▤</Text></View>
-              <Text style={styles.activeJobEmptyTitle}>No active jobs yet</Text>
-              <Text style={styles.activeJobEmptyCopy}>Your service requests and provider updates will appear here.</Text>
+
+          <ImageBackground source={activeHomeHeroSlide.image} style={styles.homePromoHero} imageStyle={styles.homeHeroImage}>
+            <View pointerEvents="none" style={styles.homeHeroShade} />
+            <View style={styles.homePromoCopy}>
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.homePromoEyebrow}>LOCAL {activeHomeHeroSlide.label.toUpperCase()} PROFESSIONALS</Text>
+              <Text style={styles.homePromoTitle}>Reliable{'\n'}Professionals{'\n'}For Your Home</Text>
+              <Text numberOfLines={2} style={styles.homePromoSubtitle}>Trusted local pros for your {activeHomeHeroSlide.label.toLowerCase()} job.</Text>
+              <Pressable accessibilityRole="button" onPress={() => {
+                setSearch(activeHomeHeroSlide.query); setRegionFilter('All'); setDistrictFilter(''); setScreen('providers'); clearMessages();
+              }} style={({ pressed }) => [styles.homePromoAction, pressed && styles.buttonPressed]}>
+                <Text style={styles.homePromoActionText}>Request a service  →</Text>
+              </Pressable>
             </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
-              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => (
-                <ActiveWorkCard key={String(job.id || index)} job={job} role="customer"
-                  onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} />
-              ))}
-            </ScrollView>
-          )}
+            <View accessibilityLabel={`Profession ${activeHomeHeroSlide.ordinal} of ${HOME_HERO_SLIDES.length}`} style={styles.homeHeroCount}>
+              <Text style={styles.homeHeroCountText}>{String(activeHomeHeroSlide.ordinal).padStart(2, '0')} / {HOME_HERO_SLIDES.length}</Text>
+            </View>
+          </ImageBackground>
 
           <View style={styles.homeSectionHeader}>
-            <Text style={styles.homeSectionTitle}>Top Local Professionals</Text>
+            <Text style={styles.homeSectionTitle}>Service Categories</Text>
+            <Pressable accessibilityRole="button" onPress={() => { setSearch(''); setScreen('providers'); clearMessages(); }}>
+              <Text style={styles.seeAllText}>See all  ›</Text>
+            </Pressable>
+          </View>
+          <View style={styles.quickCategoryGrid}>
+            {CUSTOMER_QUICK_CATEGORIES.map(category => (
+              <Pressable key={category.label} accessibilityRole="button" style={({ pressed }) => [styles.quickCategoryTile, pressed && styles.categoryTilePressed]}
+                onPress={() => {
+                  setSearch(category.query); setRegionFilter('All'); setDistrictFilter(''); setScreen('providers'); clearMessages();
+                }}>
+                <View style={[styles.quickCategoryIconWrap, { backgroundColor: category.tint }]}><Text style={styles.quickCategoryIcon}>{category.symbol}</Text></View>
+                <Text numberOfLines={1} style={styles.quickCategoryLabel}>{category.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <View style={styles.homeSectionHeader}>
+            <Text style={styles.homeSectionTitle}>{filteredProviders.some(p => Number(p.review_count || 0) > 0) ? 'Top Rated Providers' : 'Local Providers'}</Text>
             <Pressable onPress={() => { setSearch(''); setScreen('providers'); clearMessages(); }}>
-              <Text style={styles.seeAllText}>View all  ›</Text>
+              <Text style={styles.seeAllText}>See all  ›</Text>
             </Pressable>
           </View>
           {filteredProviders.length === 0 ? (
             <View style={styles.activeJobEmpty}>
-              <Text style={styles.activeJobEmptyCopy}>No live providers match your current search. Search another service or tap Book Now to browse.</Text>
+              <Text style={styles.activeJobEmptyCopy}>No providers are available for this search yet. Explore all services or try another search.</Text>
             </View>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerCarousel}>
-              {filteredProviders.slice(0, 8).map((p, index) => (
-                <View key={String(p.id) + '-' + String(p.service_id || index)} style={styles.homeProviderCard}>
-                  {p.profile_photo_url
-                    ? <RemoteImage uri={p.profile_photo_url} style={styles.homeProviderPhoto} fallbackText="No photo" />
-                    : <View style={styles.homeProviderPhotoFallback}><Text style={styles.homeProviderInitial}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
-                  <Text numberOfLines={1} style={styles.homeProviderName}>{p.business_name || p.full_name || 'Service provider'}</Text>
-                  <Text numberOfLines={1} style={styles.homeProviderService}>{p.service_name || 'Local services'}</Text>
-                  {p.verification_status === 'verified' && <View style={styles.homeProviderVerified}><Text style={styles.homeProviderVerifiedText}>✓ IDENTITY VERIFIED</Text></View>}
-                  <Text numberOfLines={1} style={styles.homeProviderLocation}>⌖  {p.area || p.district || 'Sierra Leone'}</Text>
-                  <View style={styles.homeProviderPriceRow}>
-                    <Text style={styles.homeProviderPrice}>{p.price_sle != null ? 'SLE ' + Number(p.price_sle).toLocaleString() : 'Quote needed'}</Text>
-                    <Text style={styles.homeProviderPriceLabel}>{p.price_sle != null ? 'starting price' : 'ask provider'}</Text>
-                  </View>
-                  <Button title="View profile" secondary compact onPress={() => openProvider(p)} />
-                  <Button title="Request service" compact onPress={() => startRequest(p, p)} />
+            [...filteredProviders].sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0)).slice(0, 3).map((p, index) => (
+              <Pressable key={String(p.id) + '-' + String(p.service_id || index)} accessibilityRole="button"
+                accessibilityLabel={'View ' + (p.business_name || p.full_name || 'service provider')}
+                onPress={() => openProvider(p)} style={({ pressed }) => [styles.providerListCard, pressed && styles.categoryTilePressed]}>
+                {p.profile_photo_url
+                  ? <RemoteImage uri={p.profile_photo_url} style={styles.providerListPhoto} fallbackText={String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()} />
+                  : <View style={styles.providerListPhotoFallback}><Text style={styles.providerListInitial}>{String(p.business_name || p.full_name || 'FS').slice(0, 1).toUpperCase()}</Text></View>}
+                <View style={styles.providerListCopy}>
+                  <Text numberOfLines={1} style={styles.providerListName}>{p.business_name || p.full_name || 'Service provider'}</Text>
+                  {!!Number(p.review_count || 0) && <Text style={styles.providerListRating}>★ {Number(p.rating).toFixed(1)} <Text style={styles.providerListReviews}>({Number(p.review_count)} reviews)</Text></Text>}
+                  <Text numberOfLines={1} style={styles.providerListService}>{p.service_name || 'Local services'}</Text>
+                  <Text numberOfLines={1} style={styles.providerListLocation}>⌖  {[p.area, p.district].filter(Boolean).join(', ') || 'Sierra Leone'}</Text>
                 </View>
+                <View style={styles.providerListAside}>
+                  {p.verification_status === 'verified' && <View style={styles.providerListVerified}><Text style={styles.providerListVerifiedText}>✓ Verified</Text></View>}
+                  <Text style={styles.providerListArrow}>›</Text>
+                </View>
+              </Pressable>
+            ))
+          )}
+          {jobs.some(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)) && <>
+            <View style={styles.homeSectionHeader}>
+              <Text style={styles.homeSectionTitle}>Your active requests</Text>
+              <Pressable onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }}><Text style={styles.seeAllText}>See all  ›</Text></Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
+              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 4).map((job, index) => (
+                <ActiveWorkCard key={String(job.id || index)} job={job} role="customer" onPress={() => { setScreen('requests'); loadCustomerRequests(); clearMessages(); }} />
               ))}
             </ScrollView>
-          )}
-          <Button title="Refresh services and jobs" secondary onPress={refreshHomeData} disabled={busy} />
+          </>}
         </>}
 
         {screen === 'providers' && user.role === 'customer' && <>
@@ -1931,44 +2297,52 @@ export default function App() {
         </>}
 
         {screen === 'home' && user.role === 'provider' && <>
-          <Text style={styles.sectionLead}>Manage your business and customer work from here.</Text>
+          <View style={styles.providerDashboardIntro}>
+            <Text style={styles.providerDashboardTitle}>Provider dashboard</Text>
+            <Text style={styles.providerDashboardLead}>Manage your business and customer work from here.</Text>
+          </View>
 
           <View style={styles.homeSectionHeader}>
-            <Text style={styles.homeSectionTitle}>Active Work</Text>
-            <Pressable onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }}>
+            <Text style={styles.homeSectionTitle}>Pending Requests</Text>
+            <Pressable accessibilityRole="button" onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }}>
               <Text style={styles.seeAllText}>View all  ›</Text>
             </Pressable>
           </View>
-          {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).length === 0 ? (
-            <View style={styles.activeJobEmpty}>
+          {providerPendingJobs.length === 0 ? (
+            <View style={styles.providerPendingEmpty}>
               <View style={styles.emptyJobIcon}><Text style={styles.emptyJobIconText}>▤</Text></View>
-              <Text style={styles.activeJobEmptyTitle}>No active work yet</Text>
-              <Text style={styles.activeJobEmptyCopy}>New requests and job progress will appear here as customers book your services.</Text>
+              <Text style={styles.activeJobEmptyTitle}>No pending requests</Text>
+              <Text style={styles.activeJobEmptyCopy}>New customer requests will appear here when they need your services.</Text>
             </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeJobsRow}>
-              {jobs.filter(j => ['requested', 'quoted', 'approved', 'in_progress'].includes(j.status)).slice(0, 6).map((job, index) => (
-                <ActiveWorkCard key={String(job.id || index)} job={job} role="provider"
-                  onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }} />
-              ))}
-            </ScrollView>
-          )}
+          ) : providerPendingJobs.slice(0, 3).map((job, index) => (
+            <ProviderRequestCard key={String(job.id || index)} job={job}
+              onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }} />
+          ))}
 
-          <Card>
-            <Text style={styles.cardTitle}>{providerProfile?.business_name || 'Set up your provider profile'}</Text>
-            <Text style={styles.cardDescription}>{providerProfile ? providerProfile.area + ', ' + providerProfile.district : 'Add your business location and main service before customers can find you.'}</Text>
-            <Button title={providerProfile ? 'Edit business profile and services' : 'Set up provider profile'} onPress={openProviderSetup} />
+          {providerActiveJobs.length > 0 && <>
+            <View style={styles.homeSectionHeader}>
+              <Text style={styles.homeSectionTitle}>Active Work</Text>
+              <Pressable accessibilityRole="button" onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }}>
+                <Text style={styles.seeAllText}>View all  ›</Text>
+              </Pressable>
+            </View>
+            {providerActiveJobs.slice(0, 3).map((job, index) => (
+              <ActiveWorkCard key={String(job.id || index)} job={job} role="provider" fullWidth
+                onPress={() => { setScreen('requests'); loadProviderDashboard(); clearMessages(); }} />
+            ))}
+          </>}
+
+          <Card style={styles.providerBusinessCard}>
+            <Text style={styles.providerBusinessTitle}>{providerProfile?.business_name || 'Set up your provider profile'}</Text>
+            <Text style={styles.providerBusinessLocation}>{providerProfile
+              ? ([providerProfile.area, providerProfile.district].filter(Boolean).join(', ') || 'Business location not set')
+              : 'Add your business location and main service before customers can find you.'}</Text>
+            <ProviderDashboardButton title={providerProfile ? 'Edit business profile and services' : 'Set up provider profile'} onPress={openProviderSetup} />
           </Card>
-          <Card>
-            <Text style={styles.cardTitle}>Free during launch</Text>
-            <Text style={styles.cardDescription}>Providers can receive and manage customer requests without referral limits or subscription fees. FixIt platform fees are waived during launch.</Text>
-            <Text style={styles.cardMeta}>Customer requests received: {subscriptionInfo?.referral_count ?? jobMeta.referral_count ?? 0}</Text>
-          </Card>
-          <Card>
-            <Text style={styles.cardTitle}>Incoming jobs</Text>
-            <Text style={styles.cardDescription}>{jobs.length} request(s) currently visible.</Text>
-            <Button title="Manage incoming jobs" onPress={() => { setScreen('requests'); loadProviderDashboard(); }} />
-            <Button title={'Notifications (' + notifications.filter(n => !n.is_read).length + ')'} secondary onPress={loadNotifications} />
+          <Card style={styles.providerLaunchCard}>
+            <Text style={styles.providerLaunchTitle}>Free during launch</Text>
+            <Text style={styles.providerLaunchCopy}>Providers can receive and manage customer requests without referral limits or subscription fees. FixIt platform fees are waived during launch.</Text>
+            <Text style={styles.providerLaunchMeta}>Customer requests received: {subscriptionInfo?.referral_count ?? jobMeta.referral_count ?? 0}</Text>
           </Card>
         </>}
 
@@ -2024,10 +2398,13 @@ export default function App() {
         </>}
 
         {screen === 'request-form' && <>
-          <Button title="← Back" secondary onPress={() => setScreen('provider-detail')} />
-          <Text style={styles.sectionLead}>Send a request to {selectedProvider?.business_name || selectedProvider?.full_name || 'this provider'}.</Text>
-          <Field label="Contact phone (+232)" value={requestForm.contactPhone} onChangeText={v => setRequestValue('contactPhone', v)} placeholder="76 123 456" keyboardType="phone-pad" />
-          <Text style={styles.helper}>Enter 8 digits after +232 so the provider can contact you.</Text>
+          <Button title="← Back" secondary onPress={() => {
+            if (editingRequest) { setEditingRequest(null); setScreen('requests'); }
+            else setScreen('provider-detail');
+          }} />
+          <Text style={styles.sectionLead}>{editingRequest ? 'Edit your request for ' : 'Send a request to '}{selectedProvider?.business_name || selectedProvider?.full_name || 'this provider'}.</Text>
+          <Field label="Verified contact phone (+232)" value={requestForm.contactPhone} onChangeText={v => setRequestValue('contactPhone', v)} placeholder="76 123 456" keyboardType="phone-pad" editable={!editingRequest} />
+          <Text style={styles.helper}>{editingRequest ? 'Your verified phone number is fixed for this request.' : 'Use the 8-digit phone number verified on your FixIt account.'}</Text>
           <OptionPicker label="Region" value={requestForm.region} options={REGIONS}
             onChange={r => {
               setRequestValue('region', r);
@@ -2045,34 +2422,38 @@ export default function App() {
               <Chip key={v} title={label} active={requestForm.pricingType === v} onPress={() => setRequestValue('pricingType', v)} />)}
           </View>
           <Field label="Describe the job" value={requestForm.details} onChangeText={v => setRequestValue('details', v)} placeholder="Describe the work you need..." multiline />
-          <Text style={styles.sectionTitle}>Add job photos <Text style={styles.optionalText}>(optional)</Text></Text>
-          <Text style={styles.helper}>Show the provider what needs to be fixed. Attach up to 5 JPG, PNG or WEBP photos (10 MB max each).</Text>
-          {!pendingPhotoRequestId && <View style={styles.photoActions}>
-            <View style={styles.photoActionItem}><Button title="Choose from gallery" secondary onPress={pickRequestPhotos} disabled={busy || selectedPhotos.length >= 5} /></View>
-            <View style={styles.photoActionItem}><Button title="Take a photo" secondary onPress={takeRequestPhoto} disabled={busy || selectedPhotos.length >= 5} /></View>
-          </View>}
-          {selectedPhotos.length > 0 && <View style={styles.selectedPhotosWrap}>
-            <Text style={styles.photoCount}>{selectedPhotos.length} of 5 photos selected</Text>
-            <View style={styles.selectedPhotosRow}>
-              {selectedPhotos.map((photo, index) => <View key={photo.uri} style={styles.selectedPhotoItem}>
-                <Image source={{ uri: photo.uri }} style={styles.selectedPhotoThumb} resizeMode="cover" />
-                {!pendingPhotoRequestId && <Pressable accessibilityRole="button" accessibilityLabel="Remove photo" onPress={() => setSelectedPhotos(prev => prev.filter((_, i) => i !== index))} style={styles.removePhotoButton}>
-                  <Text style={styles.removePhotoText}>×</Text>
-                </Pressable>}
-                <Text style={styles.selectedPhotoLabel}>Photo {index + 1}</Text>
-              </View>)}
-            </View>
-          </View>}
-          <Text style={styles.helper}>Final price must be approved before payment. Your photos are attached to this request so the selected provider can review the job.</Text>
-          <Button title={busy
+          {!editingRequest && <>
+            <Text style={styles.sectionTitle}>Add job photos <Text style={styles.optionalText}>(optional)</Text></Text>
+            <Text style={styles.helper}>Show the provider what needs to be fixed. Attach up to 5 photos (10 MB max each). HEIC/HEIF photos convert to JPG automatically.</Text>
+            {!pendingPhotoRequestId && <View style={styles.photoActions}>
+              <View style={styles.photoActionItem}><Button title="Choose from gallery" secondary onPress={pickRequestPhotos} disabled={busy || selectedPhotos.length >= 5} /></View>
+              <View style={styles.photoActionItem}><Button title="Take a photo" secondary onPress={takeRequestPhoto} disabled={busy || selectedPhotos.length >= 5} /></View>
+            </View>}
+            {selectedPhotos.length > 0 && <View style={styles.selectedPhotosWrap}>
+              <Text style={styles.photoCount}>{selectedPhotos.length} of 5 photos selected</Text>
+              <View style={styles.selectedPhotosRow}>
+                {selectedPhotos.map((photo, index) => <View key={photo.uri} style={styles.selectedPhotoItem}>
+                  <Image source={{ uri: photo.uri }} style={styles.selectedPhotoThumb} resizeMode="cover" />
+                  {!pendingPhotoRequestId && <Pressable accessibilityRole="button" accessibilityLabel="Remove photo" onPress={() => setSelectedPhotos(prev => prev.filter((_, i) => i !== index))} style={styles.removePhotoButton}>
+                    <Text style={styles.removePhotoText}>×</Text>
+                  </Pressable>}
+                  <Text style={styles.selectedPhotoLabel}>Photo {index + 1}</Text>
+                </View>)}
+              </View>
+            </View>}
+            <Text style={styles.helper}>Final price must be approved before payment. Your photos are attached to this request so the selected provider can review the job.</Text>
+          </>}
+          {editingRequest && <Text style={styles.helper}>You can change request details before the provider responds. Manage attached photos from View job photos.</Text>}
+          <Button title={editingRequest ? (busy ? 'Saving changes…' : 'Save changes') : busy
               ? (pendingPhotoRequestId ? 'Uploading photos…' : 'Submitting…')
               : (pendingPhotoRequestId ? 'Retry photo upload' : 'Send service request')}
-            onPress={createServiceRequest} disabled={busy} />
+            onPress={editingRequest ? saveServiceRequestEdits : createServiceRequest} disabled={busy} />
         </>}
 
         {screen === 'job-photos' && <>
           <Button title="← Back to jobs" secondary onPress={() => setScreen('requests')} />
           <Text style={styles.sectionLead}>Photos attached to service request {jobPhotosRequestId}.</Text>
+          {user.role === 'customer' && <Button title={busy ? 'Uploading photos…' : 'Add photos to this request'} secondary onPress={addPhotosToExistingRequest} disabled={busy || jobPhotos.length >= 5} />}
           {busy && jobPhotos.length === 0 ? <ActivityIndicator size="large" color={COLORS.green} style={styles.spinner} /> :
             jobPhotos.length === 0 ? <Empty text="No photos are attached to this request yet." /> :
             jobPhotos.map((photo, index) => <Card key={String(photo.id || index)}>
@@ -2084,6 +2465,13 @@ export default function App() {
 
         {screen === 'inbox' && user.role === 'customer' && <>
           <Text style={styles.sectionLead}>Choose a service request to message its assigned provider. Your conversation history is saved with the request.</Text>
+          <Card>
+            <Text style={styles.cardTitle}>Job update alerts</Text>
+            <Text style={styles.cardDescription}>{pushToken ? 'Push alerts are enabled on this device for quotes, messages, and job progress.' : 'Get an alert when your provider sends a quote or updates your job.'}</Text>
+            {pushToken
+              ? <Button title={pushBusy ? 'Updating…' : 'Disable push alerts'} secondary onPress={disablePushNotifications} disabled={pushBusy} />
+              : <Button title={pushBusy ? 'Enabling…' : 'Enable job alerts'} onPress={() => registerPushNotifications(true)} disabled={pushBusy} />}
+          </Card>
           {jobs.length === 0 ? <Card><Text style={styles.cardTitle}>Your message inbox</Text><Text style={styles.cardDescription}>When you request a service, you can message the assigned provider here or from My Jobs.</Text><Button title="Refresh my jobs" onPress={loadCustomerRequests} secondary /></Card> :
             jobs.filter(j => j.provider_id || j.provider_name || j.business_name).map((j, i) => <Card key={String(j.id || i)}>
               <View style={styles.cardTop}><Text style={styles.cardTitle}>{j.service_name || 'Service request'}</Text><Status value={j.status} /></View>
@@ -2145,6 +2533,7 @@ export default function App() {
                 <Text style={styles.cardMeta}>Provider: {j.business_name || j.provider_name || 'Provider'} · {j.created_at ? new Date(j.created_at).toLocaleDateString() : ''}</Text>
                 <Text style={styles.cardDescription}>{j.job_details}</Text>
                 <Text style={styles.cardMeta}>{j.area}, {j.district}, {j.region} · {j.service_address}</Text>
+                {j.status === 'requested' && <Button title="Edit request" secondary compact onPress={() => startEditingRequest(j)} disabled={busy} />}
                 {j.completion_submitted_at && !j.completion_confirmed_at && <View style={{ marginTop: 10, gap: 8 }}>
                   <Text style={styles.cardMeta}>The provider has submitted completion evidence. Review the photos before confirming.</Text>
                   <Button title="Confirm work completed" onPress={() => confirmCompletion(j.id)} disabled={busy} />
@@ -2319,7 +2708,7 @@ export default function App() {
         {screen === 'account' && <>
           <Card style={styles.accountSummaryCard}>
             <View style={styles.accountSummaryRow}>
-              {user.role === 'customer' ? (
+              {['customer', 'provider'].includes(user.role) ? (
                 <View style={styles.profilePictureColumn}>
                   <Pressable accessibilityRole="button" accessibilityLabel={profilePhotoUrl ? 'Change profile picture' : 'Upload profile picture'}
                     onPress={pickProfilePhoto} disabled={profilePhotoBusy}
@@ -2342,7 +2731,7 @@ export default function App() {
                 </View>
               </View>
             </View>
-            {user.role === 'customer' && (
+            {['customer', 'provider'].includes(user.role) && (
               <Button title={profilePhotoBusy ? 'Uploading photo…' : profilePhotoUrl ? 'Change profile picture' : 'Upload profile picture'}
                 secondary onPress={pickProfilePhoto} disabled={profilePhotoBusy} />
             )}
@@ -2414,7 +2803,20 @@ export default function App() {
           <Field label="Service address" value={providerForm.address} onChangeText={v => setProviderFormValue('address', v)} placeholder="Street, landmark or address" />
           <Text style={styles.fieldLabel}>Main service</Text>
           {services.length === 0 ? <Empty text="No services were returned by the server. Try refreshing the app." /> :
-            <View style={styles.wrapChips}>{services.map(s => <Chip key={String(s.id)} title={s.name} active={providerForm.serviceId === String(s.id)} onPress={() => setProviderFormValue('serviceId', String(s.id))} />)}</View>}
+            <View style={styles.wrapChips}>
+              {services.map(s => <Chip key={String(s.id)} title={s.name} active={providerForm.serviceId === String(s.id)} onPress={() => setProviderFormValue('serviceId', String(s.id))} />)}
+              <Chip title="+ Other profession" active={providerForm.serviceId === '__other__'} onPress={() => setProviderFormValue('serviceId', '__other__')} />
+            </View>}
+          {providerForm.serviceId === '__other__' && <>
+            <Field label="Profession to add" value={providerForm.otherProfession} onChangeText={v => setProviderFormValue('otherProfession', v)} placeholder="e.g. Borehole drilling" />
+            <Text style={styles.helper}>We’ll review your suggestion. It becomes searchable after approval.</Text>
+          </>}
+          {professionSuggestions.length > 0 && <View style={{ marginTop: 14 }}>
+            <Text style={styles.fieldLabel}>Profession suggestions</Text>
+            {professionSuggestions.slice(0, 3).map(item => <Text key={String(item.id)} style={{ color: COLORS.muted, fontSize: 13, marginBottom: 5 }}>
+              {item.requested_name} · {item.status === 'approved' ? 'Approved' : item.status === 'rejected' ? 'Not approved' : 'Waiting for review'}
+            </Text>)}
+          </View>}
           <Text style={styles.fieldLabel}>Pricing type</Text>
           <View style={styles.wrapChips}>
             {[['starting_price', 'Starting price'], ['fixed_price', 'Fixed price'], ['quote_required', 'Quote required']].map(([v, label]) =>
@@ -2495,6 +2897,13 @@ export default function App() {
 
         {screen === 'notifications' && <>
           <Button title="← Back to dashboard" secondary onPress={() => setScreen('home')} />
+          <Card>
+            <Text style={styles.cardTitle}>Push alerts</Text>
+            <Text style={styles.cardDescription}>{pushToken ? 'Push alerts are enabled on this device for requests, messages, and job status changes.' : 'Get an alert when a customer sends a request, message, or job update.'}</Text>
+            {pushToken
+              ? <Button title={pushBusy ? 'Updating…' : 'Disable push alerts'} secondary onPress={disablePushNotifications} disabled={pushBusy} />
+              : <Button title={pushBusy ? 'Enabling…' : 'Enable push alerts'} onPress={() => registerPushNotifications(true)} disabled={pushBusy} />}
+          </Card>
           <View style={{ backgroundColor: COLORS.orangeLight, borderRadius: 14, borderWidth: 1, borderColor: COLORS.line, padding: 14, marginBottom: 12 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.ink }}>Your notifications</Text>
             <Text style={{ fontSize: 12, color: COLORS.muted, marginTop: 4 }}>{notifications.filter(n => !n.is_read).length} unread · {notifications.length} total</Text>
@@ -2634,8 +3043,13 @@ export default function App() {
         </Pressable>
         <Pressable style={[styles.tabItem, screen === 'requests' && styles.tabItemActive]} onPress={() => { setScreen('requests'); clearMessages(); user.role === 'provider' ? loadProviderDashboard() : loadCustomerRequests(); }}>
           <Text style={[styles.tabIcon, screen === 'requests' && styles.tabIconActive]}>▤</Text>
-          <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'My Jobs' : 'My Jobs'}</Text>
+          <Text style={[styles.tabText, screen === 'requests' && styles.tabTextActive]}>{user.role === 'provider' ? 'My Jobs' : 'Requests'}</Text>
         </Pressable>
+        {user.role === 'customer' && <Pressable accessibilityRole="button" style={styles.tabItem}
+          onPress={() => { setSearch(''); setRegionFilter('All'); setDistrictFilter(''); setScreen('providers'); clearMessages(); }}>
+          <View style={styles.tabRequestCircle}><Text style={styles.tabRequestPlus}>+</Text></View>
+          <Text style={styles.tabText}>Request</Text>
+        </Pressable>}
         <Pressable style={[styles.tabItem, (screen === 'inbox' || screen === 'notifications') && styles.tabItemActive]} onPress={() => {
           clearMessages();
           if (user.role === 'provider') loadNotifications();
@@ -2645,11 +3059,11 @@ export default function App() {
             <Text style={[styles.tabIcon, (screen === 'inbox' || screen === 'notifications') && styles.tabIconActive]}>✉</Text>
             {user.role === 'provider' && notifications.some(n => !n.is_read) ? <View style={styles.tabBadge}><Text style={styles.tabBadgeText}>{notifications.filter(n => !n.is_read).length > 9 ? '9+' : notifications.filter(n => !n.is_read).length}</Text></View> : null}
           </View>
-          <Text style={[styles.tabText, (screen === 'inbox' || screen === 'notifications') && styles.tabTextActive]}>Inbox</Text>
+          <Text style={[styles.tabText, (screen === 'inbox' || screen === 'notifications') && styles.tabTextActive]}>{user.role === 'customer' ? 'Messages' : 'Inbox'}</Text>
         </Pressable>
-        <Pressable style={[styles.tabItem, screen === 'account' && styles.tabItemActive]} onPress={() => { setScreen('account'); clearMessages(); }}>
+        <Pressable style={[styles.tabItem, screen === 'account' && styles.tabItemActive]} onPress={() => { setScreen('account'); clearMessages(); loadProfilePhoto(token, user.role); }}>
           <View style={[styles.profileTabAvatar, screen === 'account' && styles.profileTabAvatarActive]}>
-            {user.role === 'customer' && profilePhotoUrl
+            {profilePhotoUrl
               ? <AuthenticatedRequestImage uri={profilePhotoUrl} token={token} style={styles.profileTabPhoto} />
               : <Text style={styles.profileTabAvatarText}>{(user.full_name || 'U').trim().slice(0, 1).toUpperCase()}</Text>}
           </View>
@@ -2704,51 +3118,79 @@ const styles = StyleSheet.create({
   splashFooterCompany: { color: '#0F172A', fontSize: 12, textAlign: 'center', marginTop: 1 },
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 44 : 0 },
-  authSafe: { flex: 1, backgroundColor: COLORS.pale, paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 12 : 0 },
-  authScreen: { flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 20, backgroundColor: '#F7F9FC' },
-  authBrandHeader: { paddingHorizontal: 4, paddingTop: 0, paddingBottom: 5 },
-  authBrandTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  authBrandCopy: { flex: 1, alignItems: 'center' },
-  authBrandTitle: { fontSize: 27, fontWeight: '900', letterSpacing: -0.7 },
-  authBrandGold: { color: COLORS.deepNavy },
-  authBrandWhite: { color: COLORS.navy },
-  authTagline: { color: COLORS.muted, fontSize: 11, lineHeight: 14, marginTop: 2, textAlign: 'center' },
-  authShield: { width: 42, height: 46, marginRight: 2, borderWidth: 2, borderColor: COLORS.deepNavy, borderRadius: 16, backgroundColor: '#E8F4EE', alignItems: 'center', justifyContent: 'center', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 5, elevation: 3 },
-  authShieldText: { color: COLORS.deepNavy, fontSize: 26, fontWeight: '900', lineHeight: 30 },
-  authShieldCheck: { color: COLORS.deepNavy, fontSize: 13, fontWeight: '900', marginTop: -7 },
-  authHero: { height: 0, borderRadius: 16, overflow: 'hidden', marginBottom: 5, backgroundColor: COLORS.deepNavy, position: 'relative', justifyContent: 'flex-end' },
-  authHeroImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  authHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(13, 42, 32, 0.48)' },
-  authHeroCopy: { paddingHorizontal: 12, paddingVertical: 7 },
-  authHeroEyebrow: { color: '#D2F5E4', fontSize: 7, fontWeight: '900', letterSpacing: 0.9, marginBottom: 3 },
-  authHeroTitle: { color: COLORS.white, fontSize: 16, lineHeight: 19, fontWeight: '900', letterSpacing: -0.2, maxWidth: 300 },
-  authHeroSubtitle: { color: '#F0F8F3', fontSize: 10, lineHeight: 13, marginTop: 2, maxWidth: 310 },
-  authWelcomePanel: { backgroundColor: 'transparent', borderRadius: 0, paddingHorizontal: 2, paddingTop: 3, paddingBottom: 4, borderWidth: 0, borderColor: 'transparent' },
-  authWelcomeTitle: { color: '#102B55', fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
-  authWelcomeCopy: { color: '#5D6675', fontSize: 16, lineHeight: 22, marginTop: 3, marginBottom: 18 },
+  authSafe: { flex: 1, backgroundColor: '#F2F7F4', paddingTop: Platform.OS === 'android' ? 3 : 32, paddingBottom: Platform.OS === 'android' ? 8 : 0 },
+  authScreen: { flexGrow: 1, justifyContent: 'flex-start', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 18, backgroundColor: '#F2F7F4' },
+  authBrandHeader: { alignItems: 'center', paddingTop: 3, paddingBottom: 13 },
+  authHouseMark: { width: 62, height: 49, alignItems: 'center', justifyContent: 'flex-end', marginBottom: 1 },
+  authRoofLeft: { position: 'absolute', width: 34, height: 7, borderRadius: 4, backgroundColor: '#096A50', left: 2, top: 16, transform: [{ rotate: '-43deg' }] },
+  authRoofRight: { position: 'absolute', width: 34, height: 7, borderRadius: 4, backgroundColor: '#096A50', right: 1, top: 16, transform: [{ rotate: '43deg' }] },
+  authHouseBody: { width: 30, height: 19, backgroundColor: '#096A50', alignItems: 'center', justifyContent: 'center' },
+  authHouseWindow: { width: 10, height: 10, backgroundColor: '#F0B832', borderWidth: 1, borderColor: '#FFF3C4' },
+  authBrandTitle: { fontSize: 32, fontWeight: '900', letterSpacing: -0.9 },
+  authBrandGreen: { color: '#096A50' },
+  authBrandDark: { color: '#182B25' },
+  authTagline: { color: '#46524E', fontSize: 13, lineHeight: 18, marginTop: 3, textAlign: 'center' },
+  authWelcomePanel: { position: 'relative', overflow: 'hidden', backgroundColor: '#075C46', borderRadius: 25, paddingHorizontal: 18, paddingTop: 19, paddingBottom: 15, shadowColor: '#063F31', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.13, shadowRadius: 10, elevation: 3 },
+  authScenicHouse: { position: 'absolute', width: 118, height: 91, right: 4, top: 8, opacity: 0.18, alignItems: 'center', justifyContent: 'flex-end' },
+  authScenicRoofLeft: { position: 'absolute', width: 67, height: 12, borderRadius: 5, backgroundColor: '#C7E5D3', left: 4, top: 26, transform: [{ rotate: '-39deg' }] },
+  authScenicRoofRight: { position: 'absolute', width: 67, height: 12, borderRadius: 5, backgroundColor: '#C7E5D3', right: 2, top: 26, transform: [{ rotate: '39deg' }] },
+  authScenicHome: { width: 82, height: 49, backgroundColor: '#C7E5D3', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingTop: 11 },
+  authScenicWindow: { width: 16, height: 20, backgroundColor: '#075C46', borderWidth: 2, borderColor: '#E3F1E7' },
+  authWelcomeTitle: { color: '#FFFFFF', fontSize: 27, fontWeight: '900', letterSpacing: -0.55 },
+  authWelcomeCopy: { color: '#E0F0E7', fontSize: 14, lineHeight: 20, marginTop: 4, marginBottom: 12 },
   authRoleRow: { flexDirection: 'row', gap: 9 },
   authOnboardingHint: { marginTop: 9, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F0F7F2', borderWidth: 1, borderColor: '#DCEBE0' },
   authOnboardingHintTitle: { color: COLORS.ink, fontSize: 11, fontWeight: '700', marginBottom: 3 },
   authOnboardingHintCopy: { color: COLORS.muted, fontSize: 10, lineHeight: 14 },
-  authRoleChoice: { flex: 1, minHeight: 46, paddingHorizontal: 6, paddingVertical: 6, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white },
-  authRoleChoiceActive: { backgroundColor: '#0862C7', borderColor: '#0862C7' },
+  authRoleChoice: { flex: 1, minWidth: 0, minHeight: 104, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 17, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', gap: 3, borderWidth: 1.5, borderColor: '#36836D', backgroundColor: 'rgba(0, 48, 36, 0.24)' },
+  authRoleChoiceActive: { backgroundColor: '#F4F8F5', borderColor: '#FFFFFF' },
+  authPeopleIcon: { width: 30, height: 26, justifyContent: 'flex-end', alignItems: 'center' },
+  authPeopleHeads: { flexDirection: 'row', width: 25, justifyContent: 'space-between', paddingHorizontal: 2 },
+  authPersonHead: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E7F4EB' },
+  authPersonActive: { backgroundColor: '#075C46' },
+  authPeopleBodies: { flexDirection: 'row', width: 30, justifyContent: 'space-between', marginTop: 1 },
+  authPersonBody: { width: 14, height: 9, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: '#E7F4EB' },
+  authHardHat: { width: 30, height: 26, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 3 },
+  authHardHatDome: { width: 21, height: 13, borderTopLeftRadius: 12, borderTopRightRadius: 12, backgroundColor: '#E7F4EB' },
+  authHardHatStripe: { width: 3, height: 10, position: 'absolute', top: 4, backgroundColor: '#075C46' },
+  authHardHatStripeActive: { backgroundColor: '#F4F8F5' },
+  authHardHatBrim: { width: 29, height: 4, borderRadius: 3, backgroundColor: '#E7F4EB' },
+  authRoleTextWrap: { width: '100%', minWidth: 0, paddingRight: 12 },
+  authRoleArrow: { position: 'absolute', right: 9, top: 38, color: '#DAEEE2', fontSize: 26, lineHeight: 29, fontWeight: '400' },
+  authRoleArrowActive: { color: '#075C46' },
   authRolePressed: { opacity: 0.82 },
-  authRoleTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900', textAlign: 'center' },
-  authRoleTitleActive: { color: '#FFFFFF' },
-  authRoleSubtitle: { color: COLORS.muted, fontSize: 9, lineHeight: 13, textAlign: 'center', marginTop: 3 },
-  authRoleSubtitleActive: { color: '#FFFFFF' },
-  authDetailsPanel: { backgroundColor: 'transparent', marginTop: 18, borderRadius: 0, paddingHorizontal: 0, paddingTop: 8, paddingBottom: 9, borderWidth: 0, borderColor: 'transparent' },
-  authSecurityNote: { color: COLORS.muted, fontSize: 10, fontWeight: '700', textAlign: 'center', marginBottom: 3 },
-  authDetailsTitle: { color: COLORS.navy, fontSize: 19, fontWeight: '900', letterSpacing: -0.2, marginBottom: 6 },
-  authFieldLabel: { color: COLORS.navy, fontSize: 13, fontWeight: '800', marginBottom: 6, marginTop: 1 },
-  authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#CBD2DC', paddingHorizontal: 14 },
+  authRoleTitle: { color: '#F3F7F4', fontSize: 13, fontWeight: '900' },
+  authRoleTitleActive: { color: '#1D2924' },
+  authRoleSubtitle: { color: '#DBEAE0', fontSize: 10, lineHeight: 14, marginTop: 4 },
+  authRoleSubtitleActive: { color: '#394842' },
+  authDetailsPanel: { backgroundColor: COLORS.white, marginTop: 12, borderRadius: 25, paddingHorizontal: 18, paddingTop: 15, paddingBottom: 14, borderWidth: 1, borderColor: '#E4ECE6', shadowColor: '#163B2D', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  authSecurityLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 },
+  authSecurityIcon: { color: '#FFFFFF', backgroundColor: '#087253', overflow: 'hidden', fontSize: 11, fontWeight: '900', textAlign: 'center', width: 16, height: 16, lineHeight: 16, borderRadius: 6 },
+  authSecurityNote: { color: '#5D6963', fontSize: 11, fontWeight: '700' },
+  authDetailsTitle: { color: '#172923', fontSize: 25, fontWeight: '900', letterSpacing: -0.6, marginBottom: 1 },
+  authDetailsCopy: { color: '#68736D', fontSize: 13, marginBottom: 15 },
+  authFieldLabel: { color: '#1D2924', fontSize: 13, fontWeight: '800', marginBottom: 6, marginTop: 1 },
+  authInputRow: { flexDirection: 'row', alignItems: 'center', minHeight: 52, borderRadius: 13, backgroundColor: '#FBFCFB', borderWidth: 1, borderColor: '#DDE5E0', paddingHorizontal: 11 },
   authCountryFlag: { fontSize: 22, marginRight: 8 },
-  authCountryCode: { color: COLORS.ink, fontSize: 15, fontWeight: '700', marginRight: 8 },
-  authInput: { flex: 1, minWidth: 0, color: COLORS.ink, fontSize: 15, paddingVertical: 11 },
+  authCountryCode: { color: '#26342E', fontSize: 14, fontWeight: '700', marginRight: 8 },
+  authInput: { flex: 1, minWidth: 0, color: '#1C2923', fontSize: 15, paddingVertical: 10 },
   authPhoneIcon: { color: COLORS.muted, fontSize: 20, marginLeft: 7 },
   authPasswordLabel: { marginTop: 7 },
   authEyeButton: { paddingHorizontal: 5, paddingVertical: 7, marginLeft: 4 },
-  authEyeText: { color: COLORS.muted, fontSize: 16, fontWeight: '800' },
+  authEyeText: { color: '#69766F', fontSize: 15, fontWeight: '800' },
+  authModeLinkWrap: { alignSelf: 'center', paddingHorizontal: 8, paddingVertical: 12, marginTop: 1 },
+  authModeLink: { color: '#08694F', fontSize: 13, fontWeight: '800', textDecorationLine: 'underline', textAlign: 'center' },
+  authGoogleDivider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 1, marginBottom: 11 },
+  authGoogleDividerLine: { flex: 1, height: 1, backgroundColor: '#E7ECE8' },
+  authGoogleOr: { color: '#7A8580', fontSize: 11, fontWeight: '700' },
+  authGoogleButton: { minHeight: 49, borderRadius: 13, borderWidth: 1, borderColor: '#DCE4DF', backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#163B2D', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  authGoogleButtonPressed: { backgroundColor: '#F6F9F7' },
+  authGoogleButtonDisabled: { opacity: 0.65 },
+  authGoogleMark: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
+  authGoogleMarkText: { color: '#4285F4', fontSize: 20, fontWeight: '900' },
+  authGoogleButtonText: { color: '#25312C', fontSize: 13, fontWeight: '700' },
+  authFooter: { alignItems: 'center', justifyContent: 'center', paddingTop: 12, paddingBottom: 8 },
+  authFooterCopy: { color: '#59665F', fontSize: 10, marginTop: 1 },
   authFootnote: { color: COLORS.muted, fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 12, lineHeight: 15 },
   brandMark: { alignSelf: 'center', width: 68, height: 68, borderRadius: 23, backgroundColor: COLORS.navy, alignItems: 'center', justifyContent: 'center', marginBottom: 12, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.16, shadowRadius: 13, elevation: 5 },
 
@@ -2767,42 +3209,73 @@ const styles = StyleSheet.create({
   header: { backgroundColor: COLORS.navy, paddingHorizontal: 18, paddingTop: 16, paddingBottom: 19, borderBottomLeftRadius: 23, borderBottomRightRadius: 23, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   pageHeader: { minHeight: 68, backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 9 : 15, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E9ECEF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   pageHeaderTitle: { color: COLORS.navy, fontSize: 23, fontWeight: '900', letterSpacing: -0.55, flex: 1 },
+  providerDashboardIntro: { marginBottom: 4 },
+  providerDashboardTitle: { color: '#173B72', fontSize: 23, fontWeight: '900', letterSpacing: -0.55 },
+  providerDashboardLead: { color: COLORS.muted, fontSize: 14, lineHeight: 21, marginTop: 5 },
+  providerHeaderActionWrap: { position: 'relative' },
+  homeHeaderBadge: { position: 'absolute', top: -4, right: -4, minWidth: 17, height: 17, paddingHorizontal: 4, borderRadius: 9, backgroundColor: '#D64545', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F5F8F6' },
+  homeHeaderBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '900' },
 
-  homeHeader: { backgroundColor: COLORS.white, paddingTop: Platform.OS === 'android' ? 10 : 13, paddingBottom: 16, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: COLORS.line },
-  homeBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  homeLogoMark: { width: 46, height: 46, borderRadius: 15, backgroundColor: COLORS.softBlue, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C6DBF6' },
-  homeLogoSymbol: { fontSize: 24 },
+  homeHeader: { backgroundColor: '#F5F8F6', paddingTop: Platform.OS === 'android' ? 8 : 13, paddingBottom: 8, paddingHorizontal: 18 },
+  homeBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  homeLogoMark: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#E6F2EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#CFE2D5' },
+  homeLogoSymbol: { fontSize: 32, lineHeight: 39, fontWeight: '900', color: '#087253', marginTop: -4 },
+  homeLogoWindow: { position: 'absolute', width: 7, height: 7, backgroundColor: '#E8B93D', right: 12, bottom: 11, borderWidth: 1, borderColor: '#FFF5D2' },
   homeBrandText: { flex: 1 },
   homeBrand: { fontSize: 22, fontWeight: '900', letterSpacing: -0.6 },
-  homeBrandFix: { color: COLORS.deepNavy },
-  homeBrandSalone: { color: COLORS.navy },
-  homeGreeting: { color: COLORS.muted, fontSize: 12, fontWeight: '700', marginTop: 3 },
-  homeSearchHeading: { marginTop: 7, marginBottom: 10, paddingHorizontal: 3 },
-  homeSearchHint: { color: COLORS.deepNavy, fontSize: 12, fontWeight: '900', letterSpacing: 0.15 },
+  homeBrandFix: { color: '#087253' },
+  homeBrandSalone: { color: '#1D2924' },
+  homeGreeting: { color: '#5E6C65', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  homeHeaderAction: { width: 40, height: 40, borderRadius: 14, borderWidth: 1, borderColor: '#DCE6DF', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  bellGlyph: { width: 20, height: 22, alignItems: 'center', justifyContent: 'flex-start' },
+  bellDome: { width: 15, height: 16, borderWidth: 1.8, borderColor: '#314139', borderTopLeftRadius: 8, borderTopRightRadius: 8, borderBottomLeftRadius: 5, borderBottomRightRadius: 5 },
+  bellBase: { width: 19, height: 2.5, borderRadius: 2, backgroundColor: '#314139', marginTop: -1 },
+  bellClapper: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#314139', marginTop: 1 },
+  homeLocationRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, paddingTop: 5, paddingBottom: 9, gap: 9 },
+  homeLocationPin: { color: '#087253', fontSize: 22, fontWeight: '900' },
+  homeLocationCopy: { flex: 1 },
+  homeLocationLabel: { color: '#7A8780', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 },
+  homeLocationValue: { color: '#26342E', fontSize: 12, fontWeight: '800', marginTop: 1 },
+  homeLocationChevron: { color: '#087253', fontSize: 15 },
+  homeSearchRow: { minHeight: 49, flexDirection: 'row', alignItems: 'center', borderRadius: 15, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E1E9E4', paddingHorizontal: 12, marginBottom: 12, shadowColor: '#172923', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.035, shadowRadius: 6, elevation: 1 },
+  homeSearchIcon: { color: '#25352D', fontSize: 25, lineHeight: 29, marginRight: 8 },
+  homeSearchInput: { flex: 1, minWidth: 0, color: '#26342E', fontSize: 13, paddingVertical: 10 },
+  homeFilterButton: { width: 37, height: 34, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: '#E6ECE8', marginLeft: 5 },
+  filterGlyph: { width: 21, height: 20, justifyContent: 'space-evenly' },
+  filterTrack: { height: 2, width: 18, backgroundColor: '#5B6962', borderRadius: 2, alignItems: 'flex-start', justifyContent: 'center' },
+  filterKnobLeft: { width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, borderColor: '#5B6962', backgroundColor: '#FFFFFF', marginLeft: 4 },
+  filterKnobRight: { width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, borderColor: '#5B6962', backgroundColor: '#FFFFFF', marginLeft: 11 },
+  filterKnobCenter: { width: 5, height: 5, borderRadius: 3, borderWidth: 1.5, borderColor: '#5B6962', backgroundColor: '#FFFFFF', marginLeft: 7 },
   homeSectionHeading: { marginTop: 12, marginBottom: 12 },
-  homeSectionTitle: { color: COLORS.navy, fontSize: 19, fontWeight: '900', letterSpacing: -0.35 },
-  homePromoHero: { minHeight: 190, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 21, padding: 16, marginBottom: 15, backgroundColor: '#1769D2', borderWidth: 1, borderColor: '#4D94E8', shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 9, elevation: 3 },
-  homePromoCopy: { flex: 1, minWidth: 0, paddingRight: 4 },
-  homePromoEyebrow: { color: '#DCEBFF', fontSize: 8, fontWeight: '900', letterSpacing: 0.8, marginBottom: 8 },
-  homePromoTitle: { color: COLORS.white, fontSize: 20, lineHeight: 24, fontWeight: '900', letterSpacing: -0.4 },
-  homePromoSubtitle: { color: '#EAF3FF', fontSize: 11, lineHeight: 16, marginTop: 7 },
-  homePromoAction: { alignSelf: 'flex-start', marginTop: 12, borderRadius: 10, backgroundColor: COLORS.white, paddingHorizontal: 11, paddingVertical: 9 },
-  homePromoActionText: { color: '#145C46', fontSize: 10, fontWeight: '900' },
-  homePromoArt: { width: 91, height: 125, marginLeft: 6, borderRadius: 18, backgroundColor: '#E8F4EE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#C6E4D3' },
-  homePromoTool: { fontSize: 35, marginBottom: 1 },
-  homePromoHouse: { color: '#176B50', fontSize: 31, fontWeight: '900', marginTop: -7 },
-  homePromoVerified: { backgroundColor: '#176B50', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 4, marginTop: 3 },
-  homePromoVerifiedText: { color: COLORS.white, fontSize: 7, fontWeight: '900', letterSpacing: 0.4 },
+  homeSectionTitle: { color: '#1D2924', fontSize: 18, fontWeight: '900', letterSpacing: -0.35 },
+  homePromoHero: { height: 220, overflow: 'hidden', borderRadius: 21, padding: 17, marginBottom: 11, backgroundColor: '#075C46', position: 'relative', justifyContent: 'center', shadowColor: '#063F31', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 9, elevation: 3 },
+  homeHeroImage: { borderRadius: 21 },
+  homeHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 48, 37, 0.26)' },
+  homeHeroCount: { position: 'absolute', right: 12, bottom: 12, zIndex: 2, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(3, 48, 37, 0.65)' },
+  homeHeroCountText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.4 },
+  homePromoCopy: { width: '58%', minWidth: 0, paddingRight: 3, zIndex: 1 },
+  homePromoEyebrow: { color: '#D2F0DF', fontSize: 8, fontWeight: '900', letterSpacing: 0.9, marginBottom: 8 },
+  homePromoTitle: { color: COLORS.white, fontSize: 22, lineHeight: 24, fontWeight: '900', letterSpacing: -0.35 },
+  homePromoSubtitle: { color: '#F0F8F3', fontSize: 11, lineHeight: 15, marginTop: 7 },
+  homePromoAction: { alignSelf: 'flex-start', marginTop: 12, borderRadius: 10, backgroundColor: '#F4F8F5', paddingHorizontal: 12, paddingVertical: 9 },
+  homePromoActionText: { color: '#075C46', fontSize: 10, fontWeight: '900' },
   homepageSlidesWrap: { width: '100%', marginBottom: 17, borderRadius: 22, overflow: 'hidden', backgroundColor: COLORS.card, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 9, elevation: 2 },
   homepageSlideImage: { width: '100%', height: 165, backgroundColor: COLORS.card },
-  homepageSlideDots: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(15,23,42,0.35)' },
+  homepageSlideDots: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, backgroundColor: 'rgba(15,23,42,0.35)', zIndex: 2 },
   homepageSlideDot: { width: 7, height: 7, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.7)' },
   homepageSlideDotActive: { width: 19, backgroundColor: COLORS.orange },
+  homeSearchHeading: { marginTop: 7, marginBottom: 10, paddingHorizontal: 3 },
+  homeSearchHint: { color: COLORS.deepNavy, fontSize: 12, fontWeight: '900', letterSpacing: 0.15 },
   categoryCarouselWrap: { width: '100%', marginBottom: 9 },
   categoryCarouselPage: { paddingHorizontal: 1 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 2 },
   categoryTile: { width: '23.7%', alignItems: 'center', marginBottom: 12, borderRadius: 16, paddingHorizontal: 4, paddingTop: 5, paddingBottom: 7, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.045, shadowRadius: 5, elevation: 1 },
   categoryTilePressed: { opacity: 0.78, transform: [{ scale: 0.98 }] },
+  quickCategoryGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 2 },
+  quickCategoryTile: { width: '23.6%', alignItems: 'center', marginBottom: 10, borderRadius: 15, paddingTop: 8, paddingBottom: 7, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E9EFEB' },
+  quickCategoryIconWrap: { width: '84%', aspectRatio: 1.15, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  quickCategoryIcon: { fontSize: 27, color: '#087253', fontWeight: '900' },
+  quickCategoryLabel: { color: '#26342E', textAlign: 'center', fontWeight: '700', fontSize: 9, lineHeight: 12, marginTop: 5, paddingHorizontal: 2 },
   categoryArt: { width: '100%', aspectRatio: 1.05, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E1E9F3' },
   categorySymbol: { fontSize: 29 },
   categoryLabel: { color: COLORS.navy, textAlign: 'center', fontWeight: '800', fontSize: 10, lineHeight: 13, marginTop: 6, minHeight: 28 },
@@ -2821,6 +3294,30 @@ const styles = StyleSheet.create({
   activeJobEmptyCopy: { color: COLORS.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 4 },
   activeJobsRow: { paddingRight: 4, paddingBottom: 4 },
   activeJobCard: { width: 330, backgroundColor: COLORS.white, borderRadius: 16, padding: 12, marginRight: 11, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
+  activeJobCardFullWidth: { width: '100%', alignSelf: 'stretch', marginRight: 0, marginBottom: 10 },
+  providerRequestCard: { width: '100%', alignSelf: 'stretch', backgroundColor: COLORS.white, borderRadius: 18, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#DCE7E1', shadowColor: '#173B72', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 7, elevation: 1 },
+  providerRequestTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 11 },
+  providerRequestIcon: { width: 66, height: 66, borderRadius: 15, backgroundColor: '#F5EFE4', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  providerRequestIconText: { fontSize: 30 },
+  providerRequestCopy: { flex: 1, minWidth: 0 },
+  providerRequestService: { color: '#173B72', fontSize: 16, fontWeight: '900' },
+  providerRequestBadge: { alignSelf: 'flex-start', backgroundColor: '#E2F6E9', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5, marginTop: 5 },
+  providerRequestBadgeText: { color: '#087253', fontSize: 11, fontWeight: '900' },
+  providerRequestCustomer: { color: COLORS.ink, fontSize: 12, lineHeight: 17, fontWeight: '700', marginTop: 7 },
+  providerRequestLocation: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  providerRequestDateRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 13, marginBottom: 3 },
+  providerRequestDateIcon: { color: COLORS.muted, fontSize: 17 },
+  providerRequestDate: { color: COLORS.muted, fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  providerDashboardButton: { minHeight: 48, backgroundColor: '#1688E9', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', marginTop: 9 },
+  providerDashboardButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '900', textAlign: 'center' },
+  providerPendingEmpty: { backgroundColor: COLORS.white, borderRadius: 18, paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', borderWidth: 1, borderColor: '#DCE7E1', marginBottom: 12 },
+  providerBusinessCard: { borderColor: '#DCE7E1', borderRadius: 18, padding: 16 },
+  providerBusinessTitle: { color: '#173B72', fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
+  providerBusinessLocation: { color: COLORS.muted, fontSize: 14, lineHeight: 20, marginTop: 6 },
+  providerLaunchCard: { borderColor: '#DCE7E1', borderRadius: 18, padding: 16 },
+  providerLaunchTitle: { color: '#173B72', fontSize: 18, fontWeight: '900' },
+  providerLaunchCopy: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 8 },
+  providerLaunchMeta: { color: COLORS.muted, fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 9 },
   activeJobTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   jobIllustration: { width: 72, height: 72, borderRadius: 11, backgroundColor: '#F1EDE5', alignItems: 'center', justifyContent: 'center' },
   jobIllustrationText: { fontSize: 29 },
@@ -2853,6 +3350,20 @@ const styles = StyleSheet.create({
   jobDetailButton: { borderWidth: 1, borderColor: '#F6CDAE', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, marginTop: 10, backgroundColor: COLORS.orangeLight },
   jobDetailButtonText: { color: COLORS.orangeDark, fontSize: 12, fontWeight: '800' },
   providerCarousel: { paddingBottom: 4, paddingRight: 4 },
+  providerListCard: { width: '100%', minHeight: 84, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 17, padding: 10, marginBottom: 9, borderWidth: 1, borderColor: '#E7ECE9', shadowColor: '#20352A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.035, shadowRadius: 6, elevation: 1 },
+  providerListPhoto: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#EAF2ED' },
+  providerListPhotoFallback: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#E4EFE8', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D4E2D8' },
+  providerListInitial: { color: '#087253', fontSize: 22, fontWeight: '900' },
+  providerListCopy: { flex: 1, minWidth: 0, marginLeft: 10 },
+  providerListName: { color: '#1D2924', fontSize: 12, fontWeight: '900' },
+  providerListRating: { color: '#A86900', fontSize: 10, fontWeight: '900', marginTop: 2 },
+  providerListReviews: { color: '#78837D', fontWeight: '600' },
+  providerListService: { color: '#5C6862', fontSize: 10, marginTop: 3 },
+  providerListLocation: { color: '#7C8781', fontSize: 9, marginTop: 2 },
+  providerListAside: { alignItems: 'flex-end', justifyContent: 'space-between', minHeight: 54, marginLeft: 5 },
+  providerListVerified: { borderRadius: 10, backgroundColor: '#E5F4EB', paddingHorizontal: 6, paddingVertical: 4 },
+  providerListVerifiedText: { color: '#087253', fontSize: 8, fontWeight: '900' },
+  providerListArrow: { color: '#78857E', fontSize: 23, lineHeight: 25 },
   homeProviderCard: { width: 196, backgroundColor: COLORS.white, borderRadius: 20, padding: 12, marginRight: 12, borderWidth: 1, borderColor: COLORS.line, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 9, elevation: 2 },
   homeProviderPhoto: { width: '100%', height: 112, borderRadius: 15, backgroundColor: COLORS.card, marginBottom: 10 },
   homeProviderPhotoFallback: { width: '100%', height: 112, borderRadius: 15, backgroundColor: COLORS.orangeLight, marginBottom: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.line },
@@ -2941,6 +3452,8 @@ const styles = StyleSheet.create({
   removePhotoButton: { position: 'absolute', right: -5, top: -5, width: 25, height: 25, borderRadius: 13, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.white },
   removePhotoText: { color: COLORS.white, fontSize: 18, fontWeight: '900', lineHeight: 20 },
   button: { backgroundColor: COLORS.orange, paddingVertical: 13, paddingHorizontal: 15, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 7, marginBottom: 3, minHeight: 46, shadowColor: COLORS.orange, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.14, shadowRadius: 5, elevation: 2 },
+  buttonGreen: { backgroundColor: '#087253', shadowColor: '#087253', shadowOpacity: 0.16, minHeight: 49, borderRadius: 13 },
+  buttonGreenText: { color: '#FFFFFF', fontSize: 14, letterSpacing: 0.2 },
   buttonSecondary: { backgroundColor: COLORS.orangeLight, borderWidth: 1, borderColor: '#F6CDAE', shadowOpacity: 0, elevation: 0 },
   buttonCompact: { paddingVertical: 8, paddingHorizontal: 12, marginTop: 0, marginBottom: 0, minHeight: 34 },
   buttonText: { color: COLORS.white, fontWeight: '900', fontSize: 13, textAlign: 'center', letterSpacing: 0.1 },
@@ -3050,13 +3563,15 @@ const styles = StyleSheet.create({
   fieldFoot: { fontSize: 11, color: COLORS.muted },
   footnote: { textAlign: 'center', color: COLORS.muted, fontSize: 11, marginTop: 16, lineHeight: 17 },
   reviewBox: { backgroundColor: COLORS.card, borderRadius: 15, padding: 13, marginTop: 9, borderWidth: 1, borderColor: COLORS.line },
-  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.line, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 18 : 8, paddingHorizontal: 8, minHeight: Platform.OS === 'android' ? 70 : 74, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 14 },
-  tabItem: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 5, borderRadius: 15, marginHorizontal: 2 },
-  tabItemActive: { backgroundColor: COLORS.orangeLight },
+  tabBar: { flexDirection: 'row', backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: '#E5ECE8', paddingTop: 6, paddingBottom: Platform.OS === 'ios' ? 18 : 8, paddingHorizontal: 6, minHeight: Platform.OS === 'android' ? 70 : 74, shadowColor: COLORS.navy, shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 14 },
+  tabItem: { flex: 1, minWidth: 0, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 4, borderRadius: 15, marginHorizontal: 1 },
+  tabItemActive: { backgroundColor: '#F0F6F2' },
   tabIcon: { color: '#84918B', fontSize: 21, lineHeight: 24, fontWeight: '800', marginBottom: 1 },
-  tabIconActive: { color: COLORS.deepNavy },
-  tabText: { color: '#64716A', fontSize: 10, fontWeight: '800' },
-  tabTextActive: { color: COLORS.deepNavy, fontWeight: '900' },
+  tabIconActive: { color: '#087253' },
+  tabRequestCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#087253', marginTop: -19, marginBottom: 1, borderWidth: 3, borderColor: '#FFFFFF', shadowColor: '#075C46', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 4, elevation: 4 },
+  tabRequestPlus: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '400', marginTop: -2 },
+  tabText: { color: '#64716A', fontSize: 9, fontWeight: '800' },
+  tabTextActive: { color: '#087253', fontWeight: '900' },
   chatLog: { backgroundColor: COLORS.card, borderRadius: 17, padding: 11, marginBottom: 10, borderWidth: 1, borderColor: COLORS.line },
   chatBubble: { borderRadius: 13, padding: 12, marginVertical: 4, maxWidth: '92%' },
   chatUser: { alignSelf: 'flex-end', backgroundColor: COLORS.orangeLight },

@@ -4,17 +4,33 @@
     "appVersionSource": "remote"
   },
   "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "309353199138-r8poji5ghpgvl61gba80rfrv9msf9t3v.apps.googleusercontent.com"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "309353199138-r8poji5ghpgvl61gba80rfrv9msf9t3v.apps.googleusercontent.com"
       }
     },
     "production": {
       "android": {
         "buildType": "app-bundle"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "309353199138-r8poji5ghpgvl61gba80rfrv9msf9t3v.apps.googleusercontent.com"
+      }
     }
   }
 }
