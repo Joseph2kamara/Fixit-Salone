@@ -244,6 +244,15 @@ CREATE TABLE IF NOT EXISTS provider_notifications (
 CREATE INDEX IF NOT EXISTS idx_provider_notifications_provider ON provider_notifications(provider_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_provider_notifications_unread ON provider_notifications(provider_id,is_read,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS expo_push_tokens (
+ token TEXT PRIMARY KEY,
+ user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ platform VARCHAR(20) NOT NULL CHECK (platform IN ('android','ios')),
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expo_push_tokens_user ON expo_push_tokens(user_id);
+
 CREATE TABLE IF NOT EXISTS provider_subscriptions (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
  provider_id UUID NOT NULL REFERENCES provider_profiles(id) ON DELETE CASCADE,
