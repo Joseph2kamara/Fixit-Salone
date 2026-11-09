@@ -1200,7 +1200,7 @@ Additional operating rules:
 
 app.post('/api/providers/me/profession-suggestions',requireAuth,async(req,res)=>{
   if(req.user.role!=='provider')return res.status(403).json({error:'Provider account required.'});
-  const name=String(req.body&&req.body.name||'').trim().replace(/\\s+/g,' ');
+  const name=String(req.body&&req.body.name||'').trim().replace(/\s+/g,' ');
   const normalizedName=name.toLowerCase();
   const pricingType=String(req.body&&req.body.pricing_type||'quote_required');
   const rawPrice=req.body&&req.body.price_sle;
