@@ -310,7 +310,7 @@ function queueExpoPushNotification(userId,title,body,data={}){
 app.post('/api/push-token',requireAuth,async(req,res)=>{
   const token=String(req.body?.token||'').trim();
   const platform=String(req.body?.platform||'').toLowerCase();
-  if(!/^(Expo|Exponent)PushToken\\[[A-Za-z0-9._-]{8,200}\\]$/.test(token))return res.status(400).json({error:'A valid Expo push token is required.'});
+  if(!/^(Expo|Exponent)PushToken\[[A-Za-z0-9._-]{8,200}\]$/.test(token))return res.status(400).json({error:'A valid Expo push token is required.'});
   if(!['android','ios'].includes(platform))return res.status(400).json({error:'Platform must be android or ios.'});
   try{
     await pool.query(`INSERT INTO expo_push_tokens(user_id,token,platform) VALUES($1,$2,$3)
