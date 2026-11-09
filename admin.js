@@ -24,13 +24,14 @@ async function boot(){
  }catch(e){sessionStorage.removeItem(tokenKey);$('loginPanel').hidden=false;$('dashboard').hidden=true;msg(e.message)}
 }
 async function loadStats(){
- const [inc,ver,users,subpay,payments]=await Promise.all([api('/api/admin/incidents'),api('/api/admin/verifications'),api('/api/admin/users'),api('/api/admin/subscription-payments'),api('/api/admin/payments')]);
+ const [inc,ver,users,subpay,payments,professions]=await Promise.all([api('/api/admin/incidents'),api('/api/admin/verifications'),api('/api/admin/users'),api('/api/admin/subscription-payments'),api('/api/admin/payments'),api('/api/admin/profession-suggestions?status=pending')]);
  $('openReports').textContent=inc.filter(x=>x.status==='open').length;
  $('verificationQueue').textContent=ver.filter(x=>['pending','under_review'].includes(x.status)).length;
  $('activeUsers').textContent=users.filter(x=>x.status==='active').length;
  $('suspendedUsers').textContent=users.filter(x=>x.status==='suspended'||x.status==='banned').length;
  $('pendingSubscriptions').textContent=subpay.filter(x=>x.status==='pending'||x.status==='processing').length;
  $('paymentRecords').textContent=payments.length;
+ $('professionQueue').textContent=professions.length;
 }
 
 async function renderSiteImages(content){
@@ -75,11 +76,14 @@ async function render(tab){
  const content=$('adminContent');content.innerHTML='<p>Loading…</p>';
  try{
   if(tab==='site-images'){await renderSiteImages(content);return}
-  let rows=await api('/api/admin/'+(tab==='verification'?'verifications':tab));
+  let rows=tab==='profession-suggestions'?await api('/api/admin/profession-suggestions?status=pending'):await api('/api/admin/'+(tab==='verification'?'verifications':tab));
   let head='',body='';
   if(tab==='incidents'){
    head='<th>ID</th><th>Reason</th><th>Details</th><th>Priority</th><th>Status</th><th>Action</th>';
    body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.reason)+'</td><td>'+esc(r.details)+'</td><td>'+esc(r.priority)+'</td><td>'+esc(r.status)+'</td><td><button class="table-btn" data-incident="'+esc(r.id)+'">Review</button></td></tr>').join('');
+  }else if(tab==='profession-suggestions'){
+   head='<th>Profession</th><th>Provider</th><th>Service details</th><th>Pricing</th><th>Submitted</th><th>Action</th>';
+   body=rows.map(r=>'<tr><td><b>'+esc(r.requested_name)+'</b></td><td><b>'+esc(r.business_name||r.provider_name||'Provider')+'</b><br><small>'+esc(r.provider_name||'')+'</small></td><td>'+esc(r.description||'—')+'</td><td>'+esc(r.pricing_type==='quote_required'?'Quote required':r.pricing_type==='fixed_price'?'Fixed price':'Starting price')+(r.price_sle==null?'':' · SLE '+Number(r.price_sle).toLocaleString())+'</td><td>'+esc(new Date(r.created_at).toLocaleDateString())+'</td><td><button class="table-btn" data-profession="'+esc(r.id)+'" data-profession-action="approved">Approve</button> <button class="table-btn" data-profession="'+esc(r.id)+'" data-profession-action="rejected">Reject</button></td></tr>').join('');
   }else if(tab==='verification'){
    head='<th>ID</th><th>Name</th><th>Role</th><th>Phone</th><th>Status</th><th>Document</th><th>Files</th><th>Action</th>';
    body=rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.full_name)+'</td><td>'+esc(r.role)+'</td><td>'+esc(r.phone)+'</td><td>'+esc(r.status)+'</td><td>'+esc(r.document_type)+'</td><td>'+((r.document_available?'<button class="table-btn" data-ver-file="'+esc(r.id)+'" data-file-type="document">View ID</button> ':'')+(r.selfie_available?'<button class="table-btn" data-ver-file="'+esc(r.id)+'" data-file-type="selfie">View selfie</button>':''))+'</td><td><button class="table-btn" data-ver="'+esc(r.id)+'">Review</button></td></tr>').join('');
@@ -99,7 +103,23 @@ async function render(tab){
    rows=await api('/api/admin/audit');head='<th>Time</th><th>Action</th><th>Actor</th><th>Entity</th><th>Metadata</th>';
    body=rows.map(r=>'<tr><td>'+esc(new Date(r.created_at).toLocaleString())+'</td><td>'+esc(r.action)+'</td><td>'+esc(r.actor_name||'System')+'</td><td>'+esc(r.entity_type)+' '+esc(r.entity_id||'')+'</td><td><code>'+esc(JSON.stringify(r.metadata))+'</code></td></tr>').join('');
   }
-  content.innerHTML='<div class="admin-section-head"><div><h2>'+esc({incidents:'Incident reports',verification:'Verification queue',users:'User accounts',subscriptions:'Active subscriptions', 'subscription-payments':'Subscription payment requests',payments:'Job payment records',audit:'Audit history'}[tab])+'</h2><p>Protected live records.</p></div><span>'+rows.length+' records</span></div><div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  content.innerHTML='<div class="admin-section-head"><div><h2>'+esc({incidents:'Incident reports',verification:'Verification queue',users:'User accounts',subscriptions:'Active subscriptions', 'subscription-payments':'Subscription payment requests','profession-suggestions':'Profession suggestions',payments:'Job payment records',audit:'Audit history'}[tab])+'</h2><p>Protected live records.</p></div><span>'+rows.length+' records</span></div><div class="table-wrap"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
+  content.querySelectorAll('[data-profession]').forEach(b=>b.onclick=async()=>{
+    const status=b.dataset.professionAction;
+    let serviceDescription='',reviewNote='';
+    if(status==='approved'){
+      const answer=prompt('Short public description for this profession (optional):','');
+      if(answer===null)return;
+      serviceDescription=answer.trim();
+    }else{
+      if(!confirm('Reject this profession suggestion?'))return;
+      reviewNote=prompt('Optional note for the provider:','')||'';
+    }
+    try{
+      await api('/api/admin/profession-suggestions/'+encodeURIComponent(b.dataset.profession),{method:'PATCH',body:JSON.stringify({status,service_description:serviceDescription,review_note:reviewNote})});
+      await loadStats();render('profession-suggestions');
+    }catch(e){alert(e.message)}
+  });
   content.querySelectorAll('[data-incident]').forEach(b=>b.onclick=async()=>{const id=b.dataset.incident;const status=prompt('Status: open, under_review, resolved or dismissed');if(!status)return;try{await api('/api/admin/incidents/'+id,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('incidents')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-ver]').forEach(b=>b.onclick=async()=>{const status=prompt('Verification: pending, under_review, verified or rejected');if(!status)return;try{await api('/api/admin/verifications/'+b.dataset.ver,{method:'PATCH',body:JSON.stringify({status})});await loadStats();render('verification')}catch(e){alert(e.message)}});
   content.querySelectorAll('[data-ver-file]').forEach(b=>b.onclick=async()=>{
