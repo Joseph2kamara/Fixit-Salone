@@ -284,6 +284,49 @@ async function audit(actor,target,action,type,id,metadata){
 
 app.get('/api/health',(req,res)=>res.json({ok:true,service:'fixit-salone'}));
 
+async function sendExpoPushNotification(userId,title,body,data={}){
+  if(!userId)return;
+  const {rows}=await pool.query('SELECT token FROM expo_push_tokens WHERE user_id=$1',[userId]);
+  if(!rows.length)return;
+  const messages=rows.map(row=>({to:row.token,sound:'default',title,body,data,channelId:'default'}));
+  for(let start=0;start<messages.length;start+=100){
+    const batch=messages.slice(start,start+100);
+    const response=await fetch('https://exp.host/--/api/v2/push/send',{
+      method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify(batch)
+    });
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error('Expo push service returned HTTP '+response.status+'.');
+    const invalid=[];
+    (payload.data||[]).forEach((ticket,index)=>{
+      if(ticket?.status==='error'&&ticket?.details?.error==='DeviceNotRegistered')invalid.push(batch[index]?.to);
+    });
+    if(invalid.length)await pool.query('DELETE FROM expo_push_tokens WHERE token=ANY($1::text[])',[invalid]);
+  }
+}
+function queueExpoPushNotification(userId,title,body,data={}){
+  void sendExpoPushNotification(userId,title,body,data).catch(error=>console.error('Push notification error:',error.message||error));
+}
+
+app.post('/api/push-token',requireAuth,async(req,res)=>{
+  const token=String(req.body?.token||'').trim();
+  const platform=String(req.body?.platform||'').toLowerCase();
+  if(!/^(Expo|Exponent)PushToken\\[[A-Za-z0-9._-]{8,200}\\]$/.test(token))return res.status(400).json({error:'A valid Expo push token is required.'});
+  if(!['android','ios'].includes(platform))return res.status(400).json({error:'Platform must be android or ios.'});
+  try{
+    await pool.query(`INSERT INTO expo_push_tokens(user_id,token,platform) VALUES($1,$2,$3)
+      ON CONFLICT(token) DO UPDATE SET user_id=EXCLUDED.user_id,platform=EXCLUDED.platform,updated_at=NOW()`,[req.user.sub,token,platform]);
+    res.status(201).json({ok:true});
+  }catch(error){console.error('Push token registration error:',error);res.status(500).json({error:'Unable to enable push alerts.'})}
+});
+app.delete('/api/push-token',requireAuth,async(req,res)=>{
+  const token=String(req.body?.token||'').trim();
+  if(!token)return res.status(400).json({error:'Push token is required.'});
+  try{
+    await pool.query('DELETE FROM expo_push_tokens WHERE user_id=$1 AND token=$2',[req.user.sub,token]);
+    res.json({ok:true});
+  }catch(error){console.error('Push token removal error:',error);res.status(500).json({error:'Unable to disable push alerts.'})}
+});
+
 app.post('/api/auth/register',authLimiter,async(req,res)=>{
   const {full_name,password,role}=req.body||{};
   const phone=normalizePhone(req.body&&req.body.phone);
@@ -591,7 +634,7 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
   if(!['fixed_price','starting_price','quote_required'].includes(pricing_type))return res.status(400).json({error:'Invalid pricing type.'});
   let client;
   try{
-    const provider=await pool.query('SELECT id FROM provider_profiles WHERE id=$1',[provider_id]);
+    const provider=await pool.query('SELECT id,user_id FROM provider_profiles WHERE id=$1',[provider_id]);
     const service=await pool.query('SELECT id FROM services WHERE id=$1 AND active=true',[service_id]);
     const offered=await pool.query('SELECT 1 FROM provider_services WHERE provider_id=$1 AND service_id=$2',[provider_id,service_id]);
     if(!provider.rows[0]||!service.rows[0]||!offered.rows[0])return res.status(400).json({error:'That provider does not currently offer the selected service.'});
@@ -610,6 +653,7 @@ app.post('/api/service-requests',requireAuth,async(req,res)=>{
       rows[0].id
     ]);
     await client.query('COMMIT');
+    queueExpoPushNotification(provider.rows[0].user_id,'New service request',locked?'A customer requested your service. Open FixIt to review your plan and requests.':'A customer has requested your service. Open FixIt to view the request.',{requestId:rows[0].id,type:'job_request'});
     try{await audit(req.user.sub,null,'service_request.created','service_request',rows[0].id,{provider_id,service_id,referral_count:referralCount,locked})}catch(auditError){console.error('Service request audit error:',auditError)}
     res.status(201).json(Object.assign({},rows[0],{provider_locked:locked}));
   }catch(e){
@@ -640,6 +684,8 @@ app.patch('/api/service-requests/:id',requireAuth,async(req,res)=>{
         'A customer updated the details of a service request. Open your jobs to review the changes.',request.id
       ]);
     }catch(notificationError){console.error('Service request update notification error:',notificationError)}
+    const providerOwner=await pool.query('SELECT user_id FROM provider_profiles WHERE id=$1',[request.provider_id]);
+    queueExpoPushNotification(providerOwner.rows[0]?.user_id,'Request updated','The customer updated a service request. Open FixIt to review the details.',{requestId:request.id,type:'job_status',status:'requested'});
     try{await audit(req.user.sub,null,'service_request.updated','service_request',request.id,{fields:['region','district','area','service_address','directions','pricing_type','job_details']})}catch(auditError){console.error('Service request update audit error:',auditError)}
     res.json(rows[0]);
   }catch(e){console.error('Service request update error:',e);res.status(500).json({error:'Unable to update service request.'})}
@@ -794,6 +840,7 @@ app.patch('/api/service-requests/:id/quote',requireAuth,async(req,res)=>{
     const fee=subscription?0:Number((amount*0.01).toFixed(2));
     const earnings=Number((amount-fee).toFixed(2));
     const {rows}=await pool.query(`UPDATE service_requests SET status='quoted',quoted_amount=$1,labour_amount=$2,materials_amount=$3,transport_amount=$4,platform_fee=$5,provider_earnings=$6,updated_at=NOW() WHERE id=$7 RETURNING id,status,quoted_amount,labour_amount,materials_amount,transport_amount,platform_fee,provider_earnings,updated_at`,[amount,labour,materials,transport,fee,earnings,r.id]);
+    queueExpoPushNotification(r.customer_user_id,'Quote received','Your provider sent a quote for your service request.',{requestId:r.id,type:'job_status',status:'quoted'});
     await audit(req.user.sub,r.customer_user_id,'service_request.quote_sent','service_request',r.id,{quoted_amount:amount,labour_amount:labour,materials_amount:materials,transport_amount:transport,platform_fee:fee,provider_earnings:earnings,subscription_active:!!subscription});
     res.json(rows[0]);
   }catch(e){console.error('Quote error:',e);res.status(500).json({error:'Unable to send quote.'})}
@@ -839,7 +886,8 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
   const allowed=['quoted','approved','in_progress','completed','cancelled','declined'];
   if(!allowed.includes(status))return res.status(400).json({error:'Invalid request status.'});
   try{
-    const current=await pool.query('SELECT id,customer_user_id,provider_id,status FROM service_requests WHERE id=$1',[req.params.id]);
+    const current=await pool.query(`SELECT sr.id,sr.customer_user_id,sr.provider_id,sr.status,pp.user_id AS provider_user_id
+      FROM service_requests sr LEFT JOIN provider_profiles pp ON pp.id=sr.provider_id WHERE sr.id=$1`,[req.params.id]);
     if(!current.rows[0])return res.status(404).json({error:'Service request not found.'});
     const r=current.rows[0];
     const profile=req.user.role==='provider'?await pool.query('SELECT id FROM provider_profiles WHERE id=$1 AND user_id=$2',[r.provider_id,req.user.sub]):null;
@@ -853,6 +901,19 @@ app.patch('/api/service-requests/:id/status',requireAuth,async(req,res)=>{
     const next=(transitions[req.user.role]&&transitions[req.user.role][r.status])||[];
     if(!next.includes(status))return res.status(409).json({error:'That status change is not allowed from the current request status.'});
     const {rows}=await pool.query('UPDATE service_requests SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING id,status,updated_at',[status,req.params.id]);
+    const statusCopy={
+      approved:['Quote approved','The customer approved your quote. Open FixIt to view the job.'],
+      in_progress:['Work started','The provider marked your job as in progress.'],
+      completed:['Job completed','The provider marked your job complete. Please review the work in FixIt.'],
+      cancelled:['Request cancelled','A service request was cancelled. Open FixIt to view its status.']
+    };
+    const statusMessage=status==='declined'
+      ? req.user.role==='provider'
+        ? ['Request declined','The provider declined your service request. Open FixIt to find another provider.']
+        : ['Quote declined','The customer declined your quote. Open FixIt to review the request.']
+      : statusCopy[status]||['Job updated','Your service request status changed to '+status.replaceAll('_',' ')+'.'];
+    const recipient=req.user.role==='customer'?r.provider_user_id:r.customer_user_id;
+    queueExpoPushNotification(recipient,statusMessage[0],statusMessage[1],{requestId:r.id,type:'job_status',status});
     await audit(req.user.sub,r.customer_user_id,'service_request.status_update','service_request',r.id,{status});
     res.json(rows[0]);
   }catch(e){res.status(500).json({error:'Unable to update request status.'})}
@@ -1336,10 +1397,22 @@ async function ensureSiteImagesTable(){
   console.log('Site image table checked.');
 }
 
+async function ensureExpoPushTokensTable(){
+  await pool.query(`CREATE TABLE IF NOT EXISTS expo_push_tokens (
+    token TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    platform VARCHAR(20) NOT NULL CHECK (platform IN ('android','ios')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_expo_push_tokens_user ON expo_push_tokens(user_id)');
+  console.log('Expo push token table checked.');
+}
+
 async function ensureProfilePhotoColumns(){
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_key TEXT');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_storage_provider VARCHAR(30)');
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_file_url TEXT');
   console.log('Profile photo database columns checked.');
 }
-initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
+initializeDatabase().then(()=>ensureProfilePhotoColumns()).then(()=>ensureSiteImagesTable()).then(()=>ensureExpoPushTokensTable()).then(()=>ensureServiceCatalogue()).then(()=>bootstrapAdmin()).then(()=>{app.listen(process.env.PORT||4000,()=>console.log('FixIt backend running on port '+(process.env.PORT||4000)));}).catch(err=>{console.error('Database initialization failed:',err);process.exit(1);});
