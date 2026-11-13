@@ -1079,7 +1079,7 @@ app.post('/api/phone-verification/verify',requireAuth,authLimiter,async(req,res)
     if(!row)return res.status(404).json({error:'Verification request not found.'});
     if(row.status==='verified')return res.json({ok:true,verified:true,message:'Phone number is already verified.'});
     if(row.status!=='pending'||(row.expires_at&&new Date(row.expires_at)<=new Date()))return res.status(400).json({error:'This verification code has expired. Request a new code.'});
-    const result=await d7VerifyRequest('const result=await d7VerifyRequest('/verify/v1/otp/verify-otp',{otp_id:row.provider_reference,otp_code:otp});',{otp_id:row.provider_reference,otp_code:otp});
+    const result=await d7VerifyRequest('/verify/v1/otp/verify-otp',{otp_id:row.provider_reference,otp_code:otp});('const result=await d7VerifyRequest('/verify/v1/otp/verify-otp',{otp_id:row.provider_reference,otp_code:otp});',{otp_id:row.provider_reference,otp_code:otp});
     const status=String(result.status||'').toUpperCase();
     if(status!=='APPROVED'){
       if(status==='EXPIRED')await pool.query("UPDATE phone_verifications SET status='expired' WHERE id=$1",[row.id]);
